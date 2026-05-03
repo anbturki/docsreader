@@ -1,0 +1,52 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DocsReader",
+  "version": "0.1.0",
+  "identifier": "com.docsreader.app",
+  "build": {
+    "beforeDevCommand": "bun run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "bun run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "DocsReader",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 800,
+        "minHeight": 500
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "10.15",
+      "entitlements": null,
+      "exceptionDomain": null,
+      "frameworks": []
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDk4QTZCNEQyODVFNjZENTMKUldSVGJlYUYwclNtbVAwZFN5bVBwUktjQ21YRVd4MWNkdDRrU3V0Qjk2UDJvcGh6cm9RZmdWc2IK",
+      "endpoints": [
+        "https://github.com/anbturki/docsreader/releases/latest/download/latest.json"
+      ]
+    }
+  }
+}

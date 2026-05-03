@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: --target universal-apple-darwin
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: windows-latest
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install Linux deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Cache cargo
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install JS deps
+        run: bun install
+
+      - name: Build & release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater signing
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS code signing + notarization
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "DocsReader ${{ github.ref_name }}"
+          releaseBody: |
+            See assets below to download and install.
+
+            Install via Homebrew:
+            ```
+            brew install --cask anbturki/tap/docsreader
+            ```
+
+            Install via curl:
+            ```
+            curl -fsSL https://raw.githubusercontent.com/anbturki/docsreader/main/install.sh | bash
+            ```
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  update-homebrew-tap:
+    needs: publish-tauri
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Determine version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for release assets to be available
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          for i in $(seq 1 30); do
+            if gh release view "${GITHUB_REF_NAME}" \
+                --repo anbturki/docsreader \
+                --json assets \
+                --jq '.assets[].name' | grep -q 'universal.dmg$'; then
+              exit 0
+            fi
+            echo "waiting for universal.dmg asset (attempt $i)..."
+            sleep 20
+          done
+          echo "timed out waiting for assets" >&2
+          exit 1
+
+      - name: Compute DMG SHA256
+        id: sha
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          DMG_NAME=$(gh release view "${GITHUB_REF_NAME}" \
+            --repo anbturki/docsreader \
+            --json assets --jq '.assets[].name' \
+            | grep 'universal.dmg$' | head -n1)
+          gh release download "${GITHUB_REF_NAME}" \
+            --repo anbturki/docsreader \
+            --pattern "$DMG_NAME"
+          SHA=$(shasum -a 256 "$DMG_NAME" | awk '{print $1}')
+          echo "dmg_name=$DMG_NAME" >> "$GITHUB_OUTPUT"
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: anbturki/homebrew-tap
+          token: ${{ secrets.TAP_GITHUB_TOKEN }}
+          path: tap
+
+      - name: Update cask
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          SHA256: ${{ steps.sha.outputs.sha256 }}
+          DMG_NAME: ${{ steps.sha.outputs.dmg_name }}
+        run: |
+          mkdir -p tap/Casks
+          cat > tap/Casks/docsreader.rb <<EOF
+          cask "docsreader" do
+            version "${VERSION}"
+            sha256 "${SHA256}"
+
+            url "https://github.com/anbturki/docsreader/releases/download/v#{version}/${DMG_NAME}"
+            name "DocsReader"
+            desc "Markdown documentation reader"
+            homepage "https://github.com/anbturki/docsreader"
+
+            app "DocsReader.app"
+
+            zap trash: [
+              "~/Library/Application Support/com.docsreader.app",
+              "~/Library/Caches/com.docsreader.app",
+              "~/Library/Preferences/com.docsreader.app.plist",
+            ]
+          end
+          EOF
+
+      - name: Commit and push tap
+        working-directory: tap
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/docsreader.rb
+          if git diff --staged --quiet; then
+            echo "no changes to commit"
+            exit 0
+          fi
+          git commit -m "docsreader ${VERSION}"
+          git push
