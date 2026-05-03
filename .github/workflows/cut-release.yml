@@ -48,10 +48,14 @@ jobs:
           # Cargo.lock: docsreader package entry
           sed -i '/^name = "docsreader"$/{n;s/^version = "[^"]*"/version = "'"$VERSION"'"/}' src-tauri/Cargo.lock
 
+          # README.md: download button URLs embed the version in asset filenames
+          sed -i 's|DocsReader_[0-9]\+\.[0-9]\+\.[0-9]\+|DocsReader_'"$VERSION"'|g' README.md
+
           echo "After:"
           grep '"version"' src-tauri/tauri.conf.json | head -1
           grep '^version' src-tauri/Cargo.toml | head -1
           grep -A1 '^name = "docsreader"$' src-tauri/Cargo.lock | head -2
+          grep -E 'DocsReader_[0-9]' README.md | head -2 || true
 
       - name: Commit, tag, push
         env:
@@ -60,7 +64,7 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock README.md
           git commit -m "chore(release): v$VERSION"
           git tag "v$VERSION"
           git push origin HEAD:main
