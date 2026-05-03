@@ -133,9 +133,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          PENDING=$(gh release list --repo "$REPO" --limit 50 \
-            --json tagName,isDraft,body \
-            --jq '[.[] | select(.isDraft) | select(.body | test("notarize: id=[A-Za-z0-9-]+ status=pending"))] | length')
+          # gh release list does not expose body, so iterate and view each draft.
+          PENDING=0
+          DRAFT_TAGS=$(gh release list --repo "$REPO" --limit 50 \
+            --json tagName,isDraft \
+            --jq '.[] | select(.isDraft) | .tagName')
+          for tag in $DRAFT_TAGS; do
+            BODY=$(gh release view "$tag" --repo "$REPO" --json body --jq .body)
+            if printf '%s' "$BODY" | grep -qE 'notarize: id=[A-Za-z0-9-]+ status=pending'; then
+              PENDING=$((PENDING + 1))
+            fi
+          done
 
           if [ "$PENDING" -eq 0 ]; then
             MSG="all stapled"
