@@ -1,6 +1,6 @@
 [package]
 name = "docsreader"
-version = "0.1.1"
+version = "0.2.0"
 description = "Markdown documentation reader"
 authors = ["Ali Turki"]
 edition = "2021"

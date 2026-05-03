@@ -7,12 +7,33 @@ const ROOTS_KEY = "roots";
 const LAST_SELECTED_KEY = "lastSelected";
 const SCAN_CACHE_KEY = "scanCache";
 const VIEW_SETTINGS_KEY = "viewSettings";
+const TABS_STATE_KEY = "tabsState";
+const SIDEBAR_STATE_KEY = "sidebarState";
 
 export type ContentWidth = "narrow" | "full";
 export type FontFamily = "sans" | "serif" | "mono";
 export type FontSize = "sm" | "md" | "lg";
 export type ColorScheme = "light" | "dark" | "system";
 export type AccentColor = "violet" | "blue" | "green" | "orange" | "rose" | "slate";
+
+export const LIGHT_CODE_THEMES = [
+  "github-light",
+  "vitesse-light",
+  "one-light",
+  "min-light",
+  "light-plus",
+] as const;
+export const DARK_CODE_THEMES = [
+  "github-dark",
+  "vitesse-dark",
+  "dracula",
+  "one-dark-pro",
+  "monokai",
+  "tokyo-night",
+  "nord",
+] as const;
+export type LightCodeTheme = (typeof LIGHT_CODE_THEMES)[number];
+export type DarkCodeTheme = (typeof DARK_CODE_THEMES)[number];
 
 export const FONT_SIZE_PX: Record<FontSize, number> = {
   sm: 13,
@@ -35,6 +56,10 @@ export interface ViewSettings {
   fontSize: FontSize;
   colorScheme: ColorScheme;
   accentColor: AccentColor;
+  codeThemeLight: LightCodeTheme;
+  codeThemeDark: DarkCodeTheme;
+  outlineOpen: boolean;
+  quickOpenShortcut: string;
 }
 
 export const defaultViewSettings: ViewSettings = {
@@ -43,6 +68,10 @@ export const defaultViewSettings: ViewSettings = {
   fontSize: "md",
   colorScheme: "system",
   accentColor: "violet",
+  codeThemeLight: "github-light",
+  codeThemeDark: "github-dark",
+  outlineOpen: true,
+  quickOpenShortcut: "Mod+P",
 };
 
 interface CachedScan {
@@ -107,6 +136,21 @@ export async function loadViewSettings(): Promise<ViewSettings> {
     fontSize: normalizeFontSize(v.fontSize),
     colorScheme: normalizeColorScheme(v.colorScheme),
     accentColor: normalizeAccentColor(v.accentColor),
+    codeThemeLight: (LIGHT_CODE_THEMES as readonly string[]).includes(
+      v.codeThemeLight as string
+    )
+      ? (v.codeThemeLight as LightCodeTheme)
+      : defaultViewSettings.codeThemeLight,
+    codeThemeDark: (DARK_CODE_THEMES as readonly string[]).includes(
+      v.codeThemeDark as string
+    )
+      ? (v.codeThemeDark as DarkCodeTheme)
+      : defaultViewSettings.codeThemeDark,
+    outlineOpen: typeof v.outlineOpen === "boolean" ? v.outlineOpen : defaultViewSettings.outlineOpen,
+    quickOpenShortcut:
+      typeof v.quickOpenShortcut === "string" && v.quickOpenShortcut.length > 0
+        ? v.quickOpenShortcut
+        : defaultViewSettings.quickOpenShortcut,
   };
 }
 
@@ -136,5 +180,60 @@ function normalizeAccentColor(value: unknown): AccentColor {
 
 export async function saveViewSettings(settings: ViewSettings): Promise<void> {
   await store.set(VIEW_SETTINGS_KEY, settings);
+  await store.save();
+}
+
+export interface TabsState {
+  paths: string[];
+  activePath?: string;
+  scrollByPath: Record<string, number>;
+}
+
+const emptyTabsState: TabsState = { paths: [], scrollByPath: {} };
+
+export async function loadTabsState(): Promise<TabsState> {
+  const v = await store.get<Partial<TabsState>>(TABS_STATE_KEY);
+  if (!v || typeof v !== "object") return emptyTabsState;
+  const paths = Array.isArray(v.paths) ? v.paths.filter((p) => typeof p === "string") : [];
+  const activePath =
+    typeof v.activePath === "string" && paths.includes(v.activePath) ? v.activePath : undefined;
+  const scrollByPath: Record<string, number> = {};
+  if (v.scrollByPath && typeof v.scrollByPath === "object") {
+    for (const [k, n] of Object.entries(v.scrollByPath)) {
+      if (typeof n === "number" && Number.isFinite(n) && n >= 0) scrollByPath[k] = n;
+    }
+  }
+  return { paths, activePath, scrollByPath };
+}
+
+export async function saveTabsState(state: TabsState): Promise<void> {
+  await store.set(TABS_STATE_KEY, state);
+  await store.save();
+}
+
+export interface SidebarState {
+  open: boolean;
+  expanded: Record<string, boolean>;
+}
+
+const defaultSidebarState: SidebarState = { open: true, expanded: {} };
+
+export async function loadSidebarState(): Promise<SidebarState> {
+  const v = await store.get<Partial<SidebarState>>(SIDEBAR_STATE_KEY);
+  if (!v || typeof v !== "object") return defaultSidebarState;
+  const expanded: Record<string, boolean> = {};
+  if (v.expanded && typeof v.expanded === "object") {
+    for (const [k, val] of Object.entries(v.expanded)) {
+      if (typeof k === "string" && typeof val === "boolean") expanded[k] = val;
+    }
+  }
+  return {
+    open: typeof v.open === "boolean" ? v.open : defaultSidebarState.open,
+    expanded,
+  };
+}
+
+export async function saveSidebarState(state: SidebarState): Promise<void> {
+  await store.set(SIDEBAR_STATE_KEY, state);
   await store.save();
 }

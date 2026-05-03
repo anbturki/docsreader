@@ -30,7 +30,9 @@ interface Props {
   filteredFiles: MarkdownFile[];
   tags: string[];
   tree: TreeNode | undefined;
-  treeVersion: number;
+  rootKey: string;
+  isExpanded: (key: string, depth: number) => boolean;
+  onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
   onPickDirectory: () => void;
   onSelectRoot: (path: string) => void;
   onRemoveRoot: (path: string) => void;
@@ -38,6 +40,7 @@ interface Props {
   onCollapseAll: () => void;
   onSearchChange: (value: string) => void;
   onSelectFile: (path: string) => void;
+  onOpenInNewTab: (path: string) => void;
 }
 
 export function ExplorerSidebar({
@@ -49,7 +52,9 @@ export function ExplorerSidebar({
   filteredFiles,
   tags,
   tree,
-  treeVersion,
+  rootKey,
+  isExpanded,
+  onToggleExpanded,
   onPickDirectory,
   onSelectRoot,
   onRemoveRoot,
@@ -57,6 +62,7 @@ export function ExplorerSidebar({
   onCollapseAll,
   onSearchChange,
   onSelectFile,
+  onOpenInNewTab,
 }: Props) {
   return (
     <Sidebar collapsible="offcanvas">
@@ -134,11 +140,13 @@ export function ExplorerSidebar({
                   />
                 ) : tree && filteredFiles.length > 0 ? (
                   <FileTree
-                    key={treeVersion}
                     node={tree}
+                    rootKey={rootKey}
                     selectedPath={selectedPath}
                     onSelect={onSelectFile}
-                    startCollapsed={treeVersion > 0}
+                    onOpenInNewTab={onOpenInNewTab}
+                    isExpanded={isExpanded}
+                    onToggleExpanded={onToggleExpanded}
                   />
                 ) : (
                   <p className="px-3 py-4 text-sm text-muted-foreground">

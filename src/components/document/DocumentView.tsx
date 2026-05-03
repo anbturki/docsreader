@@ -1,31 +1,24 @@
 import { cn } from "@/lib/utils";
 import type { MarkdownFile } from "@/lib/scan";
 import type { ViewSettings } from "@/lib/storage";
+import type { Tab } from "@/hooks/useTabs";
 import { MarkdownViewer } from "@/components/viewer/MarkdownViewer";
 import { DocumentHeader } from "./DocumentHeader";
 import { Frontmatter } from "./Frontmatter";
 
 interface Props {
-  file: MarkdownFile;
-  content: string;
-  meta: Record<string, unknown>;
-  loading: boolean;
-  error: string | undefined;
+  tab: Tab;
+  file: MarkdownFile | undefined;
   rootPath: string | undefined;
   viewSettings: ViewSettings;
   onNavigate: (path: string) => void;
 }
 
-export function DocumentView({
-  file,
-  content,
-  meta,
-  loading,
-  error,
-  rootPath,
-  viewSettings,
-  onNavigate,
-}: Props) {
+export function DocumentView({ tab, file, rootPath, viewSettings, onNavigate }: Props) {
+  const title = file?.title || file?.name || tab.title;
+  const tags = file?.tags ?? [];
+  const modified = file?.modified;
+
   return (
     <article
       className={cn(
@@ -33,19 +26,21 @@ export function DocumentView({
         viewSettings.width === "full" ? "w-full" : "max-w-4xl mx-auto"
       )}
     >
-      <DocumentHeader file={file} />
-      <Frontmatter data={meta} />
+      <DocumentHeader title={title} tags={tags} modified={modified} />
+      <Frontmatter data={tab.meta} />
       <div className="mt-6">
-        {loading ? (
+        {tab.loading ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : error ? (
-          <p className="text-sm text-destructive">{error}</p>
+        ) : tab.error ? (
+          <p className="text-sm text-destructive">{tab.error}</p>
         ) : (
           <MarkdownViewer
-            content={content}
+            content={tab.content}
             fontFamily={viewSettings.fontFamily}
             fontSize={viewSettings.fontSize}
-            currentFilePath={file.path}
+            codeThemeLight={viewSettings.codeThemeLight}
+            codeThemeDark={viewSettings.codeThemeDark}
+            currentFilePath={tab.path}
             rootPath={rootPath}
             onNavigate={onNavigate}
           />

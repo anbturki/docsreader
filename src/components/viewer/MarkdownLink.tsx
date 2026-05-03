@@ -21,17 +21,11 @@ export function MarkdownLink({ href, children, ctx, onNavigate, ...rest }: Props
       return;
     }
 
-    if (HAS_SCHEME.test(href)) {
-      void openUrl(href);
-      return;
-    }
+    if (HAS_SCHEME.test(href)) return;
 
     const cleanHref = href.split("#")[0];
     const target = toAbsolutePath(cleanHref, ctx);
-    if (!target) {
-      void openUrl(href);
-      return;
-    }
+    if (!target) return;
 
     if (MARKDOWN_EXT.test(target) && onNavigate) {
       onNavigate(target);

@@ -1,0 +1,163 @@
+name: Notarize and Staple
+
+# Polls Apple for pending notarization submissions, staples accepted
+# DMGs, flips the draft release to public, and updates the Homebrew tap.
+# Triggered by:
+#   - cron every 15 min
+#   - manual workflow_dispatch (e.g. to push a long-pending submission)
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: notarize-staple
+  cancel-in-progress: false
+
+jobs:
+  staple:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      REPO: ${{ github.repository }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - name: Write App Store Connect API key
+        run: |
+          mkdir -p "$RUNNER_TEMP/appstore"
+          KEY_PATH="$RUNNER_TEMP/appstore/AuthKey_${{ secrets.APPLE_API_KEY }}.p8"
+          printf '%s' "${{ secrets.APPLE_API_KEY_BASE64 }}" | base64 --decode > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Check pending drafts
+        id: scan
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pending"
+          gh release list --repo "$REPO" --limit 30 --json tagName,isDraft \
+            --jq '.[] | select(.isDraft) | .tagName' > "$RUNNER_TEMP/pending/tags.txt"
+          COUNT=$(wc -l < "$RUNNER_TEMP/pending/tags.txt" | tr -d ' ')
+          echo "Pending drafts: $COUNT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+
+      - name: Process pending submissions
+        if: steps.scan.outputs.count != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
+          API_KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          set -euo pipefail
+
+          while read -r TAG; do
+            [ -z "$TAG" ] && continue
+            echo "::group::$TAG"
+
+            BODY=$(gh release view "$TAG" --repo "$REPO" --json body --jq .body)
+            SUBMISSION_ID=$(printf '%s\n' "$BODY" | grep -oE 'notarize: id=[a-zA-Z0-9-]+' | head -1 | cut -d= -f2 || true)
+            if [ -z "${SUBMISSION_ID:-}" ]; then
+              echo "no notarize id in body, skipping"
+              echo "::endgroup::"
+              continue
+            fi
+
+            echo "submission=$SUBMISSION_ID"
+
+            INFO=$(xcrun notarytool info "$SUBMISSION_ID" \
+              --key "$API_KEY_PATH" --key-id "$API_KEY_ID" --issuer "$API_ISSUER" \
+              --output-format json 2>/dev/null || echo '{}')
+            STATUS=$(printf '%s' "$INFO" | jq -r '.status // "Unknown"')
+            echo "status=$STATUS"
+
+            case "$STATUS" in
+              Accepted)
+                DMG=$(gh release view "$TAG" --repo "$REPO" --json assets \
+                  --jq '.assets[].name' | grep -E 'universal\.dmg$' | head -1 || true)
+                if [ -z "$DMG" ]; then
+                  echo "::warning::No universal.dmg asset on $TAG, marking as published anyway"
+                else
+                  WORK="$RUNNER_TEMP/staple-$TAG"
+                  mkdir -p "$WORK"
+                  cd "$WORK"
+                  gh release download "$TAG" --repo "$REPO" --pattern "$DMG" --clobber
+                  echo "Stapling $DMG"
+                  xcrun stapler staple "$DMG"
+                  xcrun stapler validate "$DMG"
+                  gh release upload "$TAG" --repo "$REPO" "$DMG" --clobber
+                  cd -
+                fi
+
+                # Strip the notarize comment, publish.
+                CLEAN=$(printf '%s\n' "$BODY" | sed -E '/<!-- notarize:.*-->/d')
+                gh release edit "$TAG" --repo "$REPO" --notes "$CLEAN" --draft=false
+                echo "::notice::Published $TAG"
+
+                # Trigger Homebrew tap update.
+                gh workflow run update-homebrew-tap.yml --repo "$REPO" \
+                  --ref main -f tag="$TAG" || \
+                  echo "::warning::Failed to dispatch tap update for $TAG"
+                ;;
+              Invalid)
+                echo "::warning::Notarization rejected for $TAG"
+                xcrun notarytool log "$SUBMISSION_ID" \
+                  --key "$API_KEY_PATH" --key-id "$API_KEY_ID" --issuer "$API_ISSUER" \
+                  > "$RUNNER_TEMP/log-$TAG.json" 2>/dev/null || true
+                SUMMARY=$(jq -r '.statusSummary // "(no summary)"' "$RUNNER_TEMP/log-$TAG.json" 2>/dev/null || echo "(no log)")
+                # Replace the pending marker with a failed marker; leave draft.
+                NEW=$(printf '%s\n' "$BODY" | sed -E "s|<!-- notarize: id=[^ ]+ status=pending -->|<!-- notarize: id=$SUBMISSION_ID status=failed -->\n\n> Notarization failed: $SUMMARY|")
+                gh release edit "$TAG" --repo "$REPO" --notes "$NEW"
+                ;;
+              "In Progress")
+                echo "still in progress, will check next run"
+                ;;
+              Unknown|*)
+                echo "::warning::Unexpected status: $STATUS"
+                ;;
+            esac
+            echo "::endgroup::"
+          done < "$RUNNER_TEMP/pending/tags.txt"
+
+      - name: Update notarization badge
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PENDING=$(gh release list --repo "$REPO" --limit 50 \
+            --json tagName,isDraft,body \
+            --jq '[.[] | select(.isDraft) | select(.body | test("notarize: id=[A-Za-z0-9-]+ status=pending"))] | length')
+
+          if [ "$PENDING" -eq 0 ]; then
+            MSG="all stapled"
+            COLOR="brightgreen"
+          elif [ "$PENDING" -eq 1 ]; then
+            MSG="1 pending"
+            COLOR="yellow"
+          else
+            MSG="$PENDING pending"
+            COLOR="yellow"
+          fi
+
+          mkdir -p .github/badges
+          printf '{"schemaVersion":1,"label":"notarization","message":"%s","color":"%s"}\n' \
+            "$MSG" "$COLOR" > .github/badges/notarization.json
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/badges/notarization.json
+          if git diff --staged --quiet; then
+            echo "badge unchanged"
+          else
+            git commit -m "chore(badge): notarization $MSG [skip ci]"
+            git push
+          fi

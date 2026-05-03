@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import { ChevronRight, FileText } from "lucide-react";
 import {
   Collapsible,
@@ -16,22 +17,36 @@ import { EntryContextMenu } from "./EntryContextMenu";
 
 interface Props {
   node: TreeNode;
+  rootKey: string;
   selectedPath?: string;
   onSelect: (path: string) => void;
-  startCollapsed?: boolean;
+  onOpenInNewTab: (path: string) => void;
+  isExpanded: (key: string, depth: number) => boolean;
+  onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
 }
 
-export function FileTree({ node, selectedPath, onSelect, startCollapsed = false }: Props) {
+export function FileTree({
+  node,
+  rootKey,
+  selectedPath,
+  onSelect,
+  onOpenInNewTab,
+  isExpanded,
+  onToggleExpanded,
+}: Props) {
   return (
     <SidebarMenu>
       {node.children.map((child) => (
         <TreeEntry
           key={child.path + child.name}
           node={child}
+          rootKey={rootKey}
           selectedPath={selectedPath}
           onSelect={onSelect}
+          onOpenInNewTab={onOpenInNewTab}
           depth={0}
-          startCollapsed={startCollapsed}
+          isExpanded={isExpanded}
+          onToggleExpanded={onToggleExpanded}
         />
       ))}
     </SidebarMenu>
@@ -40,20 +55,51 @@ export function FileTree({ node, selectedPath, onSelect, startCollapsed = false 
 
 interface EntryProps {
   node: TreeNode;
+  rootKey: string;
   selectedPath?: string;
   onSelect: (path: string) => void;
+  onOpenInNewTab: (path: string) => void;
   depth: number;
-  startCollapsed: boolean;
+  isExpanded: (key: string, depth: number) => boolean;
+  onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
 }
 
-function TreeEntry({ node, selectedPath, onSelect, depth, startCollapsed }: EntryProps) {
+function TreeEntry({
+  node,
+  rootKey,
+  selectedPath,
+  onSelect,
+  onOpenInNewTab,
+  depth,
+  isExpanded,
+  onToggleExpanded,
+}: EntryProps) {
   if (!node.isDir) {
+    const handleClick = (e: MouseEvent) => {
+      if (e.metaKey || e.ctrlKey) {
+        e.preventDefault();
+        onOpenInNewTab(node.path);
+        return;
+      }
+      onSelect(node.path);
+    };
+    const handleAuxClick = (e: MouseEvent) => {
+      if (e.button === 1) {
+        e.preventDefault();
+        onOpenInNewTab(node.path);
+      }
+    };
     return (
       <SidebarMenuItem>
-        <EntryContextMenu path={node.path}>
+        <EntryContextMenu
+          path={node.path}
+          isFile
+          onOpenInNewTab={onOpenInNewTab}
+        >
           <SidebarMenuButton
             isActive={node.path === selectedPath}
-            onClick={() => onSelect(node.path)}
+            onClick={handleClick}
+            onAuxClick={handleAuxClick}
             tooltip={{ children: node.name, hidden: false }}
           >
             <FileText />
@@ -64,13 +110,17 @@ function TreeEntry({ node, selectedPath, onSelect, depth, startCollapsed }: Entr
     );
   }
 
+  const dirKey = `${rootKey}::${node.path}`;
+  const open = isExpanded(dirKey, depth);
+
   return (
     <SidebarMenuItem>
       <Collapsible
-        defaultOpen={!startCollapsed && depth < 1}
+        open={open}
+        onOpenChange={(next) => onToggleExpanded(dirKey, !next)}
         className="group/collapsible w-full"
       >
-        <EntryContextMenu path={node.path}>
+        <EntryContextMenu path={node.path} isFile={false}>
           <CollapsibleTrigger asChild>
             <SidebarMenuButton
               tooltip={{ children: node.name, hidden: false }}
@@ -94,10 +144,13 @@ function TreeEntry({ node, selectedPath, onSelect, depth, startCollapsed }: Entr
               <TreeEntry
                 key={child.path + child.name}
                 node={child}
+                rootKey={rootKey}
                 selectedPath={selectedPath}
                 onSelect={onSelect}
+                onOpenInNewTab={onOpenInNewTab}
                 depth={depth + 1}
-                startCollapsed={startCollapsed}
+                isExpanded={isExpanded}
+                onToggleExpanded={onToggleExpanded}
               />
             ))}
           </SidebarMenuSub>
@@ -105,6 +158,17 @@ function TreeEntry({ node, selectedPath, onSelect, depth, startCollapsed }: Entr
       </Collapsible>
     </SidebarMenuItem>
   );
+}
+
+export function collectDirKeys(node: TreeNode, rootKey: string): string[] {
+  const out: string[] = [];
+  function walk(n: TreeNode) {
+    if (!n.isDir) return;
+    out.push(`${rootKey}::${n.path}`);
+    for (const c of n.children) walk(c);
+  }
+  for (const c of node.children) walk(c);
+  return out;
 }
 
 function countFiles(node: TreeNode): number {

@@ -1,19 +1,23 @@
 /*
-  Code block theme: GitHub light + dark, scoped by .dark class on <html>.
-  Replaces highlight.js/styles/github-dark.css (which was hardcoded dark).
+  Code blocks rendered by @shikijs/rehype with dual themes
+  (github-light / github-dark). Class-based dark mode toggles
+  the CSS variables shiki emits on each token span.
 
-  The <pre> wrapper is intentionally transparent — only the .hljs <code>
-  block provides the visible box, so there's no nested wrapper.
+  shiki inserts literal "\n" text nodes between <span class="line">
+  and a trailing empty <span class="line"></span>. Inside <pre>'s
+  white-space: pre, those would render as extra blank lines, so we
+  zero out line-height on <code> and restore it on .line spans, and
+  collapse the trailing empty line span.
 */
 
 .prose pre {
     background: transparent !important;
     border: 0 !important;
     padding: 0 !important;
-    margin: 1.25em 0;
+    margin: 0;
 }
 
-.hljs {
+.prose pre code {
     display: block;
     overflow-x: auto;
     padding: 1rem 1.25rem;
@@ -21,128 +25,42 @@
     border: 1px solid var(--border);
     font-size: 0.875em;
     line-height: 1.6;
+    background-color: var(--shiki-light-bg);
+    color: var(--shiki-light);
 }
 
-/* === Light theme (GitHub) === */
-.hljs {
-    background: #f6f8fa;
-    color: #24292e;
-}
-.hljs-comment,
-.hljs-quote {
-    color: #6a737d;
-    font-style: italic;
-}
-.hljs-keyword,
-.hljs-selector-tag,
-.hljs-subst {
-    color: #d73a49;
-}
-.hljs-string,
-.hljs-doctag {
-    color: #032f62;
-}
-.hljs-number,
-.hljs-literal,
-.hljs-variable,
-.hljs-template-variable,
-.hljs-tag .hljs-attr {
-    color: #005cc5;
-}
-.hljs-title,
-.hljs-section,
-.hljs-selector-id,
-.hljs-name {
-    color: #6f42c1;
-    font-weight: 600;
-}
-.hljs-type,
-.hljs-class .hljs-title,
-.hljs-built_in {
-    color: #6f42c1;
-}
-.hljs-attribute,
-.hljs-attr {
-    color: #005cc5;
-}
-.hljs-symbol,
-.hljs-bullet,
-.hljs-meta {
-    color: #e36209;
-}
-.hljs-regexp {
-    color: #032f62;
-}
-.hljs-deletion {
-    color: #b31d28;
-    background-color: #ffeef0;
-}
-.hljs-addition {
-    color: #22863a;
-    background-color: #f0fff4;
-}
-.hljs-emphasis {
-    font-style: italic;
-}
-.hljs-strong {
-    font-weight: 700;
+.prose pre code span {
+    color: var(--shiki-light);
+    font-style: var(--shiki-light-font-style);
+    font-weight: var(--shiki-light-font-weight);
+    text-decoration: var(--shiki-light-text-decoration);
 }
 
-/* === Dark theme (GitHub Dark) === */
-.dark .hljs {
-    background: #0d1117;
-    color: #c9d1d9;
-}
-.dark .hljs-comment,
-.dark .hljs-quote {
-    color: #8b949e;
-}
-.dark .hljs-keyword,
-.dark .hljs-selector-tag,
-.dark .hljs-subst {
-    color: #ff7b72;
-}
-.dark .hljs-string,
-.dark .hljs-doctag {
-    color: #a5d6ff;
-}
-.dark .hljs-number,
-.dark .hljs-literal,
-.dark .hljs-variable,
-.dark .hljs-template-variable,
-.dark .hljs-tag .hljs-attr {
-    color: #79c0ff;
-}
-.dark .hljs-title,
-.dark .hljs-section,
-.dark .hljs-selector-id,
-.dark .hljs-name {
-    color: #d2a8ff;
-}
-.dark .hljs-type,
-.dark .hljs-class .hljs-title,
-.dark .hljs-built_in {
-    color: #d2a8ff;
-}
-.dark .hljs-attribute,
-.dark .hljs-attr {
-    color: #79c0ff;
-}
-.dark .hljs-symbol,
-.dark .hljs-bullet,
-.dark .hljs-meta {
-    color: #ffa657;
-}
-.dark .hljs-regexp {
-    color: #a5d6ff;
-}
-.dark .hljs-deletion {
-    color: #ffdcd7;
-    background-color: #67060c;
-}
-.dark .hljs-addition {
-    color: #aff5b4;
-    background-color: #033a16;
+.dark .prose pre code {
+    background-color: var(--shiki-dark-bg);
+    color: var(--shiki-dark);
 }
 
-/* Inline <code> (not inside <pre>) keeps prose styling — leave alone */
+.dark .prose pre code span {
+    color: var(--shiki-dark);
+    font-style: var(--shiki-dark-font-style);
+    font-weight: var(--shiki-dark-font-weight);
+    text-decoration: var(--shiki-dark-text-decoration);
+}
+
+.prose pre code .line {
+    display: block;
+    line-height: 1.6;
+    width: max-content;
+    min-width: 0;
+}
+
+.prose pre code .line:last-child:empty {
+    display: none;
+}
+
+.prose :not(pre) > code {
+    display: inline-block;
+    line-height: 1.4;
+    vertical-align: baseline;
+}

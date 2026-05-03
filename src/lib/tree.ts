@@ -29,7 +29,7 @@ export function buildTree(
       const isLeaf = i === parts.length - 1;
       if (isLeaf) {
         current.children.push({
-          name: file.title || part,
+          name: stripMdExtension(part),
           path: file.path,
           isDir: false,
           children: [],
@@ -99,4 +99,8 @@ function sortNode(node: TreeNode) {
 function rootName(p: string): string {
   const parts = p.split(/[\\/]/).filter(Boolean);
   return parts[parts.length - 1] || p;
+}
+
+function stripMdExtension(name: string): string {
+  return name.replace(/\.mdx?$/i, "");
 }

@@ -1,46 +1,37 @@
 import { useState } from "react";
-import { BookOpen, Palette, Settings as SettingsIcon } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { BookOpen, Keyboard, Palette } from "lucide-react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { ViewSettings } from "@/lib/storage";
 import { AppearanceSection } from "./AppearanceSection";
 import { ReadingSection } from "./ReadingSection";
+import { ShortcutsSection } from "./ShortcutsSection";
 
 interface Props {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   settings: ViewSettings;
   onChange: (next: ViewSettings) => void;
 }
 
-type SectionId = "appearance" | "reading";
+type SectionId = "appearance" | "reading" | "shortcuts";
 
 const SECTIONS: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "reading", label: "Reading", icon: BookOpen },
+  { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
 ];
 
-export function SettingsDialog({ settings, onChange }: Props) {
+export default function SettingsDialog({ open, onOpenChange, settings, onChange }: Props) {
   const [active, setActive] = useState<SectionId>("appearance");
 
   return (
-    <Dialog>
-      <DialogTrigger asChild>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="size-8"
-          title="Settings"
-          aria-label="Settings"
-        >
-          <SettingsIcon />
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
         className="max-w-3xl gap-0 overflow-hidden p-0 sm:max-w-3xl"
@@ -75,6 +66,9 @@ export function SettingsDialog({ settings, onChange }: Props) {
             )}
             {active === "reading" && (
               <ReadingSection settings={settings} onChange={onChange} />
+            )}
+            {active === "shortcuts" && (
+              <ShortcutsSection settings={settings} onChange={onChange} />
             )}
           </div>
         </div>
