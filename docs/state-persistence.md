@@ -1,125 +1,45 @@
-# State persistence
+# State persistence notes
 
-DocsReader keeps user state in a single Tauri store file (`docsreader.settings.json`, in
-the platform's app config dir). This document maps every key the app writes, what
-it contains, when it loads, when it saves, and what happens when shape changes.
+User state lives in a Tauri store at `docsreader.settings.json` in the platform's
+app config dir. The schema and lifecycle are visible in `src/lib/storage.ts` and
+the four hooks that own state (`useLibrary`, `useViewSettings`, `useTabs`,
+`useSidebarState`). This file captures the things you *can't* derive from the
+code.
 
-All persistence goes through `src/lib/storage.ts`.
+## What is NOT persisted (and why)
 
-## Keys
+Don't re-add these without first revisiting the reasoning - each was a
+deliberate call:
 
-| Key             | Shape                                                                      | Owner                       | Loaded by                              |
-| --------------- | -------------------------------------------------------------------------- | --------------------------- | -------------------------------------- |
-| `roots`         | `string[]`                                                                 | `useLibrary`                | mount                                  |
-| `lastSelected`  | `string`                                                                   | `useLibrary`                | mount                                  |
-| `scanCache`     | `Record<rootPath, { result: ScanResult; cachedAt: number }>`               | `useLibrary`                | per-root, on root activation           |
-| `viewSettings`  | `ViewSettings` (see below)                                                 | `useViewSettings`           | mount                                  |
-| `tabsState`     | `{ paths: string[]; activePath?: string; scrollByPath: Record<string,number> }` | `useTabs`                   | mount                                  |
-| `sidebarState`  | `{ open: boolean; expanded: Record<string, boolean> }`                     | `useSidebarState`           | mount                                  |
-
-### `viewSettings`
-
-```ts
-{
-  width: "narrow" | "full",
-  fontFamily: "sans" | "serif" | "mono",
-  fontSize: "sm" | "md" | "lg",
-  colorScheme: "light" | "dark" | "system",
-  accentColor: "violet" | "blue" | "green" | "orange" | "rose" | "slate",
-  codeThemeLight: LightCodeTheme,
-  codeThemeDark: DarkCodeTheme,
-  outlineOpen: boolean,
-  quickOpenShortcut: string,  // "Mod+P" format
-}
-```
-
-### `tabsState`
-
-```ts
-{
-  paths: string[],                              // open tab paths in order
-  activePath?: string,                          // last focused tab
-  scrollByPath: Record<string, number>,         // vertical scroll offset per path
-}
-```
-
-`scrollByPath` is pruned to the current open tabs on every save.
-
-### `sidebarState`
-
-```ts
-{
-  open: boolean,                                // sidebar visible
-  expanded: Record<string, boolean>,            // dir key -> explicit user choice
-}
-```
-
-`expanded` keys are formatted `${rootPath}::${treeNodePath}` so identically-named
-folders in different roots don't collide. A directory whose key is absent from the
-map falls back to a depth-based default (open at depth 0, collapsed deeper).
-"Collapse All" writes `false` for every visible directory.
-
-## Lifecycle
-
-### Loading
-
-Each owner runs an async `load*()` once on mount, validates shape, and falls back
-to defaults on missing or malformed values. While loading is in flight the owner
-exposes a `hydrated` boolean so the persist effect skips empty initial state.
-
-### Saving
-
-Each owner schedules a save on a 250ms debounce. Saves are batched: state changes
-inside the debounce window collapse to one write. Scroll position changes use a
-500ms debounce since they fire on every wheel event.
-
-The Tauri store flushes to disk via `store.save()` after each `set()`.
-
-### Hydration guard
-
-Without a hydration guard the persist effect would fire with the initial empty
-state immediately on mount, overwriting saved data before the load resolves.
-Every owner does:
-
-```ts
-useEffect(() => {
-  if (!hydrated) return;
-  schedulePersist();
-}, [state, hydrated]);
-```
-
-## What is *not* persisted (intentional)
-
-- Sidebar **search query** - resets to empty on launch. Persisting it would open
-  the app filtered, which masks files the user expects to see.
-- Sidebar **active tag** - same reasoning as search.
-- Tab **content / frontmatter / loading / error** - re-derived from disk on
+- **Sidebar search query and active tag.** Re-loading the app filtered hides
+  files the user expects to see.
+- **Settings dialog / quick-open dialog open state.** Transient UI, never useful
+  to restore.
+- **Tab content / frontmatter / loading / error.** Re-derived from disk on
   reopen via `loadTab`.
-- **Tree expansion defaults** - the depth-based heuristic is the implicit
-  default; explicit user overrides are persisted.
-- **Settings dialog open state** - transient UI.
-- **Quick open dialog open state** - transient UI.
-- Mermaid render output, KaTeX output - re-rendered.
+- **Tree expansion defaults.** Depth-based heuristic is the implicit default;
+  explicit user toggles are persisted.
+- **Mermaid renders, KaTeX output.** Cheap to regenerate.
 
-## Debugging
+## Store file location
 
-To inspect or wipe state, the store file lives at:
+For debugging or wiping state:
 
 - macOS: `~/Library/Application Support/com.docsreader.app/docsreader.settings.json`
 - Linux: `~/.config/com.docsreader.app/docsreader.settings.json`
 - Windows: `%APPDATA%/com.docsreader.app/docsreader.settings.json`
 
-Deleting the file resets the app to its defaults; deleting an individual top-level
-key resets only that subsystem.
+Delete the file to reset all state; delete a single top-level key to reset only
+that subsystem.
 
 ## Adding a new persisted field
 
-1. Define the shape in `src/lib/storage.ts` and add `load*` / `save*` helpers
-   that validate every field against its expected type and fall back to defaults.
-2. Decide which hook owns it (or create a new one). Mirror the pattern in
-   `useTabs` / `useSidebarState`: load on mount, set `hydrated`, schedule a
-   debounced save when state changes.
-3. Add the key to the table above.
-4. Decide whether the field should *not* be persisted (transient UI, derived
-   data). If so, add it to the "not persisted" list with a one-line reason so
-   the next person doesn't waste time looking for it.
+1. Add `load*` / `save*` helpers in `storage.ts` that validate every field and
+   fall back to defaults on missing or malformed values.
+2. Mirror the pattern in `useTabs` / `useSidebarState`: load on mount, set a
+   `hydrated` flag, schedule a debounced save when state changes.
+3. **Hydration guard is non-negotiable.** Without `if (!hydrated) return;` in
+   the persist effect, the initial empty state overwrites saved data on first
+   render before the load resolves.
+4. If the field is intentionally *not* persisted (transient UI, derived data),
+   add it to the "not persisted" list above with a one-line reason.
