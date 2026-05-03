@@ -29,6 +29,14 @@ Or install via [Homebrew or one-liner](#install).
 
 Found a bug, want a feature, or have feedback? [Open an issue](https://github.com/anbturki/docsreader/issues/new) - I'm actively building this and feedback shapes the roadmap.
 
+## Roadmap
+
+See [ROADMAP.md](./ROADMAP.md) for the full picture. Short version:
+
+- **Next:** find-in-page, full-text search, focus mode, recognition for markdown task formats (Backlog.md, taskmd, generic frontmatter).
+- **Later:** PDF export, kanban view over recognized task files, drag-a-folder-to-add-root, file management.
+- **Considering:** plugin API, annotations, side-by-side view, local "smart" features (related-docs, TL;DR).
+
 ## Screenshots
 
 | | |
