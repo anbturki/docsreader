@@ -1,0 +1,67 @@
+name: Cut Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Semantic version without v prefix (e.g. 0.1.2)"
+        required: true
+        type: string
+
+jobs:
+  bump-and-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -e
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must be semver like 0.1.2 (no v prefix). Got: $VERSION" >&2
+            exit 1
+          fi
+          if git rev-parse --verify --quiet "refs/tags/v$VERSION" >/dev/null; then
+            echo "Tag v$VERSION already exists" >&2
+            exit 1
+          fi
+
+      - name: Bump versions
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -e
+          # tauri.conf.json (jq is preinstalled on ubuntu-latest)
+          jq --arg v "$VERSION" '.version = $v' src-tauri/tauri.conf.json > src-tauri/tauri.conf.json.tmp
+          mv src-tauri/tauri.conf.json.tmp src-tauri/tauri.conf.json
+
+          # Cargo.toml: only the [package] version, not deps
+          sed -i '0,/^version = "[^"]*"/s//version = "'"$VERSION"'"/' src-tauri/Cargo.toml
+
+          # Cargo.lock: docsreader package entry
+          sed -i '/^name = "docsreader"$/{n;s/^version = "[^"]*"/version = "'"$VERSION"'"/}' src-tauri/Cargo.lock
+
+          echo "After:"
+          grep '"version"' src-tauri/tauri.conf.json | head -1
+          grep '^version' src-tauri/Cargo.toml | head -1
+          grep -A1 '^name = "docsreader"$' src-tauri/Cargo.lock | head -2
+
+      - name: Commit, tag, push
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock
+          git commit -m "chore(release): v$VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD:main
+          git push origin "v$VERSION"
