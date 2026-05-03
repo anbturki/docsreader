@@ -47,6 +47,15 @@ jobs:
       - name: Install JS deps
         run: bun install
 
+      - name: Write App Store Connect API key
+        if: matrix.platform == 'macos-latest'
+        run: |
+          mkdir -p "$RUNNER_TEMP/appstore"
+          KEY_PATH="$RUNNER_TEMP/appstore/AuthKey_${{ secrets.APPLE_API_KEY }}.p8"
+          printf '%s' "${{ secrets.APPLE_API_KEY_BASE64 }}" | base64 --decode > "$KEY_PATH"
+          chmod 600 "$KEY_PATH"
+          echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
       - name: Build & release
         uses: tauri-apps/tauri-action@v0
         env:
@@ -54,13 +63,14 @@ jobs:
           # Updater signing
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # macOS code signing + notarization
+          # macOS code signing
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # macOS notarization via App Store Connect API key
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "DocsReader ${{ github.ref_name }}"
