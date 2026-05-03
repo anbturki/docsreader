@@ -5,25 +5,67 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to attach builds to (e.g. v0.1.0)"
+        required: true
+      platforms:
+        description: "Platforms to build"
+        type: choice
+        default: all
+        options:
+          - all
+          - macos-only
+          - linux-only
+          - windows-only
+          - linux-windows
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+      ref: ${{ steps.pick.outputs.ref }}
+      tag: ${{ steps.pick.outputs.tag }}
+      macos_included: ${{ steps.pick.outputs.macos_included }}
+    steps:
+      - id: pick
+        run: |
+          MAC='{"platform":"macos-latest","args":"--target universal-apple-darwin"}'
+          LIN='{"platform":"ubuntu-22.04","args":""}'
+          WIN='{"platform":"windows-latest","args":""}'
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+            case "${{ inputs.platforms }}" in
+              macos-only)     INCLUDE="[$MAC]";          MAC_IN=true ;;
+              linux-only)     INCLUDE="[$LIN]";          MAC_IN=false ;;
+              windows-only)   INCLUDE="[$WIN]";          MAC_IN=false ;;
+              linux-windows)  INCLUDE="[$LIN,$WIN]";     MAC_IN=false ;;
+              *)              INCLUDE="[$MAC,$LIN,$WIN]"; MAC_IN=true ;;
+            esac
+          else
+            TAG="${GITHUB_REF_NAME}"
+            INCLUDE="[$MAC,$LIN,$WIN]"
+            MAC_IN=true
+          fi
+          echo "matrix={\"include\":$INCLUDE}" >> "$GITHUB_OUTPUT"
+          echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "macos_included=$MAC_IN" >> "$GITHUB_OUTPUT"
+
   publish-tauri:
+    needs: setup
     permissions:
       contents: write
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            args: --target universal-apple-darwin
-          - platform: ubuntu-22.04
-            args: ""
-          - platform: windows-latest
-            args: ""
+      matrix: ${{ fromJSON(needs.setup.outputs.matrix) }}
 
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          ref: ${{ needs.setup.outputs.ref }}
 
       - name: Install Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6  # v2
@@ -72,8 +114,8 @@ jobs:
           APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "DocsReader ${{ github.ref_name }}"
+          tagName: ${{ needs.setup.outputs.tag }}
+          releaseName: "DocsReader ${{ needs.setup.outputs.tag }}"
           releaseBody: |
             See assets below to download and install.
 
@@ -91,13 +133,15 @@ jobs:
           args: ${{ matrix.args }}
 
   update-homebrew-tap:
-    needs: publish-tauri
+    needs: [setup, publish-tauri]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: needs.setup.outputs.macos_included == 'true'
+    env:
+      TAG: ${{ needs.setup.outputs.tag }}
     steps:
       - name: Determine version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Wait for release assets to be available
         env:
@@ -105,7 +149,7 @@ jobs:
         run: |
           set -e
           for i in $(seq 1 30); do
-            if gh release view "${GITHUB_REF_NAME}" \
+            if gh release view "$TAG" \
                 --repo anbturki/docsreader \
                 --json assets \
                 --jq '.assets[].name' | grep -q 'universal.dmg$'; then
@@ -123,11 +167,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-          DMG_NAME=$(gh release view "${GITHUB_REF_NAME}" \
+          DMG_NAME=$(gh release view "$TAG" \
             --repo anbturki/docsreader \
             --json assets --jq '.assets[].name' \
             | grep 'universal.dmg$' | head -n1)
-          gh release download "${GITHUB_REF_NAME}" \
+          gh release download "$TAG" \
             --repo anbturki/docsreader \
             --pattern "$DMG_NAME"
           SHA=$(shasum -a 256 "$DMG_NAME" | awk '{print $1}')
