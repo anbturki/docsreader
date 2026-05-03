@@ -129,4 +129,17 @@
   html {
     @apply font-sans;
     }
+
+  /*
+    Tailwind v4 sets `cursor: default` on buttons to match browser defaults.
+    Restore the pointer cursor on interactive elements when enabled.
+  */
+  button:not(:disabled),
+  [role="button"]:not(:disabled),
+  [role="menuitem"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  summary {
+    cursor: pointer;
+  }
 }

@@ -11,6 +11,8 @@ const VIEW_SETTINGS_KEY = "viewSettings";
 export type ContentWidth = "narrow" | "full";
 export type FontFamily = "sans" | "serif" | "mono";
 export type FontSize = "sm" | "md" | "lg";
+export type ColorScheme = "light" | "dark" | "system";
+export type AccentColor = "violet" | "blue" | "green" | "orange" | "rose" | "slate";
 
 export const FONT_SIZE_PX: Record<FontSize, number> = {
   sm: 13,
@@ -18,16 +20,29 @@ export const FONT_SIZE_PX: Record<FontSize, number> = {
   lg: 17,
 };
 
+export const ACCENT_HUE: Record<AccentColor, number> = {
+  violet: 280,
+  blue: 240,
+  green: 145,
+  orange: 40,
+  rose: 0,
+  slate: 250,
+};
+
 export interface ViewSettings {
   width: ContentWidth;
   fontFamily: FontFamily;
   fontSize: FontSize;
+  colorScheme: ColorScheme;
+  accentColor: AccentColor;
 }
 
 export const defaultViewSettings: ViewSettings = {
   width: "narrow",
   fontFamily: "sans",
   fontSize: "md",
+  colorScheme: "system",
+  accentColor: "violet",
 };
 
 interface CachedScan {
@@ -90,6 +105,8 @@ export async function loadViewSettings(): Promise<ViewSettings> {
     fontFamily:
       v.fontFamily === "serif" || v.fontFamily === "mono" ? v.fontFamily : "sans",
     fontSize: normalizeFontSize(v.fontSize),
+    colorScheme: normalizeColorScheme(v.colorScheme),
+    accentColor: normalizeAccentColor(v.accentColor),
   };
 }
 
@@ -101,6 +118,20 @@ function normalizeFontSize(value: unknown): FontSize {
     return "md";
   }
   return defaultViewSettings.fontSize;
+}
+
+function normalizeColorScheme(value: unknown): ColorScheme {
+  return value === "light" || value === "dark" ? value : "system";
+}
+
+function normalizeAccentColor(value: unknown): AccentColor {
+  return value === "blue" ||
+    value === "green" ||
+    value === "orange" ||
+    value === "rose" ||
+    value === "slate"
+    ? value
+    : "violet";
 }
 
 export async function saveViewSettings(settings: ViewSettings): Promise<void> {

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import type { ScanProgress } from "../lib/scan";
+import type { ScanProgress } from "@/lib/scan";
 
 interface Props {
   progress?: ScanProgress;

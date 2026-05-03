@@ -1,0 +1,148 @@
+/*
+  Code block theme: GitHub light + dark, scoped by .dark class on <html>.
+  Replaces highlight.js/styles/github-dark.css (which was hardcoded dark).
+
+  The <pre> wrapper is intentionally transparent — only the .hljs <code>
+  block provides the visible box, so there's no nested wrapper.
+*/
+
+.prose pre {
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+    margin: 1.25em 0;
+}
+
+.hljs {
+    display: block;
+    overflow-x: auto;
+    padding: 1rem 1.25rem;
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    font-size: 0.875em;
+    line-height: 1.6;
+}
+
+/* === Light theme (GitHub) === */
+.hljs {
+    background: #f6f8fa;
+    color: #24292e;
+}
+.hljs-comment,
+.hljs-quote {
+    color: #6a737d;
+    font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-subst {
+    color: #d73a49;
+}
+.hljs-string,
+.hljs-doctag {
+    color: #032f62;
+}
+.hljs-number,
+.hljs-literal,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag .hljs-attr {
+    color: #005cc5;
+}
+.hljs-title,
+.hljs-section,
+.hljs-selector-id,
+.hljs-name {
+    color: #6f42c1;
+    font-weight: 600;
+}
+.hljs-type,
+.hljs-class .hljs-title,
+.hljs-built_in {
+    color: #6f42c1;
+}
+.hljs-attribute,
+.hljs-attr {
+    color: #005cc5;
+}
+.hljs-symbol,
+.hljs-bullet,
+.hljs-meta {
+    color: #e36209;
+}
+.hljs-regexp {
+    color: #032f62;
+}
+.hljs-deletion {
+    color: #b31d28;
+    background-color: #ffeef0;
+}
+.hljs-addition {
+    color: #22863a;
+    background-color: #f0fff4;
+}
+.hljs-emphasis {
+    font-style: italic;
+}
+.hljs-strong {
+    font-weight: 700;
+}
+
+/* === Dark theme (GitHub Dark) === */
+.dark .hljs {
+    background: #0d1117;
+    color: #c9d1d9;
+}
+.dark .hljs-comment,
+.dark .hljs-quote {
+    color: #8b949e;
+}
+.dark .hljs-keyword,
+.dark .hljs-selector-tag,
+.dark .hljs-subst {
+    color: #ff7b72;
+}
+.dark .hljs-string,
+.dark .hljs-doctag {
+    color: #a5d6ff;
+}
+.dark .hljs-number,
+.dark .hljs-literal,
+.dark .hljs-variable,
+.dark .hljs-template-variable,
+.dark .hljs-tag .hljs-attr {
+    color: #79c0ff;
+}
+.dark .hljs-title,
+.dark .hljs-section,
+.dark .hljs-selector-id,
+.dark .hljs-name {
+    color: #d2a8ff;
+}
+.dark .hljs-type,
+.dark .hljs-class .hljs-title,
+.dark .hljs-built_in {
+    color: #d2a8ff;
+}
+.dark .hljs-attribute,
+.dark .hljs-attr {
+    color: #79c0ff;
+}
+.dark .hljs-symbol,
+.dark .hljs-bullet,
+.dark .hljs-meta {
+    color: #ffa657;
+}
+.dark .hljs-regexp {
+    color: #a5d6ff;
+}
+.dark .hljs-deletion {
+    color: #ffdcd7;
+    background-color: #67060c;
+}
+.dark .hljs-addition {
+    color: #aff5b4;
+    background-color: #033a16;
+}
+
+/* Inline <code> (not inside <pre>) keeps prose styling — leave alone */

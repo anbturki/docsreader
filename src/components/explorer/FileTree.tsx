@@ -11,7 +11,8 @@ import {
   SidebarMenuItem,
   SidebarMenuSub,
 } from "@/components/ui/sidebar";
-import type { TreeNode } from "../lib/tree";
+import type { TreeNode } from "@/lib/tree";
+import { EntryContextMenu } from "./EntryContextMenu";
 
 interface Props {
   node: TreeNode;
@@ -49,19 +50,19 @@ function TreeEntry({ node, selectedPath, onSelect, depth, startCollapsed }: Entr
   if (!node.isDir) {
     return (
       <SidebarMenuItem>
-        <SidebarMenuButton
-          isActive={node.path === selectedPath}
-          onClick={() => onSelect(node.path)}
-          tooltip={{ children: node.name, hidden: false }}
-        >
-          <FileText />
-          <span className="truncate">{node.name}</span>
-        </SidebarMenuButton>
+        <EntryContextMenu path={node.path}>
+          <SidebarMenuButton
+            isActive={node.path === selectedPath}
+            onClick={() => onSelect(node.path)}
+            tooltip={{ children: node.name, hidden: false }}
+          >
+            <FileText />
+            <span className="truncate">{node.name}</span>
+          </SidebarMenuButton>
+        </EntryContextMenu>
       </SidebarMenuItem>
     );
   }
-
-  const count = countFiles(node);
 
   return (
     <SidebarMenuItem>
@@ -69,22 +70,24 @@ function TreeEntry({ node, selectedPath, onSelect, depth, startCollapsed }: Entr
         defaultOpen={!startCollapsed && depth < 1}
         className="group/collapsible w-full"
       >
-        <CollapsibleTrigger asChild>
-          <SidebarMenuButton
-            tooltip={{ children: node.name, hidden: false }}
-            className="pr-8"
-          >
-            <ChevronRight className="shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-90" />
-            <span className="truncate">
-              {node.segments && node.segments.length > 1 ? (
-                <CompactPath segments={node.segments} />
-              ) : (
-                node.name
-              )}
-            </span>
-          </SidebarMenuButton>
-        </CollapsibleTrigger>
-        <SidebarMenuBadge>{count}</SidebarMenuBadge>
+        <EntryContextMenu path={node.path}>
+          <CollapsibleTrigger asChild>
+            <SidebarMenuButton
+              tooltip={{ children: node.name, hidden: false }}
+              className="pr-8"
+            >
+              <ChevronRight className="shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-90" />
+              <span className="truncate">
+                {node.segments && node.segments.length > 1 ? (
+                  <CompactPath segments={node.segments} />
+                ) : (
+                  node.name
+                )}
+              </span>
+            </SidebarMenuButton>
+          </CollapsibleTrigger>
+        </EntryContextMenu>
+        <SidebarMenuBadge>{countFiles(node)}</SidebarMenuBadge>
         <CollapsibleContent>
           <SidebarMenuSub className="mx-2 px-1.5">
             {node.children.map((child) => (
@@ -114,9 +117,7 @@ function CompactPath({ segments }: { segments: string[] }) {
     <>
       {segments.map((s, i) => (
         <span key={i}>
-          {i > 0 && (
-            <span className="mx-1 text-muted-foreground/60">›</span>
-          )}
+          {i > 0 && <span className="mx-1 text-muted-foreground/60">›</span>}
           <span className={i < segments.length - 1 ? "text-muted-foreground" : ""}>
             {s}
           </span>
