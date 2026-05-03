@@ -1,23 +1,21 @@
 # DocsReader
 
-A desktop reader for Markdown documentation. macOS, Linux, Windows.
+Point it at any folder. DocsReader scans the directory for Markdown files, organizes them into a navigable tree, and renders each one in a clean reader. macOS, Linux, Windows.
 
 [![Latest Release](https://img.shields.io/github/v/release/anbturki/docsreader?label=latest&color=7c3aed)](https://github.com/anbturki/docsreader/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/anbturki/docsreader/total?label=downloads&color=7c3aed)](https://github.com/anbturki/docsreader/releases)
-
-![DocsReader](docs/screenshots/main.png)
-
-## Download
 
 [![Download for macOS](https://img.shields.io/badge/macOS-Download-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/anbturki/docsreader/releases/latest)
 [![Download for Windows](https://img.shields.io/badge/Windows-Download-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/anbturki/docsreader/releases/latest)
 [![Download for Linux](https://img.shields.io/badge/Linux-Download-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/anbturki/docsreader/releases/latest)
 
-Or install via package manager / one-liner - see [Install](#install) below.
+Or install via [Homebrew or one-liner](#install).
+
+![DocsReader](docs/screenshots/main.png)
 
 ## Features
 
-- Read any folder of Markdown, with live reload on file changes
+- Scan any folder of Markdown, with live reload as files change
 - Light + dark themes, 6 accent colors
 - Search files, titles, and tags
 - Reading preferences - font, size, page width
@@ -25,6 +23,8 @@ Or install via package manager / one-liner - see [Install](#install) below.
 - YAML frontmatter parsed for titles and tags
 - Signed auto-updates
 - Code-signed and notarized on macOS
+
+Found a bug, want a feature, or have feedback? [Open an issue](https://github.com/anbturki/docsreader/issues/new) - I'm actively building this and feedback shapes the roadmap.
 
 ## Screenshots
 

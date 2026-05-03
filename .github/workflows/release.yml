@@ -128,7 +128,7 @@ jobs:
             ```
             curl -fsSL https://raw.githubusercontent.com/anbturki/docsreader/main/install.sh | bash
             ```
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
 
