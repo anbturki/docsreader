@@ -54,20 +54,6 @@ To build a local production binary:
 bun run tauri build
 ```
 
-## Project layout
-
-```
-src/                    React frontend (TypeScript + Vite)
-  components/             UI components (sidebar, viewer, settings)
-  lib/                    Scan, tree builder, persistence helpers
-src-tauri/              Rust backend
-  src/lib.rs              scan_markdown command (walkdir + rayon)
-  capabilities/           Tauri permission scopes
-  tauri.conf.json         Bundle, signing, and updater config
-.github/workflows/      CI: release builds + CodeQL scanning
-install.sh              Curl-pipe-bash installer
-```
-
 ## Releasing
 
 Releases are cut by pushing a tag. The workflow builds for all three platforms, signs and notarizes the macOS bundle, publishes a draft GitHub Release, and updates the Homebrew tap.
