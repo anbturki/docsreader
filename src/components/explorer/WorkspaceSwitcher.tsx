@@ -43,7 +43,7 @@ export function WorkspaceSwitcher({ roots, activeRoot, onSelect, onRemove, onAdd
   useLayoutEffect(() => {
     const btn = activeButtonRef.current;
     if (!btn) return;
-    btn.scrollIntoView({ block: "nearest", inline: "nearest" });
+    btn.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
   }, [activeRoot]);
 
   const scrollBy = (dir: "left" | "right") => {
