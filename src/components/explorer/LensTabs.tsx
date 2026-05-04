@@ -25,10 +25,10 @@ export function LensTabs({ active, onChange }: Props) {
             aria-selected={isActive}
             onClick={() => onChange(l.value)}
             className={cn(
-              "border-b-2 py-1.5 transition-colors",
+              "py-1.5",
               isActive
-                ? "border-primary text-foreground"
-                : "border-transparent text-muted-foreground hover:text-foreground"
+                ? "font-semibold text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             {l.label}
