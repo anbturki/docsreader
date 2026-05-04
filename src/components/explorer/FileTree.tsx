@@ -1,17 +1,11 @@
 import type { MouseEvent } from "react";
 import { ChevronRight, FileText } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import {
-  SidebarMenu,
-  SidebarMenuBadge,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-} from "@/components/ui/sidebar";
 import type { TreeNode } from "@/lib/tree";
 import { EntryContextMenu } from "./EntryContextMenu";
 
@@ -23,6 +17,9 @@ interface Props {
   onOpenInNewTab: (path: string) => void;
   isExpanded: (key: string, depth: number) => boolean;
   onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
+  isPinned: (path: string) => boolean;
+  onTogglePin: (path: string) => void;
+  onHide: (path: string) => void;
 }
 
 export function FileTree({
@@ -33,9 +30,12 @@ export function FileTree({
   onOpenInNewTab,
   isExpanded,
   onToggleExpanded,
+  isPinned,
+  onTogglePin,
+  onHide,
 }: Props) {
   return (
-    <SidebarMenu>
+    <ul className="px-1 py-1">
       {node.children.map((child) => (
         <TreeEntry
           key={child.path + child.name}
@@ -47,9 +47,12 @@ export function FileTree({
           depth={0}
           isExpanded={isExpanded}
           onToggleExpanded={onToggleExpanded}
+          isPinned={isPinned}
+          onTogglePin={onTogglePin}
+          onHide={onHide}
         />
       ))}
-    </SidebarMenu>
+    </ul>
   );
 }
 
@@ -62,7 +65,12 @@ interface EntryProps {
   depth: number;
   isExpanded: (key: string, depth: number) => boolean;
   onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
+  isPinned: (path: string) => boolean;
+  onTogglePin: (path: string) => void;
+  onHide: (path: string) => void;
 }
+
+const INDENT_STEP = 14;
 
 function TreeEntry({
   node,
@@ -73,7 +81,12 @@ function TreeEntry({
   depth,
   isExpanded,
   onToggleExpanded,
+  isPinned,
+  onTogglePin,
+  onHide,
 }: EntryProps) {
+  const padLeft = 8 + depth * INDENT_STEP;
+
   if (!node.isDir) {
     const handleClick = (e: MouseEvent) => {
       if (e.metaKey || e.ctrlKey) {
@@ -90,23 +103,32 @@ function TreeEntry({
       }
     };
     return (
-      <SidebarMenuItem>
+      <li>
         <EntryContextMenu
           path={node.path}
           isFile
           onOpenInNewTab={onOpenInNewTab}
+          pinned={isPinned(node.path)}
+          onTogglePin={onTogglePin}
+          onHide={onHide}
         >
-          <SidebarMenuButton
-            isActive={node.path === selectedPath}
+          <button
             onClick={handleClick}
             onAuxClick={handleAuxClick}
-            tooltip={{ children: node.name, hidden: false }}
+            style={{ paddingLeft: padLeft }}
+            className={cn(
+              "flex w-full items-center gap-2 py-1.5 pr-2 text-left text-sm transition-colors",
+              node.path === selectedPath
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "hover:bg-sidebar-accent/50"
+            )}
+            title={node.name}
           >
-            <FileText />
+            <FileText className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate">{node.name}</span>
-          </SidebarMenuButton>
+          </button>
         </EntryContextMenu>
-      </SidebarMenuItem>
+      </li>
     );
   }
 
@@ -114,32 +136,24 @@ function TreeEntry({
   const open = isExpanded(dirKey, depth);
 
   return (
-    <SidebarMenuItem>
-      <Collapsible
-        open={open}
-        onOpenChange={(next) => onToggleExpanded(dirKey, !next)}
-        className="group/collapsible w-full"
-      >
-        <EntryContextMenu path={node.path} isFile={false}>
-          <CollapsibleTrigger asChild>
-            <SidebarMenuButton
-              tooltip={{ children: node.name, hidden: false }}
-              className="pr-8"
-            >
-              <ChevronRight className="shrink-0 transition-transform group-data-[state=open]/collapsible:rotate-90" />
-              <span className="truncate">
-                {node.segments && node.segments.length > 1 ? (
-                  <CompactPath segments={node.segments} />
-                ) : (
-                  node.name
-                )}
-              </span>
-            </SidebarMenuButton>
+    <li>
+      <Collapsible open={open} onOpenChange={(next) => onToggleExpanded(dirKey, !next)}>
+        <EntryContextMenu path={node.path} isFile={false} onHide={onHide}>
+          <CollapsibleTrigger
+            style={{ paddingLeft: padLeft }}
+            className="group flex w-full items-center gap-2 py-1.5 pr-2 text-left text-sm text-muted-foreground transition-colors hover:bg-sidebar-accent/50 hover:text-foreground"
+          >
+            <ChevronRight
+              className={cn(
+                "size-3.5 shrink-0 transition-transform",
+                open && "rotate-90"
+              )}
+            />
+            <span className="truncate">{node.name}</span>
           </CollapsibleTrigger>
         </EntryContextMenu>
-        <SidebarMenuBadge>{countFiles(node)}</SidebarMenuBadge>
         <CollapsibleContent>
-          <SidebarMenuSub className="mx-2 px-1.5">
+          <ul>
             {node.children.map((child) => (
               <TreeEntry
                 key={child.path + child.name}
@@ -151,12 +165,15 @@ function TreeEntry({
                 depth={depth + 1}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}
+                isPinned={isPinned}
+                onTogglePin={onTogglePin}
+                onHide={onHide}
               />
             ))}
-          </SidebarMenuSub>
+          </ul>
         </CollapsibleContent>
       </Collapsible>
-    </SidebarMenuItem>
+    </li>
   );
 }
 
@@ -169,24 +186,4 @@ export function collectDirKeys(node: TreeNode, rootKey: string): string[] {
   }
   for (const c of node.children) walk(c);
   return out;
-}
-
-function countFiles(node: TreeNode): number {
-  if (!node.isDir) return 1;
-  return node.children.reduce((sum, c) => sum + countFiles(c), 0);
-}
-
-function CompactPath({ segments }: { segments: string[] }) {
-  return (
-    <>
-      {segments.map((s, i) => (
-        <span key={i}>
-          {i > 0 && <span className="mx-1 text-muted-foreground/60">›</span>}
-          <span className={i < segments.length - 1 ? "text-muted-foreground" : ""}>
-            {s}
-          </span>
-        </span>
-      ))}
-    </>
-  );
 }

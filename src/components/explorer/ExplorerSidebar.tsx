@@ -1,44 +1,62 @@
-import { FolderPlus, ListCollapse, RefreshCw } from "lucide-react";
+import { ListCollapse, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarRail,
-  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import type { MarkdownFile } from "@/lib/scan";
 import type { TreeNode } from "@/lib/tree";
+import type { SidebarLens } from "@/lib/storage";
 import type { RootScan } from "@/hooks/useLibrary";
 import { FileTree } from "./FileTree";
-import { FolderList } from "./FolderList";
+import { LensTabs } from "./LensTabs";
+import { PinnedList } from "./PinnedList";
+import { RecentList } from "./RecentList";
 import { ScanProgressView } from "./ScanProgressView";
 import { SearchInput } from "./SearchInput";
-import { TagsBar } from "./TagsBar";
+import { TagsList } from "./TagsList";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 interface Props {
+  // workspaces
   roots: string[];
   activeRoot: string | undefined;
   activeScan: RootScan | undefined;
-  selectedPath: string | undefined;
-  search: string;
-  filteredFiles: MarkdownFile[];
-  tags: string[];
-  tree: TreeNode | undefined;
-  rootKey: string;
-  isExpanded: (key: string, depth: number) => boolean;
-  onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
   onPickDirectory: () => void;
   onSelectRoot: (path: string) => void;
   onRemoveRoot: (path: string) => void;
   onRescan: () => void;
-  onCollapseAll: () => void;
+
+  // lens
+  lens: SidebarLens;
+  onLensChange: (lens: SidebarLens) => void;
+
+  // search
+  search: string;
   onSearchChange: (value: string) => void;
+
+  // files
+  filteredFiles: MarkdownFile[];
+  pinnedFiles: MarkdownFile[];
+
+  // tree
+  tree: TreeNode | undefined;
+  rootKey: string;
+  isExpanded: (key: string, depth: number) => boolean;
+  onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
+  onCollapseAll: () => void;
+
+  // pin / hide
+  isPinned: (path: string) => boolean;
+  onTogglePin: (path: string) => void;
+  onHide: (path: string) => void;
+
+  // file ops
+  selectedPath: string | undefined;
   onSelectFile: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
 }
@@ -47,120 +65,118 @@ export function ExplorerSidebar({
   roots,
   activeRoot,
   activeScan,
-  selectedPath,
-  search,
-  filteredFiles,
-  tags,
-  tree,
-  rootKey,
-  isExpanded,
-  onToggleExpanded,
   onPickDirectory,
   onSelectRoot,
   onRemoveRoot,
   onRescan,
-  onCollapseAll,
+  lens,
+  onLensChange,
+  search,
   onSearchChange,
+  filteredFiles,
+  pinnedFiles,
+  tree,
+  rootKey,
+  isExpanded,
+  onToggleExpanded,
+  onCollapseAll,
+  isPinned,
+  onTogglePin,
+  onHide,
+  selectedPath,
   onSelectFile,
   onOpenInNewTab,
 }: Props) {
   return (
     <Sidebar collapsible="offcanvas">
-      <SidebarHeader className="gap-3">
-        <div className="flex items-center justify-between gap-2">
+      <SidebarHeader className="gap-0 p-0">
+        <div className="flex items-center justify-between px-3 pt-3 pb-1">
           <span className="text-sm font-semibold tracking-tight">DocsReader</span>
-          <div className="flex items-center gap-1">
-            {activeRoot && (
-              <>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={onCollapseAll}
-                  title="Collapse all"
-                  className="size-8"
-                >
-                  <ListCollapse />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={onRescan}
-                  disabled={!!activeScan?.scanning}
-                  title="Refresh"
-                  className="size-8"
-                >
-                  <RefreshCw className={activeScan?.scanning ? "animate-spin" : ""} />
-                </Button>
-              </>
+          <div className="flex items-center gap-0.5">
+            {activeRoot && lens === "tree" && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={onCollapseAll}
+                title="Collapse all"
+                className="size-7 text-muted-foreground"
+              >
+                <ListCollapse />
+              </Button>
             )}
-            <Button size="sm" onClick={onPickDirectory}>
-              <FolderPlus />
-              Add
-            </Button>
+            {activeRoot && (
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={onRescan}
+                disabled={!!activeScan?.scanning}
+                title="Refresh"
+                className="size-7 text-muted-foreground"
+              >
+                <RefreshCw className={activeScan?.scanning ? "animate-spin" : ""} />
+              </Button>
+            )}
           </div>
         </div>
 
-        <SearchInput value={search} onChange={onSearchChange} />
+        {roots.length > 0 && (
+          <WorkspaceSwitcher
+            roots={roots}
+            activeRoot={activeRoot}
+            onSelect={onSelectRoot}
+            onRemove={onRemoveRoot}
+            onAdd={onPickDirectory}
+          />
+        )}
+
+        {roots.length > 0 && (
+          <LensTabs active={lens} onChange={onLensChange} />
+        )}
+
+        {roots.length > 0 && (
+          <div className="px-2 pt-2 pb-2">
+            <SearchInput value={search} onChange={onSearchChange} />
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="overflow-x-hidden">
         {roots.length === 0 ? (
           <Empty className="my-auto">
             <EmptyHeader>
-              <EmptyTitle>No folders yet</EmptyTitle>
+              <EmptyTitle>No workspaces yet</EmptyTitle>
               <EmptyDescription>
-                Add a directory to start reading markdown files.
+                Add a folder of markdown to start.
               </EmptyDescription>
             </EmptyHeader>
-            <Button onClick={onPickDirectory}>
-              <FolderPlus />
-              Add Folder
-            </Button>
+            <Button onClick={onPickDirectory}>Add folder</Button>
           </Empty>
+        ) : activeScan?.scanning ? (
+          <ScanProgressView
+            progress={activeScan.progress}
+            startedAt={activeScan.startedAt}
+          />
         ) : (
-          <>
-            <FolderList
-              roots={roots}
-              activeRoot={activeRoot}
-              onSelect={onSelectRoot}
-              onRemove={onRemoveRoot}
-            />
-
-            <TagsBar tags={tags} activeTag={search} onTagClick={(tag) => onSearchChange(tag === search ? "" : tag)} />
-
-            <SidebarSeparator />
-
-            <SidebarGroup>
-              <SidebarGroupLabel>Files</SidebarGroupLabel>
-              <SidebarGroupContent>
-                {activeScan?.scanning ? (
-                  <ScanProgressView
-                    progress={activeScan.progress}
-                    startedAt={activeScan.startedAt}
-                  />
-                ) : tree && filteredFiles.length > 0 ? (
-                  <FileTree
-                    node={tree}
-                    rootKey={rootKey}
-                    selectedPath={selectedPath}
-                    onSelect={onSelectFile}
-                    onOpenInNewTab={onOpenInNewTab}
-                    isExpanded={isExpanded}
-                    onToggleExpanded={onToggleExpanded}
-                  />
-                ) : (
-                  <p className="px-3 py-4 text-sm text-muted-foreground">
-                    No markdown files found.
-                  </p>
-                )}
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </>
+          <LensView
+            lens={lens}
+            tree={tree}
+            rootKey={rootKey}
+            filteredFiles={filteredFiles}
+            pinnedFiles={pinnedFiles}
+            selectedPath={selectedPath}
+            isExpanded={isExpanded}
+            onToggleExpanded={onToggleExpanded}
+            isPinned={isPinned}
+            onTogglePin={onTogglePin}
+            onHide={onHide}
+            onSelect={onSelectFile}
+            onOpenInNewTab={onOpenInNewTab}
+          />
         )}
       </SidebarContent>
 
       <SidebarFooter className="text-xs text-muted-foreground">
-        <ExplorerFooter activeScan={activeScan} search={search} matchCount={filteredFiles.length} />
+        <ExplorerFooter activeScan={activeScan} matchCount={filteredFiles.length} />
       </SidebarFooter>
 
       <SidebarRail />
@@ -168,13 +184,101 @@ export function ExplorerSidebar({
   );
 }
 
+interface LensViewProps {
+  lens: SidebarLens;
+  tree: TreeNode | undefined;
+  rootKey: string;
+  filteredFiles: MarkdownFile[];
+  pinnedFiles: MarkdownFile[];
+  selectedPath: string | undefined;
+  isExpanded: (key: string, depth: number) => boolean;
+  onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
+  isPinned: (path: string) => boolean;
+  onTogglePin: (path: string) => void;
+  onHide: (path: string) => void;
+  onSelect: (path: string) => void;
+  onOpenInNewTab: (path: string) => void;
+}
+
+function LensView({
+  lens,
+  tree,
+  rootKey,
+  filteredFiles,
+  pinnedFiles,
+  selectedPath,
+  isExpanded,
+  onToggleExpanded,
+  isPinned,
+  onTogglePin,
+  onHide,
+  onSelect,
+  onOpenInNewTab,
+}: LensViewProps) {
+  if (lens === "tree") {
+    if (!tree || filteredFiles.length === 0) {
+      return (
+        <p className="px-4 py-6 text-sm text-muted-foreground">
+          No markdown files found.
+        </p>
+      );
+    }
+    return (
+      <FileTree
+        node={tree}
+        rootKey={rootKey}
+        selectedPath={selectedPath}
+        onSelect={onSelect}
+        onOpenInNewTab={onOpenInNewTab}
+        isExpanded={isExpanded}
+        onToggleExpanded={onToggleExpanded}
+        isPinned={isPinned}
+        onTogglePin={onTogglePin}
+        onHide={onHide}
+      />
+    );
+  }
+  if (lens === "recent") {
+    return (
+      <RecentList
+        files={filteredFiles}
+        selectedPath={selectedPath}
+        onSelect={onSelect}
+        onOpenInNewTab={onOpenInNewTab}
+        isPinned={isPinned}
+        onTogglePin={onTogglePin}
+      />
+    );
+  }
+  if (lens === "tags") {
+    return (
+      <TagsList
+        files={filteredFiles}
+        selectedPath={selectedPath}
+        onSelect={onSelect}
+        onOpenInNewTab={onOpenInNewTab}
+        isPinned={isPinned}
+        onTogglePin={onTogglePin}
+      />
+    );
+  }
+  // pinned lens
+  return (
+    <PinnedList
+      files={pinnedFiles}
+      selectedPath={selectedPath}
+      onSelect={onSelect}
+      onOpenInNewTab={onOpenInNewTab}
+      onTogglePin={onTogglePin}
+    />
+  );
+}
+
 function ExplorerFooter({
   activeScan,
-  search,
   matchCount,
 }: {
   activeScan: RootScan | undefined;
-  search: string;
   matchCount: number;
 }) {
   if (!activeScan) return null;
@@ -194,8 +298,8 @@ function ExplorerFooter({
     <span className="px-2">
       {activeScan.result.files.length} files
       {activeScan.result.truncated && " (50k cap)"}
-      {elapsed !== null && <> · scanned in {elapsed}ms</>}
-      {search && ` · ${matchCount} match`}
+      {elapsed !== null && <> · {elapsed}ms</>}
+      {matchCount !== activeScan.result.files.length && ` · ${matchCount} match`}
     </span>
   );
 }

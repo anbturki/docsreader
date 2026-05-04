@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpen, Keyboard, Palette } from "lucide-react";
+import { BookOpen, FolderTree, Keyboard, Palette } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import {
 import { cn } from "@/lib/utils";
 import type { ViewSettings } from "@/lib/storage";
 import { AppearanceSection } from "./AppearanceSection";
+import { ExplorerSection } from "./ExplorerSection";
 import { ReadingSection } from "./ReadingSection";
 import { ShortcutsSection } from "./ShortcutsSection";
 
@@ -19,11 +20,12 @@ interface Props {
   onChange: (next: ViewSettings) => void;
 }
 
-type SectionId = "appearance" | "reading" | "shortcuts";
+type SectionId = "appearance" | "reading" | "explorer" | "shortcuts";
 
 const SECTIONS: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "reading", label: "Reading", icon: BookOpen },
+  { id: "explorer", label: "Explorer", icon: FolderTree },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
 ];
 
@@ -66,6 +68,9 @@ export default function SettingsDialog({ open, onOpenChange, settings, onChange 
             )}
             {active === "reading" && (
               <ReadingSection settings={settings} onChange={onChange} />
+            )}
+            {active === "explorer" && (
+              <ExplorerSection settings={settings} onChange={onChange} />
             )}
             {active === "shortcuts" && (
               <ShortcutsSection settings={settings} onChange={onChange} />

@@ -20,8 +20,10 @@ import { useTabs } from "@/hooks/useTabs";
 import { useTheme } from "@/hooks/useTheme";
 import { useViewSettings } from "@/hooks/useViewSettings";
 import { useSidebarState } from "@/hooks/useSidebarState";
+import { usePinned } from "@/hooks/usePinned";
 import { buildTree } from "@/lib/tree";
 import { collectDirKeys } from "@/components/explorer/FileTree";
+import { buildHideMatcher } from "@/lib/match";
 import { basename } from "@/lib/path";
 import type { MarkdownFile } from "@/lib/scan";
 import "@/styles/code-theme.css";
@@ -30,7 +32,8 @@ function App() {
   const library = useLibrary();
   const tabs = useTabs();
   const viewSettings = useViewSettings();
-  const sidebar = useSidebarState();
+  const sidebar = useSidebarState(viewSettings.settings.defaultFolderState);
+  const pinned = usePinned();
   useTheme(viewSettings.settings.colorScheme, viewSettings.settings.accentColor);
   const deferredSettings = useDeferredValue(viewSettings.settings);
   const [search, setSearch] = useState("");
@@ -51,17 +54,29 @@ function App() {
     });
   }, [viewSettings]);
 
-  const allFiles = library.activeScan?.result.files ?? [];
+  const hideMatcher = useMemo(
+    () => buildHideMatcher(viewSettings.settings.hidePatterns),
+    [viewSettings.settings.hidePatterns]
+  );
+
+  const rawFiles = library.activeScan?.result.files ?? [];
+  const allFiles = useMemo(() => {
+    if (hideMatcher.empty) return rawFiles;
+    return rawFiles.filter((f) => !hideMatcher.matchesPath(f.relPath));
+  }, [rawFiles, hideMatcher]);
 
   const quickOpenFiles = useMemo<QuickOpenFile[]>(() => {
     const out: QuickOpenFile[] = [];
     for (const root of library.roots) {
       const scan = library.scans[root];
       if (!scan) continue;
-      for (const f of scan.result.files) out.push({ ...f, rootPath: root });
+      for (const f of scan.result.files) {
+        if (!hideMatcher.empty && hideMatcher.matchesPath(f.relPath)) continue;
+        out.push({ ...f, rootPath: root });
+      }
     }
     return out;
-  }, [library.roots, library.scans]);
+  }, [library.roots, library.scans, hideMatcher]);
 
   const quickOpenShortcut = useMemo(
     () => parseShortcut(viewSettings.settings.quickOpenShortcut),
@@ -103,11 +118,54 @@ function App() {
     if (!tree) return;
     sidebar.collapseAll(collectDirKeys(tree, rootKey));
   }, [tree, rootKey, sidebar]);
-  const tagList = useTags(allFiles);
   const activeFile = tabs.activeTab
     ? allFiles.find((f) => f.path === tabs.activeTab?.path)
     : undefined;
   const headerRelPath = activeFile?.relPath ?? (tabs.activeTab && basename(tabs.activeTab.path));
+
+  const pinnedFiles = useMemo(() => {
+    if (!library.activeRoot) return [];
+    const set = new Set(pinned.pinnedFor(library.activeRoot));
+    return allFiles.filter((f) => set.has(f.path));
+  }, [library.activeRoot, pinned, allFiles]);
+
+  const handleTogglePin = useCallback(
+    (path: string) => {
+      if (!library.activeRoot) return;
+      pinned.togglePinned(library.activeRoot, path);
+    },
+    [library.activeRoot, pinned]
+  );
+
+  const handleHide = useCallback(
+    (absolutePath: string) => {
+      if (!library.activeRoot) return;
+      const root = library.activeRoot;
+      const fileEntry = allFiles.find((f) => f.path === absolutePath);
+      let rel = fileEntry?.relPath;
+      if (!rel) {
+        rel = absolutePath.startsWith(root + "/")
+          ? absolutePath.slice(root.length + 1)
+          : basename(absolutePath);
+      }
+      const isDir = !fileEntry;
+      const pattern = isDir ? `${rel}/**` : rel;
+      const current = viewSettings.settings.hidePatterns;
+      if (current.includes(pattern)) return;
+      viewSettings.update({
+        ...viewSettings.settings,
+        hidePatterns: [...current, pattern],
+      });
+    },
+    [library.activeRoot, allFiles, viewSettings]
+  );
+
+  const handleLensChange = useCallback(
+    (lens: typeof viewSettings.settings.sidebarLens) => {
+      viewSettings.update({ ...viewSettings.settings, sidebarLens: lens });
+    },
+    [viewSettings]
+  );
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -116,20 +174,27 @@ function App() {
           roots={library.roots}
           activeRoot={library.activeRoot}
           activeScan={library.activeScan}
-          selectedPath={tabs.activeTab?.path}
-          search={search}
-          filteredFiles={filteredFiles}
-          tags={tagList}
-          tree={tree}
-          rootKey={rootKey}
-          isExpanded={sidebar.isExpanded}
-          onToggleExpanded={sidebar.toggleExpanded}
           onPickDirectory={() => void library.pickDirectory()}
           onSelectRoot={(path) => void library.selectRoot(path)}
           onRemoveRoot={(path) => void library.removeRoot(path)}
           onRescan={() => library.activeRoot && void library.rescan(library.activeRoot)}
-          onCollapseAll={handleCollapseAll}
+          lens={viewSettings.settings.sidebarLens}
+          onLensChange={handleLensChange}
+          search={search}
           onSearchChange={setSearch}
+          filteredFiles={filteredFiles}
+          pinnedFiles={pinnedFiles}
+          tree={tree}
+          rootKey={rootKey}
+          isExpanded={sidebar.isExpanded}
+          onToggleExpanded={sidebar.toggleExpanded}
+          onCollapseAll={handleCollapseAll}
+          isPinned={(path) =>
+            library.activeRoot ? pinned.isPinned(library.activeRoot, path) : false
+          }
+          onTogglePin={handleTogglePin}
+          onHide={handleHide}
+          selectedPath={tabs.activeTab?.path}
           onSelectFile={tabs.openInActive}
           onOpenInNewTab={tabs.openInNew}
         />
@@ -252,14 +317,6 @@ function useFilteredFiles(files: MarkdownFile[], search: string): MarkdownFile[]
       return f.tags.some((t) => t.toLowerCase().includes(q));
     });
   }, [files, search]);
-}
-
-function useTags(files: MarkdownFile[]): string[] {
-  return useMemo(() => {
-    const tags = new Set<string>();
-    files.forEach((f) => f.tags.forEach((t) => tags.add(t)));
-    return Array.from(tags).sort();
-  }, [files]);
 }
 
 export default App;
