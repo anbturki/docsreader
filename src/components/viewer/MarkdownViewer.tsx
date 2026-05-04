@@ -57,6 +57,7 @@ import {
 } from "@/lib/storage";
 import { useWebRoot } from "@/hooks/useWebRoot";
 import { remarkMermaid } from "@/lib/remarkMermaid";
+import { remarkSvgbob } from "@/lib/remarkSvgbob";
 import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
 import { MarkdownImage } from "./MarkdownImage";
 import { MarkdownLink } from "./MarkdownLink";
@@ -171,7 +172,7 @@ interface MemoBodyProps {
   rehypePlugins: Pluggable[];
 }
 
-const REMARK_PLUGINS: Pluggable[] = [remarkGfm, remarkMath, remarkMermaid];
+const REMARK_PLUGINS: Pluggable[] = [remarkGfm, remarkMath, remarkMermaid, remarkSvgbob];
 
 const SANITIZE_SCHEMA: typeof defaultSchema = {
   ...defaultSchema,
@@ -190,6 +191,7 @@ const SANITIZE_SCHEMA: typeof defaultSchema = {
       "dataLanguage",
       "dataTheme",
       "dataMermaid",
+      "dataSvgbob",
     ],
     pre: [
       ...(defaultSchema.attributes?.pre ?? []),
