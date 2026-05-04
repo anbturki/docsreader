@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BookOpen, FolderTree, Keyboard, Palette } from "lucide-react";
 import {
   Dialog,
@@ -13,14 +13,17 @@ import { ExplorerSection } from "./ExplorerSection";
 import { ReadingSection } from "./ReadingSection";
 import { ShortcutsSection } from "./ShortcutsSection";
 
+export type SettingsSection = "appearance" | "reading" | "explorer" | "shortcuts";
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   settings: ViewSettings;
   onChange: (next: ViewSettings) => void;
+  initialSection?: SettingsSection;
 }
 
-type SectionId = "appearance" | "reading" | "explorer" | "shortcuts";
+type SectionId = SettingsSection;
 
 const SECTIONS: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "appearance", label: "Appearance", icon: Palette },
@@ -29,8 +32,18 @@ const SECTIONS: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
 ];
 
-export default function SettingsDialog({ open, onOpenChange, settings, onChange }: Props) {
-  const [active, setActive] = useState<SectionId>("appearance");
+export default function SettingsDialog({
+  open,
+  onOpenChange,
+  settings,
+  onChange,
+  initialSection,
+}: Props) {
+  const [active, setActive] = useState<SectionId>(initialSection ?? "appearance");
+
+  useEffect(() => {
+    if (open && initialSection) setActive(initialSection);
+  }, [open, initialSection]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

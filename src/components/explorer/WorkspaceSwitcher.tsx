@@ -19,7 +19,7 @@ interface Props {
 export function WorkspaceSwitcher({ roots, activeRoot, onSelect, onRemove, onAdd }: Props) {
   if (roots.length === 0) return null;
   return (
-    <div className="flex items-center gap-1 overflow-x-auto px-2 pb-1 pt-2">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-1 pt-2">
       {roots.map((root) => {
         const label = root.split("/").filter(Boolean).pop() || root;
         const active = root === activeRoot;
@@ -30,10 +30,9 @@ export function WorkspaceSwitcher({ roots, activeRoot, onSelect, onRemove, onAdd
                 onClick={() => onSelect(root)}
                 title={root}
                 className={cn(
-                  "shrink-0 rounded-md px-2 py-1 text-sm transition-colors",
-                  "border-b-2 border-transparent",
+                  "max-w-[12rem] truncate py-1 text-sm",
                   active
-                    ? "border-primary text-foreground"
+                    ? "font-semibold text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -52,7 +51,7 @@ export function WorkspaceSwitcher({ roots, activeRoot, onSelect, onRemove, onAdd
       <Button
         size="icon"
         variant="ghost"
-        className="size-7 shrink-0 text-muted-foreground"
+        className="size-6 text-muted-foreground"
         onClick={onAdd}
         title="Add workspace"
         aria-label="Add workspace"

@@ -54,6 +54,8 @@ interface Props {
   isPinned: (path: string) => boolean;
   onTogglePin: (path: string) => void;
   onHide: (path: string) => void;
+  hiddenCount: number;
+  onOpenSettings: () => void;
 
   // file ops
   selectedPath: string | undefined;
@@ -83,6 +85,8 @@ export function ExplorerSidebar({
   isPinned,
   onTogglePin,
   onHide,
+  hiddenCount,
+  onOpenSettings,
   selectedPath,
   onSelectFile,
   onOpenInNewTab,
@@ -176,7 +180,12 @@ export function ExplorerSidebar({
       </SidebarContent>
 
       <SidebarFooter className="text-xs text-muted-foreground">
-        <ExplorerFooter activeScan={activeScan} matchCount={filteredFiles.length} />
+        <ExplorerFooter
+          activeScan={activeScan}
+          matchCount={filteredFiles.length}
+          hiddenCount={hiddenCount}
+          onOpenSettings={onOpenSettings}
+        />
       </SidebarFooter>
 
       <SidebarRail />
@@ -277,9 +286,13 @@ function LensView({
 function ExplorerFooter({
   activeScan,
   matchCount,
+  hiddenCount,
+  onOpenSettings,
 }: {
   activeScan: RootScan | undefined;
   matchCount: number;
+  hiddenCount: number;
+  onOpenSettings: () => void;
 }) {
   if (!activeScan) return null;
   if (activeScan.scanning) {
@@ -290,16 +303,25 @@ function ExplorerFooter({
       </span>
     );
   }
-  const elapsed =
-    activeScan.startedAt && activeScan.finishedAt
-      ? Math.max(1, Math.round(activeScan.finishedAt - activeScan.startedAt))
-      : null;
+  const total = activeScan.result.files.length;
+  const visible = total - hiddenCount;
   return (
-    <span className="px-2">
-      {activeScan.result.files.length} files
-      {activeScan.result.truncated && " (50k cap)"}
-      {elapsed !== null && <> · {elapsed}ms</>}
-      {matchCount !== activeScan.result.files.length && ` · ${matchCount} match`}
+    <span className="flex items-center gap-2 px-2">
+      <span>
+        {visible} files
+        {activeScan.result.truncated && " (50k cap)"}
+        {matchCount !== visible && ` · ${matchCount} match`}
+      </span>
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={onOpenSettings}
+          className="ml-auto rounded-sm underline-offset-2 hover:underline focus:underline focus:outline-none"
+          title="Manage hidden files in Settings"
+        >
+          {hiddenCount} hidden
+        </button>
+      )}
     </span>
   );
 }

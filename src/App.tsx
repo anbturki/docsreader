@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { ListTree, Settings as SettingsIcon } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
+import type { SettingsSection } from "@/components/settings/SettingsDialog";
 import { OutlinePanel } from "@/components/document/OutlinePanel";
 import { matchShortcut, parseShortcut } from "@/lib/shortcuts";
 
@@ -39,6 +40,7 @@ function App() {
   const [search, setSearch] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsMounted, setSettingsMounted] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickOpenMounted, setQuickOpenMounted] = useState(false);
   const [activeScrollEl, setActiveScrollEl] = useState<HTMLElement | null>(null);
@@ -194,6 +196,12 @@ function App() {
           }
           onTogglePin={handleTogglePin}
           onHide={handleHide}
+          hiddenCount={Math.max(0, rawFiles.length - allFiles.length)}
+          onOpenSettings={() => {
+            setSettingsMounted(true);
+            setSettingsSection("explorer");
+            setSettingsOpen(true);
+          }}
           selectedPath={tabs.activeTab?.path}
           onSelectFile={tabs.openInActive}
           onOpenInNewTab={tabs.openInNew}
@@ -229,6 +237,7 @@ function App() {
                 onFocus={() => setSettingsMounted(true)}
                 onClick={() => {
                   setSettingsMounted(true);
+                  setSettingsSection(undefined);
                   setSettingsOpen(true);
                 }}
               >
@@ -241,6 +250,7 @@ function App() {
                     onOpenChange={setSettingsOpen}
                     settings={viewSettings.settings}
                     onChange={viewSettings.update}
+                    initialSection={settingsSection}
                   />
                 </Suspense>
               )}
