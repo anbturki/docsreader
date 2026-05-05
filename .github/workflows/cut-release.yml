@@ -13,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
@@ -71,3 +72,17 @@ jobs:
           git tag "v$VERSION"
           git push origin HEAD:main
           git push origin "v$VERSION"
+
+      # Pushes authenticated by GITHUB_TOKEN don't trigger other workflows,
+      # so release.yml's `on: push: tags` event never fires. Dispatch
+      # explicitly to compensate.
+      - name: Dispatch Release workflow
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh workflow run release.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "v$VERSION" \
+            -f tag="v$VERSION" \
+            -f platforms=all
