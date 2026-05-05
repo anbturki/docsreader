@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { loadSidebarState, saveSidebarState } from "@/lib/storage";
+import { loadSidebarState, saveSidebarState, type DefaultFolderState } from "@/lib/storage";
 
-const DEFAULT_OPEN_DEPTH = 1;
+const TOP_LEVEL_DEPTH = 1;
 
 export interface SidebarStateApi {
   hydrated: boolean;
@@ -12,7 +12,7 @@ export interface SidebarStateApi {
   collapseAll: (keys: string[]) => void;
 }
 
-export function useSidebarState(): SidebarStateApi {
+export function useSidebarState(defaultFolderState: DefaultFolderState = "top-level"): SidebarStateApi {
   const [open, setOpenState] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [hydrated, setHydrated] = useState(false);
@@ -55,10 +55,21 @@ export function useSidebarState(): SidebarStateApi {
 
   const setOpen = useCallback((v: boolean) => setOpenState(v), []);
 
+  const defaultRef = useRef(defaultFolderState);
+  defaultRef.current = defaultFolderState;
+
   const isExpanded = useCallback((key: string, depth: number) => {
     const explicit = stateRef.current.expanded[key];
     if (typeof explicit === "boolean") return explicit;
-    return depth < DEFAULT_OPEN_DEPTH;
+    switch (defaultRef.current) {
+      case "expanded":
+        return true;
+      case "collapsed":
+        return false;
+      case "top-level":
+      default:
+        return depth < TOP_LEVEL_DEPTH;
+    }
   }, []);
 
   const toggleExpanded = useCallback((key: string, currentlyOpen: boolean) => {

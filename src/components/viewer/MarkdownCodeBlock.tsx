@@ -18,6 +18,9 @@ const HIDDEN_LANGUAGES = new Set(["text", "plaintext", "plain", "txt"]);
 const MermaidBlock = lazy(() =>
   import("./MermaidBlock").then((m) => ({ default: m.MermaidBlock }))
 );
+const SvgbobBlock = lazy(() =>
+  import("./SvgbobBlock").then((m) => ({ default: m.SvgbobBlock }))
+);
 
 export function MarkdownCodeBlock({
   className,
@@ -27,7 +30,8 @@ export function MarkdownCodeBlock({
   const ref = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const language = extractLanguage(children);
-  const isMermaid = hasMermaidFlag(children);
+  const isMermaid = hasFlag(children, "data-mermaid");
+  const isSvgbob = hasFlag(children, "data-svgbob");
 
   if (isMermaid) {
     const code = extractText(children).trim();
@@ -38,6 +42,19 @@ export function MarkdownCodeBlock({
         }
       >
         <MermaidBlock code={code} />
+      </Suspense>
+    );
+  }
+
+  if (isSvgbob) {
+    const code = extractText(children);
+    return (
+      <Suspense
+        fallback={
+          <div className="my-5 text-xs text-muted-foreground">Loading diagram…</div>
+        }
+      >
+        <SvgbobBlock code={code} />
       </Suspense>
     );
   }
@@ -94,12 +111,12 @@ export function MarkdownCodeBlock({
   );
 }
 
-function hasMermaidFlag(children: ReactNode): boolean {
+function hasFlag(children: ReactNode, attr: string): boolean {
   for (const child of Children.toArray(children)) {
     if (!isValidElement(child)) continue;
-    const el = child as ReactElement<{ "data-mermaid"?: string }>;
+    const el = child as ReactElement<Record<string, unknown>>;
     if (el.type !== "code") continue;
-    if (el.props["data-mermaid"] === "true") return true;
+    if (el.props[attr] === "true") return true;
   }
   return false;
 }

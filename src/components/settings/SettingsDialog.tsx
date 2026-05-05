@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { BookOpen, Keyboard, Palette } from "lucide-react";
+import { useEffect, useState } from "react";
+import { BookOpen, FolderTree, Keyboard, Palette } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,26 +9,41 @@ import {
 import { cn } from "@/lib/utils";
 import type { ViewSettings } from "@/lib/storage";
 import { AppearanceSection } from "./AppearanceSection";
+import { ExplorerSection } from "./ExplorerSection";
 import { ReadingSection } from "./ReadingSection";
 import { ShortcutsSection } from "./ShortcutsSection";
+
+export type SettingsSection = "appearance" | "reading" | "explorer" | "shortcuts";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   settings: ViewSettings;
   onChange: (next: ViewSettings) => void;
+  initialSection?: SettingsSection;
 }
 
-type SectionId = "appearance" | "reading" | "shortcuts";
+type SectionId = SettingsSection;
 
 const SECTIONS: { id: SectionId; label: string; icon: typeof Palette }[] = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "reading", label: "Reading", icon: BookOpen },
+  { id: "explorer", label: "Explorer", icon: FolderTree },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
 ];
 
-export default function SettingsDialog({ open, onOpenChange, settings, onChange }: Props) {
-  const [active, setActive] = useState<SectionId>("appearance");
+export default function SettingsDialog({
+  open,
+  onOpenChange,
+  settings,
+  onChange,
+  initialSection,
+}: Props) {
+  const [active, setActive] = useState<SectionId>(initialSection ?? "appearance");
+
+  useEffect(() => {
+    if (open && initialSection) setActive(initialSection);
+  }, [open, initialSection]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -66,6 +81,9 @@ export default function SettingsDialog({ open, onOpenChange, settings, onChange 
             )}
             {active === "reading" && (
               <ReadingSection settings={settings} onChange={onChange} />
+            )}
+            {active === "explorer" && (
+              <ExplorerSection settings={settings} onChange={onChange} />
             )}
             {active === "shortcuts" && (
               <ShortcutsSection settings={settings} onChange={onChange} />

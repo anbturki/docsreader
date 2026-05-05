@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ClipboardCopy, FilePlus, FolderOpen } from "lucide-react";
+import { ClipboardCopy, EyeOff, FilePlus, FolderOpen, Pin, PinOff } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   ContextMenu,
@@ -19,10 +19,21 @@ interface Props {
   path: string;
   isFile: boolean;
   onOpenInNewTab?: (path: string) => void;
+  pinned?: boolean;
+  onTogglePin?: (path: string) => void;
+  onHide?: (path: string) => void;
   children: ReactNode;
 }
 
-export function EntryContextMenu({ path, isFile, onOpenInNewTab, children }: Props) {
+export function EntryContextMenu({
+  path,
+  isFile,
+  onOpenInNewTab,
+  pinned,
+  onTogglePin,
+  onHide,
+  children,
+}: Props) {
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
@@ -36,6 +47,28 @@ export function EntryContextMenu({ path, isFile, onOpenInNewTab, children }: Pro
             <ContextMenuSeparator />
           </>
         )}
+        {isFile && onTogglePin && (
+          <ContextMenuItem onSelect={() => onTogglePin(path)}>
+            {pinned ? (
+              <>
+                <PinOff />
+                Unpin
+              </>
+            ) : (
+              <>
+                <Pin />
+                Pin to top
+              </>
+            )}
+          </ContextMenuItem>
+        )}
+        {onHide && (
+          <ContextMenuItem onSelect={() => onHide(path)}>
+            <EyeOff />
+            Hide from explorer
+          </ContextMenuItem>
+        )}
+        {(isFile || onHide) && <ContextMenuSeparator />}
         <ContextMenuItem onSelect={() => navigator.clipboard.writeText(path)}>
           <ClipboardCopy />
           Copy path

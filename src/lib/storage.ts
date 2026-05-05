@@ -9,12 +9,15 @@ const SCAN_CACHE_KEY = "scanCache";
 const VIEW_SETTINGS_KEY = "viewSettings";
 const TABS_STATE_KEY = "tabsState";
 const SIDEBAR_STATE_KEY = "sidebarState";
+const PINNED_KEY = "pinnedByRoot";
 
 export type ContentWidth = "narrow" | "full";
 export type FontFamily = "sans" | "serif" | "mono";
 export type FontSize = "sm" | "md" | "lg";
 export type ColorScheme = "light" | "dark" | "system";
 export type AccentColor = "violet" | "blue" | "green" | "orange" | "rose" | "slate";
+export type DefaultFolderState = "expanded" | "top-level" | "collapsed";
+export type SidebarLens = "tree" | "recent" | "tags" | "pinned";
 
 export const LIGHT_CODE_THEMES = [
   "github-light",
@@ -60,6 +63,9 @@ export interface ViewSettings {
   codeThemeDark: DarkCodeTheme;
   outlineOpen: boolean;
   quickOpenShortcut: string;
+  defaultFolderState: DefaultFolderState;
+  hidePatterns: string[];
+  sidebarLens: SidebarLens;
 }
 
 export const defaultViewSettings: ViewSettings = {
@@ -72,6 +78,9 @@ export const defaultViewSettings: ViewSettings = {
   codeThemeDark: "github-dark",
   outlineOpen: true,
   quickOpenShortcut: "Mod+P",
+  defaultFolderState: "top-level",
+  hidePatterns: [],
+  sidebarLens: "tree",
 };
 
 interface CachedScan {
@@ -151,7 +160,30 @@ export async function loadViewSettings(): Promise<ViewSettings> {
       typeof v.quickOpenShortcut === "string" && v.quickOpenShortcut.length > 0
         ? v.quickOpenShortcut
         : defaultViewSettings.quickOpenShortcut,
+    defaultFolderState: normalizeDefaultFolderState(v.defaultFolderState),
+    hidePatterns: normalizeHidePatterns(v.hidePatterns),
+    sidebarLens: normalizeSidebarLens(v.sidebarLens),
   };
+}
+
+function normalizeDefaultFolderState(value: unknown): DefaultFolderState {
+  return value === "expanded" || value === "collapsed" ? value : "top-level";
+}
+
+function normalizeHidePatterns(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const out: string[] = [];
+  for (const v of value) {
+    if (typeof v === "string") {
+      const trimmed = v.trim();
+      if (trimmed) out.push(trimmed);
+    }
+  }
+  return out;
+}
+
+function normalizeSidebarLens(value: unknown): SidebarLens {
+  return value === "recent" || value === "tags" || value === "pinned" ? value : "tree";
 }
 
 function normalizeFontSize(value: unknown): FontSize {
@@ -235,5 +267,23 @@ export async function loadSidebarState(): Promise<SidebarState> {
 
 export async function saveSidebarState(state: SidebarState): Promise<void> {
   await store.set(SIDEBAR_STATE_KEY, state);
+  await store.save();
+}
+
+export type PinnedByRoot = Record<string, string[]>;
+
+export async function loadPinned(): Promise<PinnedByRoot> {
+  const v = await store.get<PinnedByRoot>(PINNED_KEY);
+  if (!v || typeof v !== "object") return {};
+  const out: PinnedByRoot = {};
+  for (const [root, paths] of Object.entries(v)) {
+    if (typeof root !== "string" || !Array.isArray(paths)) continue;
+    out[root] = paths.filter((p) => typeof p === "string");
+  }
+  return out;
+}
+
+export async function savePinned(pinned: PinnedByRoot): Promise<void> {
+  await store.set(PINNED_KEY, pinned);
   await store.save();
 }
