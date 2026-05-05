@@ -19,6 +19,7 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
+      actions: write
     env:
       REPO: ${{ github.repository }}
     steps:
