@@ -100,10 +100,12 @@ jobs:
 
       # Build & sign. Notarization is intentionally skipped here (no
       # APPLE_API_ISSUER/APPLE_API_KEY in env), so tauri-action exits
-      # immediately on macOS. The release is created as a draft so users
-      # don't see un-notarized assets. The notarize-staple workflow polls
-      # Apple, staples, and flips the draft to public when ready.
-      - name: Build & release (draft)
+      # immediately on macOS. The release is published immediately so
+      # Linux/Windows users aren't blocked by Apple's queue. The macOS
+      # DMG is signed (Gatekeeper online check passes once Apple says
+      # Accepted) and the notarize-staple workflow swaps in the stapled
+      # DMG when Apple finishes.
+      - name: Build & publish release
         uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5  # v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -130,13 +132,15 @@ jobs:
             ```
             curl -fsSL https://raw.githubusercontent.com/anbturki/docsreader/main/install.sh | bash
             ```
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
 
       # macOS-only: submit the DMG to Apple async (no --wait), then stash
-      # the submission id in the release body. notarize-staple.yml picks
-      # it up on its next cron run.
+      # the submission id in the release body alongside a user-facing
+      # warning. notarize-staple.yml polls Apple, staples the DMG when
+      # accepted, swaps in the stapled asset, and strips both the marker
+      # and the warning from the body.
       - name: Submit macOS DMG for async notarization
         if: matrix.platform == 'macos-latest'
         env:
@@ -171,17 +175,7 @@ jobs:
           echo "Submission ID: $SUBMISSION_ID"
 
           BODY=$(gh release view "$TAG" --repo "$REPO" --json body --jq .body)
-          NEW_BODY=$(printf '%s\n\n<!-- notarize: id=%s status=pending -->\n' "$BODY" "$SUBMISSION_ID")
+          WARNING='> [!NOTE]
+          > **macOS notarization in progress.** Gatekeeper may prompt on first launch until Apple finishes (~5-30 min, occasionally longer). Right-click the app and choose Open as a workaround. This message disappears automatically once stapling completes.'
+          NEW_BODY=$(printf '%s\n\n%s\n\n<!-- notarize: id=%s status=pending -->\n' "$BODY" "$WARNING" "$SUBMISSION_ID")
           gh release edit "$TAG" --repo "$REPO" --notes "$NEW_BODY"
-
-      # Linux/Windows have no notarization requirement, so flip those
-      # platforms' release segment to published immediately. macOS will
-      # be flipped by the staple workflow once Apple finishes.
-      - name: Mark non-macOS releases as published
-        if: needs.setup.outputs.macos_included != 'true' && matrix.platform != 'macos-latest'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          REPO: ${{ github.repository }}
-          TAG: ${{ needs.setup.outputs.tag }}
-        run: |
-          gh release edit "$TAG" --repo "$REPO" --draft=false || true

@@ -1,7 +1,9 @@
 name: Notarize and Staple
 
 # Polls Apple for pending notarization submissions, staples accepted
-# DMGs, flips the draft release to public, and updates the Homebrew tap.
+# DMGs, and updates the Homebrew tap. Releases are public from the
+# moment the build finishes; this workflow swaps in the stapled DMG
+# and strips the in-progress warning from the body when Apple is done.
 # Triggered by:
 #   - cron every 15 min
 #   - manual workflow_dispatch (e.g. to push a long-pending submission)
@@ -37,17 +39,25 @@ jobs:
           chmod 600 "$KEY_PATH"
           echo "APPLE_API_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
 
-      - name: Check pending drafts
+      - name: Find releases with pending markers
         id: scan
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/pending"
-          gh release list --repo "$REPO" --limit 30 --json tagName,isDraft \
-            --jq '.[] | select(.isDraft) | .tagName' > "$RUNNER_TEMP/pending/tags.txt"
+          : > "$RUNNER_TEMP/pending/tags.txt"
+          # gh release list does not expose body, so we have to iterate.
+          # Releases are now public from the start; the pending marker is
+          # the only signal a release still needs stapling.
+          for tag in $(gh release list --repo "$REPO" --limit 30 --json tagName --jq '.[].tagName'); do
+            body=$(gh release view "$tag" --repo "$REPO" --json body --jq .body)
+            if printf '%s' "$body" | grep -qE 'notarize: id=[A-Za-z0-9-]+ status=pending'; then
+              echo "$tag" >> "$RUNNER_TEMP/pending/tags.txt"
+            fi
+          done
           COUNT=$(wc -l < "$RUNNER_TEMP/pending/tags.txt" | tr -d ' ')
-          echo "Pending drafts: $COUNT"
+          echo "Pending releases: $COUNT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
 
       - name: Process pending submissions
@@ -85,7 +95,7 @@ jobs:
                 DMG=$(gh release view "$TAG" --repo "$REPO" --json assets \
                   --jq '.assets[].name' | grep -E 'universal\.dmg$' | head -1 || true)
                 if [ -z "$DMG" ]; then
-                  echo "::warning::No universal.dmg asset on $TAG, marking as published anyway"
+                  echo "::warning::No universal.dmg asset on $TAG, marking complete anyway"
                 else
                   WORK="$RUNNER_TEMP/staple-$TAG"
                   mkdir -p "$WORK"
@@ -98,10 +108,19 @@ jobs:
                   cd -
                 fi
 
-                # Strip the notarize comment, publish.
-                CLEAN=$(printf '%s\n' "$BODY" | sed -E '/<!-- notarize:.*-->/d')
-                gh release edit "$TAG" --repo "$REPO" --notes "$CLEAN" --draft=false
-                echo "::notice::Published $TAG"
+                # Strip both the in-progress warning blurb and the marker
+                # comment. The blurb runs from the GitHub callout marker
+                # `> [!NOTE]` through the next blank line.
+                CLEAN=$(printf '%s\n' "$BODY" | awk '
+                  BEGIN { skip=0 }
+                  /^> \[!NOTE\]$/ { skip=1; next }
+                  skip && /^$/ { skip=0; next }
+                  skip { next }
+                  /<!-- notarize:.*-->/ { next }
+                  { print }
+                ')
+                gh release edit "$TAG" --repo "$REPO" --notes "$CLEAN"
+                echo "::notice::Stapled $TAG"
 
                 # Trigger Homebrew tap update.
                 gh workflow run update-homebrew-tap.yml --repo "$REPO" \
@@ -114,7 +133,8 @@ jobs:
                   --key "$API_KEY_PATH" --key-id "$API_KEY_ID" --issuer "$API_ISSUER" \
                   > "$RUNNER_TEMP/log-$TAG.json" 2>/dev/null || true
                 SUMMARY=$(jq -r '.statusSummary // "(no summary)"' "$RUNNER_TEMP/log-$TAG.json" 2>/dev/null || echo "(no log)")
-                # Replace the pending marker with a failed marker; leave draft.
+                # Replace the pending marker with a failed marker so the
+                # warning blurb still tells users notarization didn't pass.
                 NEW=$(printf '%s\n' "$BODY" | sed -E "s|<!-- notarize: id=[^ ]+ status=pending -->|<!-- notarize: id=$SUBMISSION_ID status=failed -->\n\n> Notarization failed: $SUMMARY|")
                 gh release edit "$TAG" --repo "$REPO" --notes "$NEW"
                 ;;
@@ -134,12 +154,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # gh release list does not expose body, so iterate and view each draft.
+          # Walk every recent release looking for pending markers.
           PENDING=0
-          DRAFT_TAGS=$(gh release list --repo "$REPO" --limit 50 \
-            --json tagName,isDraft \
-            --jq '.[] | select(.isDraft) | .tagName')
-          for tag in $DRAFT_TAGS; do
+          for tag in $(gh release list --repo "$REPO" --limit 50 --json tagName --jq '.[].tagName'); do
             BODY=$(gh release view "$tag" --repo "$REPO" --json body --jq .body)
             if printf '%s' "$BODY" | grep -qE 'notarize: id=[A-Za-z0-9-]+ status=pending'; then
               PENDING=$((PENDING + 1))
