@@ -28,13 +28,10 @@ export function SvgbobBlock({ code }: Props) {
     setSvg(undefined);
     void (async () => {
       try {
-        console.log("[svgbob] loading", { codeLen: code.length });
         const bob = await loadBob();
         const rendered = bob.render(code);
-        console.log("[svgbob] rendered", { svgLen: rendered.length });
         if (!cancelled) setSvg(rendered);
       } catch (err) {
-        console.error("[svgbob] error", err);
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       }
     })();
