@@ -1,3 +1,4 @@
+import picomatch from "picomatch";
 import {
   hasNavigation,
   isFolderSection,
@@ -6,6 +7,8 @@ import {
   type DocsYaml,
 } from "./docsYaml";
 import type { MarkdownFile } from "./scan";
+
+const DEFAULT_PATTERN = "*.md";
 
 export type ManifestIssueKind =
   | "schema"
@@ -53,9 +56,18 @@ export function computeManifestIssues(opts: {
           .replace(/\\/g, "/")
           .replace(/^\.\//, "")
           .replace(/\/+$/, "");
+        const pattern = section.pattern ?? DEFAULT_PATTERN;
+        const nested = section.nested === true;
+        const matcher = picomatch(nested ? `**/${pattern}` : pattern, { dot: true });
         const hasAny = opts.files.some((f) => {
           const rel = f.relPath.replace(/\\/g, "/");
-          return folder === "" || rel === folder || rel.startsWith(folder + "/");
+          if (folder !== "" && rel !== folder && !rel.startsWith(folder + "/")) {
+            return false;
+          }
+          const relInFolder =
+            folder === "" ? rel : rel.slice(folder.length + 1);
+          if (!nested && relInFolder.includes("/")) return false;
+          return matcher(relInFolder);
         });
         if (!hasAny) {
           issues.push({

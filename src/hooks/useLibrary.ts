@@ -35,7 +35,7 @@ export interface Library {
   pickDirectory: () => Promise<void>;
   addRoot: (path: string) => Promise<void>;
   removeRoot: (path: string) => Promise<void>;
-  selectRoot: (path: string) => Promise<void>;
+  selectRoot: (path: string | undefined) => Promise<void>;
   rescan: (root: string) => Promise<void>;
 }
 
@@ -224,10 +224,10 @@ export function useLibrary(): Library {
   );
 
   const selectRoot = useCallback(
-    async (path: string) => {
+    async (path: string | undefined) => {
       setActiveRoot(path);
       await saveLastSelected(path);
-      if (!scans[path]) await hydrateFromCache(path);
+      if (path && !scans[path]) await hydrateFromCache(path);
     },
     [scans, hydrateFromCache]
   );

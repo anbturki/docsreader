@@ -100,13 +100,14 @@ function App() {
   }, [library.roots, library.scans, showInternal]);
 
   // If the currently active workspace is now hidden by the visibility filter,
-  // switch to the first visible one so the content area reflects the filter.
+  // switch to the first visible one. If no visible workspace exists, clear
+  // activeRoot - otherwise the content area would render files from a tab
+  // the user can no longer see in the switcher.
   useEffect(() => {
     if (showInternal) return;
     if (!library.activeRoot) return;
     if (visibleRoots.includes(library.activeRoot)) return;
-    const fallback = visibleRoots[0];
-    if (fallback) void library.selectRoot(fallback);
+    void library.selectRoot(visibleRoots[0]);
   }, [showInternal, library, library.activeRoot, visibleRoots]);
 
   const rootBySlug = useMemo<Map<string, string>>(() => {

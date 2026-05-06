@@ -19,6 +19,12 @@ export interface Tab {
   // accept (reload) or close.
   pendingContent?: string;
   staleSince?: number;
+  // Last raw disk content the user explicitly dismissed. While set,
+  // further modify events that produce the same raw content stay
+  // silent - dismissing means "I am OK reading the stale version,
+  // stop nagging." A genuinely new content divergence clears this and
+  // raises a fresh banner.
+  dismissedContent?: string;
 }
 
 export interface Tabs {
@@ -58,6 +64,11 @@ interface UseTabsOptions {
 export function useTabs(options: UseTabsOptions): Tabs {
   const autoReloadRef = useRef(options.autoReloadOnExternalChange);
   autoReloadRef.current = options.autoReloadOnExternalChange;
+  // Per-tab sequence counter. Each handleExternalModify call increments
+  // its tab's counter and captures a local copy; if a newer event has
+  // fired before the readTextFile await resolves, the older one's
+  // result is dropped. Protects against out-of-order async completion.
+  const modifySeqRef = useRef(new Map<string, number>());
 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeId, setActiveId] = useState<string | undefined>();
@@ -132,6 +143,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
 
   const close = useCallback(
     (id: string) => {
+      modifySeqRef.current.delete(id);
       setTabs((prev) => {
         const idx = prev.findIndex((t) => t.id === id);
         if (idx < 0) return prev;
@@ -159,6 +171,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
         content,
         pendingContent: undefined,
         staleSince: undefined,
+        dismissedContent: undefined,
         error: undefined,
       });
     },
@@ -166,12 +179,18 @@ export function useTabs(options: UseTabsOptions): Tabs {
   );
 
   // Dismiss the banner without reloading. Tab keeps showing the prior
-  // content. The pendingContent is cleared so further unchanged
-  // modifications stay quiet; the next *content* divergence fires a
-  // fresh banner.
+  // content. We remember the dismissed raw content so further modify
+  // events that produce the same raw don't re-fire the banner; only a
+  // genuinely new content divergence will.
   const dismissPending = useCallback(
     (id: string) => {
-      updateTab(id, { pendingContent: undefined, staleSince: undefined });
+      const current = tabsRef.current.find((t) => t.id === id);
+      const dismissedContent = current?.pendingContent;
+      updateTab(id, {
+        pendingContent: undefined,
+        staleSince: undefined,
+        dismissedContent,
+      });
     },
     [updateTab]
   );
@@ -183,8 +202,14 @@ export function useTabs(options: UseTabsOptions): Tabs {
   // silent auto-reload, skip the banner entirely.
   const handleExternalModify = useCallback(
     async (id: string, path: string) => {
+      const seq = (modifySeqRef.current.get(id) ?? 0) + 1;
+      modifySeqRef.current.set(id, seq);
       try {
         const raw = await readTextFile(path);
+        // Drop stale completions if a newer modify event has fired in
+        // the meantime - prevents out-of-order async overwrites.
+        if (modifySeqRef.current.get(id) !== seq) return;
+
         const current = tabsRef.current.find((t) => t.id === id);
         if (!current || current.path !== path) return;
 
@@ -193,12 +218,17 @@ export function useTabs(options: UseTabsOptions): Tabs {
         // Body unchanged. Could be a touch (mtime only) or a
         // frontmatter-only change. Either way, refresh meta silently
         // and clear any banner that was outstanding (the user reverted
-        // the external change before deciding).
+        // the external change before deciding). Also clear
+        // dismissedContent - the file is back in sync.
         if (reparsed.content === current.content) {
           const patch: Partial<Tab> = { meta: reparsed.data };
-          if (current.pendingContent !== undefined) {
+          if (
+            current.pendingContent !== undefined ||
+            current.dismissedContent !== undefined
+          ) {
             patch.pendingContent = undefined;
             patch.staleSince = undefined;
+            patch.dismissedContent = undefined;
           }
           updateTab(id, patch);
           return;
@@ -214,10 +244,15 @@ export function useTabs(options: UseTabsOptions): Tabs {
             loading: false,
             pendingContent: undefined,
             staleSince: undefined,
+            dismissedContent: undefined,
           });
           return;
         }
 
+        // The user already dismissed this exact raw content. Stay
+        // silent - they're reading the prior version on purpose.
+        if (raw === current.dismissedContent) return;
+        // Already-pending duplicate event; nothing new to show.
         if (raw === current.pendingContent) return;
         updateTab(id, {
           pendingContent: raw,
@@ -229,6 +264,27 @@ export function useTabs(options: UseTabsOptions): Tabs {
     },
     [updateTab]
   );
+
+  // When the user toggles on auto-reload, any outstanding banners
+  // become inconsistent (new modifies will silently reload while the
+  // banner still shows old comparison data). Clear all pending state.
+  useEffect(() => {
+    if (!options.autoReloadOnExternalChange) return;
+    setTabs((prev) =>
+      prev.map((t) =>
+        t.pendingContent === undefined &&
+        t.staleSince === undefined &&
+        t.dismissedContent === undefined
+          ? t
+          : {
+              ...t,
+              pendingContent: undefined,
+              staleSince: undefined,
+              dismissedContent: undefined,
+            }
+      )
+    );
+  }, [options.autoReloadOnExternalChange]);
 
   const watchersRef = useRef(new Map<string, { path: string; unwatch: UnwatchFn }>());
 

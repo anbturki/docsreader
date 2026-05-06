@@ -281,6 +281,12 @@ async fn install_welcome_workspace(app: AppHandle) -> Result<String, String> {
         .path()
         .resolve("resources/welcome", BaseDirectory::Resource)
         .map_err(|e| format!("could not resolve welcome resource: {e}"))?;
+    if !src.exists() {
+        return Err(format!(
+            "welcome resource not found at {} - in dev mode, ensure src-tauri/resources/welcome exists; in a packaged build, ensure tauri.conf.json bundle.resources includes resources/welcome/**/*",
+            src.display()
+        ));
+    }
     let dst_root = app
         .path()
         .app_data_dir()
@@ -288,7 +294,9 @@ async fn install_welcome_workspace(app: AppHandle) -> Result<String, String> {
     let dst = dst_root.join("welcome");
 
     if !dst.exists() {
-        copy_dir_recursive(&src, &dst).map_err(|e| format!("copy welcome: {e}"))?;
+        copy_dir_recursive(&src, &dst).map_err(|e| {
+            format!("copy welcome from {} to {}: {e}", src.display(), dst.display())
+        })?;
     }
 
     Ok(dst.to_string_lossy().to_string())

@@ -38,11 +38,16 @@ export function parseFrontmatter(source: string): {
   const trimmed = source.replace(/^﻿/, "");
   const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(trimmed);
   if (!match) return { data: {}, content: trimmed };
+  // Strip the matched frontmatter region regardless of whether the
+  // YAML inside parsed cleanly. If the parse failed (malformed YAML),
+  // we still don't want the `---` block bleeding into the rendered
+  // body or into change-detection comparisons.
+  const content = trimmed.slice(match[0].length);
   try {
     const data = (yaml.load(match[1]) ?? {}) as Record<string, unknown>;
-    return { data, content: trimmed.slice(match[0].length) };
+    return { data, content };
   } catch {
-    return { data: {}, content: trimmed };
+    return { data: {}, content };
   }
 }
 
