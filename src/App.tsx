@@ -43,8 +43,10 @@ import "@/styles/code-theme.css";
 
 function App() {
   const library = useLibrary();
-  const tabs = useTabs();
   const viewSettings = useViewSettings();
+  const tabs = useTabs({
+    autoReloadOnExternalChange: viewSettings.settings.autoReloadOnExternalChange,
+  });
   const sidebar = useSidebarState(viewSettings.settings.defaultFolderState);
   const pinned = usePinned();
   useTheme(viewSettings.settings.colorScheme, viewSettings.settings.accentColor);
@@ -468,6 +470,9 @@ function App() {
                       onActiveRefChange={handleActiveRefChange}
                       onAcceptPending={tabs.acceptPending}
                       onDismissPending={tabs.dismissPending}
+                      onDiffViewModeChange={(mode) =>
+                        viewSettings.update({ ...viewSettings.settings, diffViewMode: mode })
+                      }
                     />
                   );
                 })

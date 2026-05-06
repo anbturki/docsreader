@@ -19,6 +19,7 @@ interface Props {
   onActiveRefChange?: (el: HTMLElement | null) => void;
   onAcceptPending: (id: string) => void;
   onDismissPending: (id: string) => void;
+  onDiffViewModeChange: (mode: ViewSettings["diffViewMode"]) => void;
 }
 
 export function TabScrollPane({
@@ -33,6 +34,7 @@ export function TabScrollPane({
   onActiveRefChange,
   onAcceptPending,
   onDismissPending,
+  onDiffViewModeChange,
 }: Props) {
   const pendingBody = useMemo(
     () => (tab.pendingContent ? parseFrontmatter(tab.pendingContent).content : undefined),
@@ -112,6 +114,8 @@ export function TabScrollPane({
         <ExternalChangeBanner
           before={tab.content}
           after={pendingBody}
+          diffViewMode={viewSettings.diffViewMode}
+          onDiffViewModeChange={onDiffViewModeChange}
           onReload={() => onAcceptPending(tab.id)}
           onDismiss={() => onDismissPending(tab.id)}
         />

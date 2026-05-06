@@ -51,7 +51,14 @@ function emptyTab(path: string): Tab {
   };
 }
 
-export function useTabs(): Tabs {
+interface UseTabsOptions {
+  autoReloadOnExternalChange: boolean;
+}
+
+export function useTabs(options: UseTabsOptions): Tabs {
+  const autoReloadRef = useRef(options.autoReloadOnExternalChange);
+  autoReloadRef.current = options.autoReloadOnExternalChange;
+
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeId, setActiveId] = useState<string | undefined>();
   const [hydrated, setHydrated] = useState(false);
@@ -172,25 +179,46 @@ export function useTabs(): Tabs {
   // Read the disk content for an open tab and decide whether the
   // change is substantive. If the new content matches `current.content`
   // (touch-only modify), do nothing. Otherwise stash it as pendingContent
-  // so the document can render the banner.
+  // so the document can render the banner. When the user has opted into
+  // silent auto-reload, skip the banner entirely.
   const handleExternalModify = useCallback(
     async (id: string, path: string) => {
       try {
         const raw = await readTextFile(path);
         const current = tabsRef.current.find((t) => t.id === id);
         if (!current || current.path !== path) return;
-        if (raw === current.pendingContent) return;
-        // Compare against the rendered source (frontmatter + body
-        // re-stitched). We compare the raw file bytes against the raw
-        // bytes the tab was loaded from. To avoid storing both, we
-        // re-parse on demand: if frontmatter+body match, no banner.
+
         const reparsed = parseFrontmatter(raw);
+
+        // Body unchanged. Could be a touch (mtime only) or a
+        // frontmatter-only change. Either way, refresh meta silently
+        // and clear any banner that was outstanding (the user reverted
+        // the external change before deciding).
         if (reparsed.content === current.content) {
-          // Frontmatter may have changed even when body didn't; still
-          // refresh meta silently to keep `meta` accurate.
-          updateTab(id, { meta: reparsed.data });
+          const patch: Partial<Tab> = { meta: reparsed.data };
+          if (current.pendingContent !== undefined) {
+            patch.pendingContent = undefined;
+            patch.staleSince = undefined;
+          }
+          updateTab(id, patch);
           return;
         }
+
+        // Body diverged. Either silent-reload (per user setting) or
+        // raise the banner.
+        if (autoReloadRef.current) {
+          updateTab(id, {
+            meta: reparsed.data,
+            content: reparsed.content,
+            error: undefined,
+            loading: false,
+            pendingContent: undefined,
+            staleSince: undefined,
+          });
+          return;
+        }
+
+        if (raw === current.pendingContent) return;
         updateTab(id, {
           pendingContent: raw,
           staleSince: Date.now(),

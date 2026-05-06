@@ -3,15 +3,25 @@ import { AlertTriangle, RefreshCw, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { computeDiffStats } from "@/lib/diffStats";
 import { DiffViewerDialog } from "./DiffViewerDialog";
+import type { DiffViewMode } from "@/lib/storage";
 
 interface Props {
   before: string;
   after: string;
+  diffViewMode: DiffViewMode;
+  onDiffViewModeChange: (mode: DiffViewMode) => void;
   onReload: () => void;
   onDismiss: () => void;
 }
 
-export function ExternalChangeBanner({ before, after, onReload, onDismiss }: Props) {
+export function ExternalChangeBanner({
+  before,
+  after,
+  diffViewMode,
+  onDiffViewModeChange,
+  onReload,
+  onDismiss,
+}: Props) {
   const stats = useMemo(() => computeDiffStats(before, after), [before, after]);
   const [diffOpen, setDiffOpen] = useState(false);
 
@@ -54,6 +64,8 @@ export function ExternalChangeBanner({ before, after, onReload, onDismiss }: Pro
         onOpenChange={setDiffOpen}
         before={before}
         after={after}
+        mode={diffViewMode}
+        onModeChange={onDiffViewModeChange}
         onReload={() => {
           setDiffOpen(false);
           onReload();

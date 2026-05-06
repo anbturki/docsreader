@@ -18,6 +18,7 @@ export type ColorScheme = "light" | "dark" | "system";
 export type AccentColor = "violet" | "blue" | "green" | "orange" | "rose" | "slate";
 export type DefaultFolderState = "expanded" | "top-level" | "collapsed";
 export type SidebarLens = "tree" | "recent" | "tags" | "pinned";
+export type DiffViewMode = "unified" | "split";
 
 export const LIGHT_CODE_THEMES = [
   "github-light",
@@ -68,6 +69,8 @@ export interface ViewSettings {
   sidebarLens: SidebarLens;
   welcomeOpened: boolean;
   showInternal: boolean;
+  autoReloadOnExternalChange: boolean;
+  diffViewMode: DiffViewMode;
 }
 
 export const defaultViewSettings: ViewSettings = {
@@ -85,6 +88,8 @@ export const defaultViewSettings: ViewSettings = {
   sidebarLens: "tree",
   welcomeOpened: false,
   showInternal: true,
+  autoReloadOnExternalChange: false,
+  diffViewMode: "unified",
 };
 
 interface CachedScan {
@@ -169,6 +174,8 @@ export async function loadViewSettings(): Promise<ViewSettings> {
     sidebarLens: normalizeSidebarLens(v.sidebarLens),
     welcomeOpened: v.welcomeOpened === true,
     showInternal: typeof v.showInternal === "boolean" ? v.showInternal : true,
+    autoReloadOnExternalChange: v.autoReloadOnExternalChange === true,
+    diffViewMode: v.diffViewMode === "split" ? "split" : "unified",
   };
 }
 

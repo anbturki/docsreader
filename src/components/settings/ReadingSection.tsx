@@ -1,4 +1,5 @@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Toggle } from "@/components/ui/toggle";
 import type { ContentWidth, FontFamily, FontSize, ViewSettings } from "@/lib/storage";
 
 interface Props {
@@ -67,6 +68,22 @@ export function ReadingSection({ settings, onChange }: Props) {
             Full width
           </ToggleGroupItem>
         </ToggleGroup>
+      </Field>
+
+      <Field
+        label="External changes"
+        hint="When a file changes on disk, DocsReader shows a banner with a diff and asks before reloading. Turn on to silently reload like older versions did."
+      >
+        <Toggle
+          variant="outline"
+          pressed={settings.autoReloadOnExternalChange}
+          onPressedChange={(v) =>
+            onChange({ ...settings, autoReloadOnExternalChange: v })
+          }
+          className="self-start"
+        >
+          {settings.autoReloadOnExternalChange ? "Auto-reload" : "Ask before reloading"}
+        </Toggle>
       </Field>
     </div>
   );
