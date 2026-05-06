@@ -15,6 +15,7 @@ import type { SidebarLens } from "@/lib/storage";
 import type { RootScan } from "@/hooks/useLibrary";
 import type { ProjectMeta } from "@/lib/docsYaml";
 import type { ManifestIssue } from "@/lib/manifestIssues";
+import type { GitFileStatusKind } from "@/lib/git";
 import { FileTree } from "./FileTree";
 import { LensTabs } from "./LensTabs";
 import { PinnedList } from "./PinnedList";
@@ -75,6 +76,10 @@ interface Props {
   selectedPath: string | undefined;
   onSelectFile: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+
+  // git
+  gitStatusByPath?: Map<string, GitFileStatusKind>;
+  onShowGitDiff?: (path: string) => void;
 }
 
 export function ExplorerSidebar({
@@ -108,6 +113,8 @@ export function ExplorerSidebar({
   selectedPath,
   onSelectFile,
   onOpenInNewTab,
+  gitStatusByPath,
+  onShowGitDiff,
 }: Props) {
   return (
     <Sidebar collapsible="offcanvas">
@@ -201,6 +208,8 @@ export function ExplorerSidebar({
             onHide={onHide}
             onSelect={onSelectFile}
             onOpenInNewTab={onOpenInNewTab}
+            gitStatusByPath={gitStatusByPath}
+            onShowGitDiff={onShowGitDiff}
           />
         )}
       </SidebarContent>
@@ -239,6 +248,8 @@ interface LensViewProps {
   onHide: (path: string) => void;
   onSelect: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  gitStatusByPath?: Map<string, GitFileStatusKind>;
+  onShowGitDiff?: (path: string) => void;
 }
 
 function LensView({
@@ -255,6 +266,8 @@ function LensView({
   onHide,
   onSelect,
   onOpenInNewTab,
+  gitStatusByPath,
+  onShowGitDiff,
 }: LensViewProps) {
   if (lens === "tree") {
     if (!tree || filteredFiles.length === 0) {
@@ -276,6 +289,8 @@ function LensView({
         isPinned={isPinned}
         onTogglePin={onTogglePin}
         onHide={onHide}
+        gitStatusByPath={gitStatusByPath}
+        onShowGitDiff={onShowGitDiff}
       />
     );
   }

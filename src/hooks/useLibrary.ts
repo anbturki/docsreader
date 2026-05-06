@@ -6,6 +6,7 @@ import {
   type ScanProgress,
   type ScanResult,
 } from "@/lib/scan";
+import { fetchGitStatus, type GitStatus } from "@/lib/git";
 import { describeEventKind } from "@/lib/events";
 import {
   deleteScanCache,
@@ -24,6 +25,7 @@ export interface RootScan {
   startedAt?: number;
   finishedAt?: number;
   cachedAt?: number;
+  gitStatus?: GitStatus;
 }
 
 export interface Library {
@@ -164,8 +166,19 @@ export function useLibrary(): Library {
           finishedAt: performance.now(),
           progress: s[root]?.progress,
           cachedAt: Date.now(),
+          gitStatus: s[root]?.gitStatus,
         },
       }));
+      // Refresh git status after the scan completes. Runs in the
+      // background; if the workspace is not a git repo, this resolves
+      // to undefined silently.
+      void fetchGitStatus(root).then((gitStatus) => {
+        setScans((s) => {
+          const prev = s[root];
+          if (!prev) return s;
+          return { ...s, [root]: { ...prev, gitStatus } };
+        });
+      });
     } catch (err) {
       console.error(err);
       setScans((s) => {

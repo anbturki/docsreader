@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { readTextFile } from "@tauri-apps/plugin-fs";
 import { ListTree, Settings as SettingsIcon } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
@@ -38,6 +39,9 @@ import {
   type ProjectMeta,
 } from "@/lib/docsYaml";
 import { computeManifestIssues } from "@/lib/manifestIssues";
+import { fetchGitHead, type GitFileStatusKind } from "@/lib/git";
+import { parseFrontmatter } from "@/lib/scan";
+import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
 import "@/styles/code-theme.css";
 
@@ -313,6 +317,43 @@ function App() {
     [viewSettings]
   );
 
+  const activeGitStatus = library.activeScan?.gitStatus;
+  const gitStatusByPath = useMemo(() => {
+    if (!activeGitStatus) return undefined;
+    const map = new Map<string, GitFileStatusKind>();
+    for (const f of activeGitStatus.files) {
+      if (!f.path) continue;
+      map.set(f.path.replace(/\\/g, "/"), f.status as GitFileStatusKind);
+    }
+    return map;
+  }, [activeGitStatus]);
+
+  const [gitDiffState, setGitDiffState] = useState<
+    | undefined
+    | { before: string; after: string; title: string }
+  >();
+  const handleShowGitDiff = useCallback(
+    async (absolutePath: string) => {
+      if (!library.activeRoot) return;
+      const root = library.activeRoot;
+      const rel = absolutePath.startsWith(root + "/")
+        ? absolutePath.slice(root.length + 1)
+        : absolutePath;
+      try {
+        const [headRaw, diskRaw] = await Promise.all([
+          fetchGitHead(root, rel),
+          readTextFile(absolutePath),
+        ]);
+        const before = headRaw === undefined ? "" : parseFrontmatter(headRaw).content;
+        const after = parseFrontmatter(diskRaw).content;
+        setGitDiffState({ before, after, title: rel });
+      } catch (err) {
+        console.error("git diff failed", err);
+      }
+    },
+    [library.activeRoot]
+  );
+
   const handleOpenWelcome = useCallback(async () => {
     try {
       const path = await invoke<string>("install_welcome_workspace");
@@ -362,6 +403,8 @@ function App() {
           }
           crossLinks={crossLinks}
           manifestIssues={manifestIssues}
+          gitStatusByPath={gitStatusByPath}
+          onShowGitDiff={(path) => void handleShowGitDiff(path)}
           lens={viewSettings.settings.sidebarLens}
           onLensChange={handleLensChange}
           search={search}
@@ -504,6 +547,19 @@ function App() {
               onSelect={(path) => tabs.openInActive(path)}
             />
           </Suspense>
+        )}
+        {gitDiffState && (
+          <DiffViewerDialog
+            open
+            onOpenChange={(o) => !o && setGitDiffState(undefined)}
+            before={gitDiffState.before}
+            after={gitDiffState.after}
+            title={`Git diff: ${gitDiffState.title} (working tree vs HEAD)`}
+            mode={viewSettings.settings.diffViewMode}
+            onModeChange={(mode) =>
+              viewSettings.update({ ...viewSettings.settings, diffViewMode: mode })
+            }
+          />
         )}
       </SidebarProvider>
     </TooltipProvider>

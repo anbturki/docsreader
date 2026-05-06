@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ClipboardCopy, EyeOff, FilePlus, FolderOpen, Pin, PinOff } from "lucide-react";
+import { ClipboardCopy, EyeOff, FilePlus, FolderOpen, GitCompare, Pin, PinOff } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   ContextMenu,
@@ -22,6 +22,7 @@ interface Props {
   pinned?: boolean;
   onTogglePin?: (path: string) => void;
   onHide?: (path: string) => void;
+  onShowGitDiff?: (path: string) => void;
   children: ReactNode;
 }
 
@@ -32,6 +33,7 @@ export function EntryContextMenu({
   pinned,
   onTogglePin,
   onHide,
+  onShowGitDiff,
   children,
 }: Props) {
   return (
@@ -69,6 +71,15 @@ export function EntryContextMenu({
           </ContextMenuItem>
         )}
         {(isFile || onHide) && <ContextMenuSeparator />}
+        {isFile && onShowGitDiff && (
+          <>
+            <ContextMenuItem onSelect={() => onShowGitDiff(path)}>
+              <GitCompare />
+              Show git diff
+            </ContextMenuItem>
+            <ContextMenuSeparator />
+          </>
+        )}
         <ContextMenuItem onSelect={() => navigator.clipboard.writeText(path)}>
           <ClipboardCopy />
           Copy path

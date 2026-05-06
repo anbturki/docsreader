@@ -7,6 +7,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import type { TreeNode } from "@/lib/tree";
+import type { GitFileStatusKind } from "@/lib/git";
 import { EntryContextMenu } from "./EntryContextMenu";
 
 interface Props {
@@ -20,6 +21,8 @@ interface Props {
   isPinned: (path: string) => boolean;
   onTogglePin: (path: string) => void;
   onHide: (path: string) => void;
+  gitStatusByPath?: Map<string, GitFileStatusKind>;
+  onShowGitDiff?: (path: string) => void;
 }
 
 export function FileTree({
@@ -33,6 +36,8 @@ export function FileTree({
   isPinned,
   onTogglePin,
   onHide,
+  gitStatusByPath,
+  onShowGitDiff,
 }: Props) {
   return (
     <ul className="px-1 py-1">
@@ -50,6 +55,8 @@ export function FileTree({
           isPinned={isPinned}
           onTogglePin={onTogglePin}
           onHide={onHide}
+          gitStatusByPath={gitStatusByPath}
+          onShowGitDiff={onShowGitDiff}
         />
       ))}
     </ul>
@@ -68,6 +75,8 @@ interface EntryProps {
   isPinned: (path: string) => boolean;
   onTogglePin: (path: string) => void;
   onHide: (path: string) => void;
+  gitStatusByPath?: Map<string, GitFileStatusKind>;
+  onShowGitDiff?: (path: string) => void;
 }
 
 const INDENT_STEP = 14;
@@ -84,7 +93,12 @@ function TreeEntry({
   isPinned,
   onTogglePin,
   onHide,
+  gitStatusByPath,
+  onShowGitDiff,
 }: EntryProps) {
+  const gitStatus = !node.isDir && node.file
+    ? gitStatusByPath?.get(node.file.relPath.replace(/\\/g, "/"))
+    : undefined;
   const padLeft = 8 + depth * INDENT_STEP;
 
   if (!node.isDir) {
@@ -129,6 +143,7 @@ function TreeEntry({
           pinned={isPinned(node.path)}
           onTogglePin={onTogglePin}
           onHide={onHide}
+          onShowGitDiff={onShowGitDiff}
         >
           <button
             onClick={handleClick}
@@ -144,6 +159,7 @@ function TreeEntry({
           >
             <FileText className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate">{node.name}</span>
+            {gitStatus && <GitBadge kind={gitStatus} />}
             {node.badge && <Badge label={node.badge} />}
           </button>
         </EntryContextMenu>
@@ -187,6 +203,8 @@ function TreeEntry({
                 isPinned={isPinned}
                 onTogglePin={onTogglePin}
                 onHide={onHide}
+                gitStatusByPath={gitStatusByPath}
+                onShowGitDiff={onShowGitDiff}
               />
             ))}
           </ul>
@@ -200,6 +218,48 @@ function Badge({ label }: { label: string }) {
   return (
     <span className="ml-auto rounded-sm bg-sidebar-accent/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
       {label}
+    </span>
+  );
+}
+
+const GIT_BADGE_LABELS: Record<GitFileStatusKind, string> = {
+  modified: "M",
+  added: "A",
+  deleted: "D",
+  renamed: "R",
+  untracked: "?",
+  unmerged: "U",
+};
+
+const GIT_BADGE_TOOLTIPS: Record<GitFileStatusKind, string> = {
+  modified: "Modified since HEAD",
+  added: "Added (staged)",
+  deleted: "Deleted",
+  renamed: "Renamed",
+  untracked: "Untracked",
+  unmerged: "Unmerged conflict",
+};
+
+const GIT_BADGE_CLASSES: Record<GitFileStatusKind, string> = {
+  modified: "text-amber-600 dark:text-amber-400",
+  added: "text-emerald-600 dark:text-emerald-400",
+  deleted: "text-rose-600 dark:text-rose-400",
+  renamed: "text-blue-600 dark:text-blue-400",
+  untracked: "text-muted-foreground",
+  unmerged: "text-rose-700 dark:text-rose-300",
+};
+
+function GitBadge({ kind }: { kind: GitFileStatusKind }) {
+  return (
+    <span
+      className={cn(
+        "ml-auto inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-[10px] font-bold tabular-nums",
+        GIT_BADGE_CLASSES[kind]
+      )}
+      title={GIT_BADGE_TOOLTIPS[kind]}
+      aria-label={GIT_BADGE_TOOLTIPS[kind]}
+    >
+      {GIT_BADGE_LABELS[kind]}
     </span>
   );
 }

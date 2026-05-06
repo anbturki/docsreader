@@ -302,6 +302,171 @@ async fn install_welcome_workspace(app: AppHandle) -> Result<String, String> {
     Ok(dst.to_string_lossy().to_string())
 }
 
+// ─── Git integration ────────────────────────────────────────────────────────
+//
+// We shell out to /usr/bin/git for status and HEAD-content lookups. Three
+// reasons over a Rust git library: zero binary weight, no runtime
+// dependency on libgit2 in the bundle, and the user's installed git
+// always understands the user's repo. Workspaces without a `.git` (or
+// without git installed) silently skip git decorations.
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitFileStatus {
+    pub path: String,
+    pub status: String,
+    #[serde(default, rename = "originalPath", skip_serializing_if = "Option::is_none")]
+    pub original_path: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GitStatus {
+    pub root: String,
+    pub files: Vec<GitFileStatus>,
+}
+
+fn classify_xy(xy: &str) -> &'static str {
+    let bytes = xy.as_bytes();
+    if bytes.len() < 2 {
+        return "modified";
+    }
+    let x = bytes[0] as char;
+    let y = bytes[1] as char;
+    if x == '?' || y == '?' {
+        return "untracked";
+    }
+    if x == 'U' || y == 'U' || (x == 'D' && y == 'D') || (x == 'A' && y == 'A') {
+        return "unmerged";
+    }
+    if x == 'A' || y == 'A' {
+        return "added";
+    }
+    if x == 'D' || y == 'D' {
+        return "deleted";
+    }
+    if x == 'R' || y == 'R' || x == 'C' || y == 'C' {
+        return "renamed";
+    }
+    "modified"
+}
+
+#[tauri::command]
+async fn git_status(workspace: String) -> Result<Option<GitStatus>, String> {
+    let toplevel_out = std::process::Command::new("git")
+        .args(["-C", &workspace, "rev-parse", "--show-toplevel"])
+        .output();
+    let toplevel_out = match toplevel_out {
+        Ok(o) => o,
+        Err(_) => return Ok(None), // git not installed
+    };
+    if !toplevel_out.status.success() {
+        return Ok(None); // not in a git repo
+    }
+    let toplevel = String::from_utf8_lossy(&toplevel_out.stdout)
+        .trim()
+        .to_string();
+
+    // Workspace must live inside the repo. Compute the prefix so we can
+    // translate repo-relative paths (what git emits) into
+    // workspace-relative paths (what the scan uses).
+    let ws_canonical = std::path::Path::new(&workspace)
+        .canonicalize()
+        .unwrap_or_else(|_| std::path::Path::new(&workspace).to_path_buf());
+    let tl_canonical = std::path::Path::new(&toplevel)
+        .canonicalize()
+        .unwrap_or_else(|_| std::path::Path::new(&toplevel).to_path_buf());
+    let prefix = ws_canonical
+        .strip_prefix(&tl_canonical)
+        .ok()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .unwrap_or_default();
+
+    let status_out = std::process::Command::new("git")
+        .args(["-C", &workspace, "status", "--porcelain=v1", "-z"])
+        .output()
+        .map_err(|e| format!("git status: {e}"))?;
+    if !status_out.status.success() {
+        return Err(format!(
+            "git status: {}",
+            String::from_utf8_lossy(&status_out.stderr)
+        ));
+    }
+
+    let mut files = Vec::new();
+    let mut iter = status_out
+        .stdout
+        .split(|b| *b == 0)
+        .filter(|t| !t.is_empty())
+        .peekable();
+    while let Some(tok) = iter.next() {
+        let s = match std::str::from_utf8(tok) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if s.len() < 4 {
+            continue;
+        }
+        let xy = &s[..2];
+        let path = s[3..].to_string();
+        let status = classify_xy(xy);
+        let is_rename = xy.contains('R') || xy.contains('C');
+
+        let original_path = if is_rename {
+            // The next token is the original (pre-rename) path.
+            iter.next()
+                .and_then(|t| std::str::from_utf8(t).ok().map(|s| s.to_string()))
+        } else {
+            None
+        };
+
+        // Translate repo-relative path into workspace-relative.
+        let final_path = if prefix.is_empty() {
+            path.clone()
+        } else if path == prefix {
+            String::new()
+        } else if let Some(rest) = path.strip_prefix(&format!("{}/", prefix)) {
+            rest.to_string()
+        } else {
+            // Outside our workspace subdir; skip.
+            continue;
+        };
+
+        files.push(GitFileStatus {
+            path: final_path,
+            status: status.to_string(),
+            original_path,
+        });
+    }
+
+    Ok(Some(GitStatus {
+        root: toplevel,
+        files,
+    }))
+}
+
+#[tauri::command]
+async fn git_show_head(workspace: String, path: String) -> Result<Option<String>, String> {
+    // Use the workspace-relative path. The shell-out runs from `workspace`,
+    // so git resolves the path against the repo's worktree correctly.
+    let out = std::process::Command::new("git")
+        .args(["-C", &workspace, "show", &format!("HEAD:./{}", path)])
+        .output()
+        .map_err(|e| format!("git show: {e}"))?;
+    if !out.status.success() {
+        // Common case: file is untracked / new (no HEAD revision). Don't
+        // treat as an error - the caller renders an "all added" diff.
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        if stderr.contains("exists on disk, but not in")
+            || stderr.contains("does not exist")
+            || stderr.contains("path does not exist")
+            || stderr.contains("bad revision")
+        {
+            return Ok(None);
+        }
+        return Err(format!("git show: {}", stderr));
+    }
+    Ok(Some(String::from_utf8_lossy(&out.stdout).to_string()))
+}
+
 fn load_docs_yaml(root: &Path) -> (Option<DocsYaml>, Option<String>) {
     for name in [".docs.yaml", "docs.yaml"] {
         let p = root.join(name);
@@ -628,7 +793,9 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             scan_markdown,
-            install_welcome_workspace
+            install_welcome_workspace,
+            git_status,
+            git_show_head
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -20,8 +20,12 @@ interface Props {
   after: string;
   mode: DiffViewMode;
   onModeChange: (mode: DiffViewMode) => void;
-  onReload: () => void;
-  onDismiss: () => void;
+  // When provided, render banner-style "Keep current" / "Reload from disk"
+  // actions. Omit both to render a plain Close button (read-only diff view,
+  // e.g. for a git-vs-HEAD comparison).
+  onReload?: () => void;
+  onDismiss?: () => void;
+  title?: string;
 }
 
 interface DiffLine {
@@ -43,7 +47,9 @@ export function DiffViewerDialog({
   onModeChange,
   onReload,
   onDismiss,
+  title,
 }: Props) {
+  const hasBannerActions = onReload !== undefined && onDismiss !== undefined;
   const { unified, split } = useMemo(() => {
     const lines = buildDiffLines(before, after);
     return { unified: lines, split: pairForSplit(lines) };
@@ -58,8 +64,8 @@ export function DiffViewerDialog({
         className="max-w-4xl gap-0 overflow-hidden p-0 sm:max-w-4xl"
       >
         <DialogHeader className="flex flex-row items-center justify-between gap-4 border-b px-5 py-3">
-          <DialogTitle className="text-base font-semibold">
-            External change diff
+          <DialogTitle className="truncate text-base font-semibold">
+            {title ?? (hasBannerActions ? "External change diff" : "Diff")}
           </DialogTitle>
           <ToggleGroup
             type="single"
@@ -92,13 +98,21 @@ export function DiffViewerDialog({
         </div>
 
         <DialogFooter className="m-0 flex-row justify-end gap-2 rounded-b-xl border-t bg-muted/30 px-5 py-3">
-          <Button variant="ghost" onClick={onDismiss}>
-            Keep current version
-          </Button>
-          <Button onClick={onReload}>
-            <RefreshCw className="size-3.5" />
-            Reload from disk
-          </Button>
+          {hasBannerActions ? (
+            <>
+              <Button variant="ghost" onClick={onDismiss}>
+                Keep current version
+              </Button>
+              <Button onClick={onReload}>
+                <RefreshCw className="size-3.5" />
+                Reload from disk
+              </Button>
+            </>
+          ) : (
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
