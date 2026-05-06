@@ -12,6 +12,7 @@ import type { MarkdownFile } from "@/lib/scan";
 import type { TreeNode } from "@/lib/tree";
 import type { SidebarLens } from "@/lib/storage";
 import type { RootScan } from "@/hooks/useLibrary";
+import type { ProjectMeta } from "@/lib/docsYaml";
 import { FileTree } from "./FileTree";
 import { LensTabs } from "./LensTabs";
 import { PinnedList } from "./PinnedList";
@@ -26,6 +27,7 @@ interface Props {
   roots: string[];
   activeRoot: string | undefined;
   activeScan: RootScan | undefined;
+  projectMetaByRoot: Record<string, ProjectMeta>;
   onPickDirectory: () => void;
   onSelectRoot: (path: string) => void;
   onRemoveRoot: (path: string) => void;
@@ -67,6 +69,7 @@ export function ExplorerSidebar({
   roots,
   activeRoot,
   activeScan,
+  projectMetaByRoot,
   onPickDirectory,
   onSelectRoot,
   onRemoveRoot,
@@ -127,6 +130,7 @@ export function ExplorerSidebar({
           <WorkspaceSwitcher
             roots={roots}
             activeRoot={activeRoot}
+            projectMetaByRoot={projectMetaByRoot}
             onSelect={onSelectRoot}
             onRemove={onRemoveRoot}
             onAdd={onPickDirectory}

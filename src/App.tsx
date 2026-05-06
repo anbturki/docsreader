@@ -23,9 +23,16 @@ import { useViewSettings } from "@/hooks/useViewSettings";
 import { useSidebarState } from "@/hooks/useSidebarState";
 import { usePinned } from "@/hooks/usePinned";
 import { buildTree } from "@/lib/tree";
+import { buildCuratedTree } from "@/lib/curatedTree";
 import { collectDirKeys } from "@/components/explorer/FileTree";
 import { buildHideMatcher } from "@/lib/match";
 import { basename } from "@/lib/path";
+import {
+  getIgnorePatterns,
+  getProjectMeta,
+  hasNavigation,
+  type ProjectMeta,
+} from "@/lib/docsYaml";
 import type { MarkdownFile } from "@/lib/scan";
 import "@/styles/code-theme.css";
 
@@ -56,10 +63,31 @@ function App() {
     });
   }, [viewSettings]);
 
-  const hideMatcher = useMemo(
-    () => buildHideMatcher(viewSettings.settings.hidePatterns),
-    [viewSettings.settings.hidePatterns]
+  const activeDocsIgnore = useMemo(
+    () => getIgnorePatterns(library.activeScan?.result.docsYaml),
+    [library.activeScan?.result.docsYaml]
   );
+
+  const hideMatcher = useMemo(
+    () => buildHideMatcher([...viewSettings.settings.hidePatterns, ...activeDocsIgnore]),
+    [viewSettings.settings.hidePatterns, activeDocsIgnore]
+  );
+
+  const projectMetaByRoot = useMemo<Record<string, ProjectMeta>>(() => {
+    const out: Record<string, ProjectMeta> = {};
+    for (const root of library.roots) {
+      const meta = getProjectMeta(library.scans[root]?.result.docsYaml);
+      if (meta) out[root] = meta;
+    }
+    return out;
+  }, [library.roots, library.scans]);
+
+  const activeDocsYamlError = library.activeScan?.result.docsYamlError;
+  useEffect(() => {
+    if (activeDocsYamlError) {
+      console.warn("[docsreader] .docs.yaml parse error:", activeDocsYamlError);
+    }
+  }, [activeDocsYamlError]);
 
   const rawFiles = library.activeScan?.result.files ?? [];
   const allFiles = useMemo(() => {
@@ -72,13 +100,18 @@ function App() {
     for (const root of library.roots) {
       const scan = library.scans[root];
       if (!scan) continue;
+      const docsIgnore = getIgnorePatterns(scan.result.docsYaml);
+      const matcher =
+        docsIgnore.length === 0
+          ? buildHideMatcher(viewSettings.settings.hidePatterns)
+          : buildHideMatcher([...viewSettings.settings.hidePatterns, ...docsIgnore]);
       for (const f of scan.result.files) {
-        if (!hideMatcher.empty && hideMatcher.matchesPath(f.relPath)) continue;
+        if (!matcher.empty && matcher.matchesPath(f.relPath)) continue;
         out.push({ ...f, rootPath: root });
       }
     }
     return out;
-  }, [library.roots, library.scans, hideMatcher]);
+  }, [library.roots, library.scans, viewSettings.settings.hidePatterns]);
 
   const quickOpenShortcut = useMemo(
     () => parseShortcut(viewSettings.settings.quickOpenShortcut),
@@ -111,10 +144,14 @@ function App() {
     };
   }, [quickOpenMounted]);
   const filteredFiles = useFilteredFiles(allFiles, search);
-  const tree = useMemo(
-    () => (library.activeRoot ? buildTree(library.activeRoot, filteredFiles) : undefined),
-    [library.activeRoot, filteredFiles]
-  );
+  const activeDocsYaml = library.activeScan?.result.docsYaml;
+  const tree = useMemo(() => {
+    if (!library.activeRoot) return undefined;
+    if (hasNavigation(activeDocsYaml)) {
+      return buildCuratedTree(library.activeRoot, filteredFiles, activeDocsYaml);
+    }
+    return buildTree(library.activeRoot, filteredFiles);
+  }, [library.activeRoot, filteredFiles, activeDocsYaml]);
   const rootKey = library.activeRoot ?? "";
   const handleCollapseAll = useCallback(() => {
     if (!tree) return;
@@ -176,6 +213,7 @@ function App() {
           roots={library.roots}
           activeRoot={library.activeRoot}
           activeScan={library.activeScan}
+          projectMetaByRoot={projectMetaByRoot}
           onPickDirectory={() => void library.pickDirectory()}
           onSelectRoot={(path) => void library.selectRoot(path)}
           onRemoveRoot={(path) => void library.removeRoot(path)}

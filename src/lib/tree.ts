@@ -7,6 +7,8 @@ export interface TreeNode {
   children: TreeNode[];
   file?: MarkdownFile;
   segments?: string[];
+  badge?: string;
+  missing?: boolean;
 }
 
 export function buildTree(

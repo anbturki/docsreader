@@ -8,16 +8,25 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import type { ProjectMeta } from "@/lib/docsYaml";
 
 interface Props {
   roots: string[];
   activeRoot: string | undefined;
+  projectMetaByRoot: Record<string, ProjectMeta>;
   onSelect: (path: string) => void;
   onRemove: (path: string) => void;
   onAdd: () => void;
 }
 
-export function WorkspaceSwitcher({ roots, activeRoot, onSelect, onRemove, onAdd }: Props) {
+export function WorkspaceSwitcher({
+  roots,
+  activeRoot,
+  projectMetaByRoot,
+  onSelect,
+  onRemove,
+  onAdd,
+}: Props) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const activeButtonRef = useRef<HTMLButtonElement>(null);
   const [canLeft, setCanLeft] = useState(false);
@@ -72,7 +81,10 @@ export function WorkspaceSwitcher({ roots, activeRoot, onSelect, onRemove, onAdd
         className="no-scrollbar flex flex-1 items-center gap-3 overflow-x-auto scroll-smooth"
       >
         {roots.map((root) => {
-          const label = root.split("/").filter(Boolean).pop() || root;
+          const folderLabel = root.split("/").filter(Boolean).pop() || root;
+          const meta = projectMetaByRoot[root];
+          const label = meta?.name ?? folderLabel;
+          const tooltip = formatTooltip(root, meta);
           const active = root === activeRoot;
           return (
             <ContextMenu key={root}>
@@ -80,7 +92,7 @@ export function WorkspaceSwitcher({ roots, activeRoot, onSelect, onRemove, onAdd
                 <button
                   ref={active ? activeButtonRef : undefined}
                   onClick={() => onSelect(root)}
-                  title={root}
+                  title={tooltip}
                   className={cn(
                     "shrink-0 max-w-[10rem] truncate py-1 text-sm",
                     active
@@ -124,4 +136,14 @@ export function WorkspaceSwitcher({ roots, activeRoot, onSelect, onRemove, onAdd
       </Button>
     </div>
   );
+}
+
+function formatTooltip(root: string, meta: ProjectMeta | undefined): string {
+  if (!meta) return root;
+  const lines: string[] = [meta.name];
+  if (meta.tagline) lines.push(meta.tagline);
+  const scopeLine = meta.scope;
+  if (scopeLine) lines.push(scopeLine);
+  lines.push(root);
+  return lines.join("\n");
 }

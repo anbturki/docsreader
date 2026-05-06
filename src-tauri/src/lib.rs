@@ -28,11 +28,95 @@ pub struct MarkdownFile {
     pub size: u64,
 }
 
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct DocsYamlProject {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slug: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tagline: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub homepage: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DocsYamlNavItem {
+    Markdown {
+        title: String,
+        path: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        slug: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        badge: Option<String>,
+    },
+    OpenApi {
+        title: String,
+        openapi: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        slug: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        badge: Option<String>,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DocsYamlNavSection {
+    Items {
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        collapsed: Option<bool>,
+        items: Vec<DocsYamlNavItem>,
+    },
+    Folder {
+        title: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        collapsed: Option<bool>,
+        folder: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sort: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        direction: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title_from: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pattern: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        nested: Option<bool>,
+    },
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct DocsYaml {
+    #[serde(default, rename = "spec_version", skip_serializing_if = "Option::is_none")]
+    pub spec_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<DocsYamlProject>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub navigation: Vec<DocsYamlNavSection>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ignore: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visibility: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ScanResult {
     pub root: String,
     pub files: Vec<MarkdownFile>,
     pub truncated: bool,
+    #[serde(default, rename = "docsYaml", skip_serializing_if = "Option::is_none")]
+    pub docs_yaml: Option<DocsYaml>,
+    #[serde(default, rename = "docsYamlError", skip_serializing_if = "Option::is_none")]
+    pub docs_yaml_error: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -160,6 +244,23 @@ fn read_partial(path: &Path) -> std::io::Result<String> {
     let n = file.read(&mut buf)?;
     buf.truncate(n);
     Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
+fn load_docs_yaml(root: &Path) -> (Option<DocsYaml>, Option<String>) {
+    for name in [".docs.yaml", "docs.yaml"] {
+        let p = root.join(name);
+        if !p.exists() {
+            continue;
+        }
+        return match std::fs::read_to_string(&p) {
+            Ok(s) => match serde_yaml::from_str::<DocsYaml>(&s) {
+                Ok(parsed) => (Some(parsed), None),
+                Err(e) => (None, Some(format!("{}: {}", name, e))),
+            },
+            Err(e) => (None, Some(format!("{}: {}", name, e))),
+        };
+    }
+    (None, None)
 }
 
 #[tauri::command]
@@ -299,10 +400,14 @@ fn run_scan(app: AppHandle, path: String) -> Result<ScanResult, String> {
         },
     );
 
+    let (docs_yaml, docs_yaml_error) = load_docs_yaml(root_path);
+
     Ok(ScanResult {
         root: root_path.to_string_lossy().to_string(),
         files,
         truncated,
+        docs_yaml,
+        docs_yaml_error,
     })
 }
 
@@ -371,6 +476,83 @@ fn maybe_emit_read_progress(
             last_file,
         },
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_v01_manifest_with_mixed_sections() {
+        let yaml = r##"
+spec_version: "0.1"
+project:
+  slug: voice
+  name: Vinfra Voice
+  tagline: Carrier-grade VoIP for MENA
+  scope: L1
+  icon: phone
+  homepage: docs/spec/architecture.md
+navigation:
+  - title: Start here
+    items:
+      - title: Architecture overview
+        path: docs/spec/architecture.md
+      - title: Operating contract
+        path: docs/CONTRACT.md
+        badge: live
+  - title: Architecture decisions
+    folder: docs/adr/
+    sort: filename
+    title_from: heading
+  - title: Build curriculum
+    folder: docs/phases/
+    nested: true
+ignore:
+  - docs/archived/**
+  - "**/*.draft.md"
+visibility: internal
+"##;
+        let parsed: DocsYaml = serde_yaml::from_str(yaml).expect("should parse");
+        let project = parsed.project.expect("project required");
+        assert_eq!(project.slug.as_deref(), Some("voice"));
+        assert_eq!(project.name.as_deref(), Some("Vinfra Voice"));
+        assert_eq!(parsed.navigation.len(), 3);
+        assert_eq!(parsed.ignore.len(), 2);
+
+        let (mut items, mut folder) = (false, false);
+        for s in &parsed.navigation {
+            match s {
+                DocsYamlNavSection::Items { .. } => items = true,
+                DocsYamlNavSection::Folder { .. } => folder = true,
+            }
+        }
+        assert!(items && folder, "both section kinds match");
+    }
+
+    #[test]
+    fn ignores_unknown_top_level_fields() {
+        let yaml = r##"
+spec_version: "0.1"
+project:
+  slug: x
+  name: X
+navigation:
+  - title: T
+    folder: docs/
+api_reference:
+  openapi: api.yaml
+versions:
+  current: a
+  supported: [a]
+theme:
+  primary_color: "#000"
+metadata:
+  team: t
+"##;
+        let parsed: DocsYaml = serde_yaml::from_str(yaml).expect("should parse with extras");
+        assert_eq!(parsed.navigation.len(), 1);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -88,6 +88,24 @@ function TreeEntry({
   const padLeft = 8 + depth * INDENT_STEP;
 
   if (!node.isDir) {
+    if (node.missing) {
+      return (
+        <li>
+          <div
+            style={{ paddingLeft: padLeft }}
+            className="flex w-full items-center gap-2 py-1.5 pr-2 text-left text-sm text-muted-foreground/70"
+            title={`Path declared in .docs.yaml but not found in the workspace: ${node.path.replace(/^missing::/, "")}`}
+          >
+            <FileText className="size-3.5 shrink-0 opacity-60" />
+            <span className="truncate italic">{node.name}</span>
+            {node.badge && <Badge label={node.badge} />}
+            <span className="ml-auto text-[10px] uppercase tracking-wide opacity-70">
+              missing
+            </span>
+          </div>
+        </li>
+      );
+    }
     const handleClick = (e: MouseEvent) => {
       if (e.metaKey || e.ctrlKey) {
         e.preventDefault();
@@ -126,6 +144,7 @@ function TreeEntry({
           >
             <FileText className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate">{node.name}</span>
+            {node.badge && <Badge label={node.badge} />}
           </button>
         </EntryContextMenu>
       </li>
@@ -174,6 +193,14 @@ function TreeEntry({
         </CollapsibleContent>
       </Collapsible>
     </li>
+  );
+}
+
+function Badge({ label }: { label: string }) {
+  return (
+    <span className="ml-auto rounded-sm bg-sidebar-accent/60 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+      {label}
+    </span>
   );
 }
 
