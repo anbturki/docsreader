@@ -12,6 +12,7 @@ interface Props {
   onDiffViewModeChange: (mode: DiffViewMode) => void;
   onReload: () => void;
   onDismiss: () => void;
+  onAlwaysAutoReload: () => void;
 }
 
 export function ExternalChangeBanner({
@@ -21,6 +22,7 @@ export function ExternalChangeBanner({
   onDiffViewModeChange,
   onReload,
   onDismiss,
+  onAlwaysAutoReload,
 }: Props) {
   const stats = useMemo(() => computeDiffStats(before, after), [before, after]);
   const [diffOpen, setDiffOpen] = useState(false);
@@ -39,6 +41,14 @@ export function ExternalChangeBanner({
             </span>
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            <button
+              type="button"
+              onClick={onAlwaysAutoReload}
+              className="mr-1 rounded px-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus:underline focus:outline-none"
+              title="Always reload silently from now on. Reversible in Settings -> Reading."
+            >
+              Always auto-reload
+            </button>
             <Button size="sm" variant="ghost" onClick={() => setDiffOpen(true)}>
               Show diff
             </Button>

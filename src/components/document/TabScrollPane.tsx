@@ -20,6 +20,7 @@ interface Props {
   onAcceptPending: (id: string) => void;
   onDismissPending: (id: string) => void;
   onDiffViewModeChange: (mode: ViewSettings["diffViewMode"]) => void;
+  onAlwaysAutoReload: () => void;
 }
 
 export function TabScrollPane({
@@ -35,6 +36,7 @@ export function TabScrollPane({
   onAcceptPending,
   onDismissPending,
   onDiffViewModeChange,
+  onAlwaysAutoReload,
 }: Props) {
   const pendingBody = useMemo(
     () => (tab.pendingContent ? parseFrontmatter(tab.pendingContent).content : undefined),
@@ -118,6 +120,7 @@ export function TabScrollPane({
           onDiffViewModeChange={onDiffViewModeChange}
           onReload={() => onAcceptPending(tab.id)}
           onDismiss={() => onDismissPending(tab.id)}
+          onAlwaysAutoReload={onAlwaysAutoReload}
         />
       )}
       <DocumentView

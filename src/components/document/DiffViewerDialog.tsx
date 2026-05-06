@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { RefreshCw } from "lucide-react";
+import { Columns2, RefreshCw, Rows3 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -54,10 +54,10 @@ export function DiffViewerDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        showCloseButton
+        showCloseButton={false}
         className="max-w-4xl gap-0 overflow-hidden p-0 sm:max-w-4xl"
       >
-        <DialogHeader className="flex flex-row items-center justify-between border-b px-5 py-3">
+        <DialogHeader className="flex flex-row items-center justify-between gap-4 border-b px-5 py-3">
           <DialogTitle className="text-base font-semibold">
             External change diff
           </DialogTitle>
@@ -68,10 +68,12 @@ export function DiffViewerDialog({
             variant="outline"
             spacing={4}
           >
-            <ToggleGroupItem value="unified" className="h-7 px-2 text-xs">
+            <ToggleGroupItem value="unified" className="h-7 gap-1.5 px-2 text-xs">
+              <Rows3 className="size-3" />
               Unified
             </ToggleGroupItem>
-            <ToggleGroupItem value="split" className="h-7 px-2 text-xs">
+            <ToggleGroupItem value="split" className="h-7 gap-1.5 px-2 text-xs">
+              <Columns2 className="size-3" />
               Side by side
             </ToggleGroupItem>
           </ToggleGroup>
@@ -89,7 +91,7 @@ export function DiffViewerDialog({
           )}
         </div>
 
-        <DialogFooter className="border-t px-5 py-3">
+        <DialogFooter className="m-0 flex-row justify-end gap-2 rounded-b-xl border-t bg-muted/30 px-5 py-3">
           <Button variant="ghost" onClick={onDismiss}>
             Keep current version
           </Button>

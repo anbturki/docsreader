@@ -1,5 +1,4 @@
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Toggle } from "@/components/ui/toggle";
 import type { ContentWidth, FontFamily, FontSize, ViewSettings } from "@/lib/storage";
 
 interface Props {
@@ -72,18 +71,29 @@ export function ReadingSection({ settings, onChange }: Props) {
 
       <Field
         label="External changes"
-        hint="When a file changes on disk, DocsReader shows a banner with a diff and asks before reloading. Turn on to silently reload like older versions did."
+        hint="When a file changes on disk while you're reading it, DocsReader can ask before reloading or just swap the content silently."
       >
-        <Toggle
-          variant="outline"
-          pressed={settings.autoReloadOnExternalChange}
-          onPressedChange={(v) =>
-            onChange({ ...settings, autoReloadOnExternalChange: v })
+        <ToggleGroup
+          type="single"
+          value={settings.autoReloadOnExternalChange ? "auto" : "ask"}
+          onValueChange={(v) =>
+            v &&
+            onChange({
+              ...settings,
+              autoReloadOnExternalChange: v === "auto",
+            })
           }
-          className="self-start"
+          variant="outline"
+          spacing={8}
+          className="grid w-full grid-cols-2"
         >
-          {settings.autoReloadOnExternalChange ? "Auto-reload" : "Ask before reloading"}
-        </Toggle>
+          <ToggleGroupItem value="ask" className={pillClass}>
+            Ask before reloading
+          </ToggleGroupItem>
+          <ToggleGroupItem value="auto" className={pillClass}>
+            Auto-reload
+          </ToggleGroupItem>
+        </ToggleGroup>
       </Field>
     </div>
   );

@@ -474,6 +474,12 @@ function App() {
                       onDiffViewModeChange={(mode) =>
                         viewSettings.update({ ...viewSettings.settings, diffViewMode: mode })
                       }
+                      onAlwaysAutoReload={() =>
+                        viewSettings.update({
+                          ...viewSettings.settings,
+                          autoReloadOnExternalChange: true,
+                        })
+                      }
                     />
                   );
                 })

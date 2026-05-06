@@ -1,7 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import { X } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Toggle } from "@/components/ui/toggle";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { DefaultFolderState, ViewSettings } from "@/lib/storage";
@@ -120,16 +119,25 @@ export function ExplorerSection({ settings, onChange, onOpenWelcome }: Props) {
 
       <Field
         label="Internal-only workspaces"
-        hint="Workspaces whose .docs.yaml declares visibility: internal show in the switcher when this is on (default). Turn off to preview what a public-only audience would see."
+        hint="Workspaces whose .docs.yaml declares visibility: internal can be hidden from the switcher to preview what a public-only audience would see."
       >
-        <Toggle
+        <ToggleGroup
+          type="single"
+          value={settings.showInternal ? "show" : "hide"}
+          onValueChange={(v) =>
+            v && onChange({ ...settings, showInternal: v === "show" })
+          }
           variant="outline"
-          pressed={settings.showInternal}
-          onPressedChange={(v) => onChange({ ...settings, showInternal: v })}
-          className="self-start"
+          spacing={8}
+          className="grid w-full grid-cols-2"
         >
-          {settings.showInternal ? "Showing internal" : "Hidden"}
-        </Toggle>
+          <ToggleGroupItem value="show" className={pillClass}>
+            Show internal
+          </ToggleGroupItem>
+          <ToggleGroupItem value="hide" className={pillClass}>
+            Hide internal
+          </ToggleGroupItem>
+        </ToggleGroup>
       </Field>
 
       <Field
