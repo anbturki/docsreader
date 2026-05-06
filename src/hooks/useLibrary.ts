@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import {
   scanDirectory,
   type ScanProgress,
   type ScanResult,
 } from "@/lib/scan";
+import { describeEventKind } from "@/lib/events";
 import {
   deleteScanCache,
   loadLastSelected,
@@ -151,6 +153,55 @@ export function useLibrary(): Library {
     },
     [scans, hydrateFromCache]
   );
+
+  // Workspace-level watcher: re-scan the active root when files or
+  // folders are created, removed, or renamed anywhere inside it.
+  // Modify-only events for individual files are handled per-tab in
+  // useTabs, so they're ignored here to avoid redundant scans.
+  const rescanRef = useRef(rescan);
+  rescanRef.current = rescan;
+  useEffect(() => {
+    if (!activeRoot) return;
+    let cancelled = false;
+    let unwatch: UnwatchFn | undefined;
+    let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const scheduleRescan = () => {
+      if (cancelled) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (!cancelled) void rescanRef.current(activeRoot);
+      }, 600);
+    };
+
+    void (async () => {
+      try {
+        const unwatchFn = await watch(
+          activeRoot,
+          (event) => {
+            const kind = describeEventKind(event.type);
+            if (kind === "create" || kind === "remove" || kind === "rename") {
+              scheduleRescan();
+            }
+          },
+          { recursive: true, delayMs: 200 }
+        );
+        if (cancelled) {
+          void unwatchFn();
+          return;
+        }
+        unwatch = unwatchFn;
+      } catch (err) {
+        console.error("workspace watch failed", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      if (unwatch) void unwatch();
+    };
+  }, [activeRoot]);
 
   const activeScan = activeRoot ? scans[activeRoot] : undefined;
 
