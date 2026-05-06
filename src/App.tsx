@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ListTree, Settings as SettingsIcon } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
@@ -88,6 +88,43 @@ function App() {
       console.warn("[docsreader] .docs.yaml parse error:", activeDocsYamlError);
     }
   }, [activeDocsYamlError]);
+
+  // Auto-open project.homepage once per workspace per session: only fires on
+  // the first time the active scan finishes with no tabs open in that root,
+  // so closing the homepage tab doesn't keep reopening it on workspace switch.
+  const autoOpenedHomepageRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!tabs.hydrated) return;
+    if (!library.activeRoot) return;
+    const scan = library.activeScan;
+    if (!scan || scan.scanning) return;
+    const root = library.activeRoot;
+    if (autoOpenedHomepageRef.current.has(root)) return;
+
+    const homepage = scan.result.docsYaml?.project?.homepage?.trim();
+    if (!homepage) return;
+
+    const homepageRel = homepage.replace(/\\/g, "/").replace(/^\.\//, "");
+    const file = scan.result.files.find(
+      (f) => f.relPath.replace(/\\/g, "/") === homepageRel
+    );
+    if (!file) return;
+
+    const hasTabInRoot = tabs.tabs.some((t) => t.path.startsWith(root + "/") || t.path === root);
+    if (hasTabInRoot) {
+      autoOpenedHomepageRef.current.add(root);
+      return;
+    }
+
+    autoOpenedHomepageRef.current.add(root);
+    tabs.openInNew(file.path);
+  }, [
+    tabs.hydrated,
+    library.activeRoot,
+    library.activeScan,
+    tabs.tabs,
+    tabs,
+  ]);
 
   const rawFiles = library.activeScan?.result.files ?? [];
   const allFiles = useMemo(() => {

@@ -97,6 +97,15 @@ function isSkippedWatchPath(eventPath: string, root: string): boolean {
   return false;
 }
 
+// True when the watch event refers to .docs.yaml or docs.yaml at the
+// workspace root - the manifest. We watch modifies for it specifically
+// because edits change the curated tree even when no files come/go.
+function isManifestPath(eventPath: string, root: string): boolean {
+  const norm = eventPath.replace(/\\/g, "/");
+  const r = root.replace(/\\/g, "/");
+  return norm === `${r}/.docs.yaml` || norm === `${r}/docs.yaml`;
+}
+
 export function useLibrary(): Library {
   const [roots, setRoots] = useState<string[]>([]);
   const [activeRoot, setActiveRoot] = useState<string | undefined>();
@@ -252,12 +261,23 @@ export function useLibrary(): Library {
           activeRoot,
           (event) => {
             const kind = describeEventKind(event.type);
+            const paths = Array.isArray(event.paths) ? event.paths : [];
+
+            // Manifest edit: rescan even on modify, since the curated
+            // tree depends on the YAML content not just on file presence.
+            if (
+              kind === "modify" &&
+              paths.some((p) => isManifestPath(p, activeRoot))
+            ) {
+              scheduleRescan();
+              return;
+            }
+
             if (kind !== "create" && kind !== "remove" && kind !== "rename") {
               return;
             }
             // event.paths can contain multiple paths for batched events.
             // Only schedule a rescan if at least one path is not skipped.
-            const paths = Array.isArray(event.paths) ? event.paths : [];
             const someRelevant =
               paths.length === 0 ||
               paths.some((p) => !isSkippedWatchPath(p, activeRoot));
