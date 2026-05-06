@@ -263,11 +263,19 @@ export function useLibrary(): Library {
             const kind = describeEventKind(event.type);
             const paths = Array.isArray(event.paths) ? event.paths : [];
 
-            // Manifest edit: rescan even on modify, since the curated
-            // tree depends on the YAML content not just on file presence.
+            // Manifest events bypass both the modify-skip and the
+            // dotfile-skip filters. The dotfile filter would otherwise
+            // drop create/remove/rename of `.docs.yaml` because of its
+            // leading dot, and the modify-skip would drop in-place edits.
+            const manifestTouched = paths.some((p) =>
+              isManifestPath(p, activeRoot)
+            );
             if (
-              kind === "modify" &&
-              paths.some((p) => isManifestPath(p, activeRoot))
+              manifestTouched &&
+              (kind === "create" ||
+                kind === "remove" ||
+                kind === "rename" ||
+                kind === "modify")
             ) {
               scheduleRescan();
               return;

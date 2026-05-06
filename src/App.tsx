@@ -93,8 +93,11 @@ function App() {
   // the first time the active scan finishes with no tabs open in that root,
   // so closing the homepage tab doesn't keep reopening it on workspace switch.
   const autoOpenedHomepageRef = useRef<Set<string>>(new Set());
+  const tabsHydrated = tabs.hydrated;
+  const tabsList = tabs.tabs;
+  const tabsOpenInNew = tabs.openInNew;
   useEffect(() => {
-    if (!tabs.hydrated) return;
+    if (!tabsHydrated) return;
     if (!library.activeRoot) return;
     const scan = library.activeScan;
     if (!scan || scan.scanning) return;
@@ -110,21 +113,17 @@ function App() {
     );
     if (!file) return;
 
-    const hasTabInRoot = tabs.tabs.some((t) => t.path.startsWith(root + "/") || t.path === root);
+    const hasTabInRoot = tabsList.some(
+      (t) => t.path.startsWith(root + "/") || t.path === root
+    );
     if (hasTabInRoot) {
       autoOpenedHomepageRef.current.add(root);
       return;
     }
 
     autoOpenedHomepageRef.current.add(root);
-    tabs.openInNew(file.path);
-  }, [
-    tabs.hydrated,
-    library.activeRoot,
-    library.activeScan,
-    tabs.tabs,
-    tabs,
-  ]);
+    tabsOpenInNew(file.path);
+  }, [tabsHydrated, library.activeRoot, library.activeScan, tabsList, tabsOpenInNew]);
 
   const rawFiles = library.activeScan?.result.files ?? [];
   const allFiles = useMemo(() => {

@@ -30,10 +30,10 @@ export function buildCuratedTree(
   const filesByRel = new Map<string, MarkdownFile>();
   for (const f of files) filesByRel.set(normalizeRel(f.relPath), f);
 
-  for (const section of docsYaml.navigation) {
+  docsYaml.navigation.forEach((section, idx) => {
     const sectionNode: TreeNode = {
       name: section.title,
-      path: `${root}::section::${section.title}`,
+      path: `${root}::section::${idx}::${section.title}`,
       isDir: true,
       children: [],
     };
@@ -49,7 +49,7 @@ export function buildCuratedTree(
     }
 
     rootNode.children.push(sectionNode);
-  }
+  });
 
   return rootNode;
 }
@@ -179,7 +179,9 @@ function deriveTitle(file: MarkdownFile, relInFolder: string, mode: string): str
 function prettifyFilename(relInFolder: string): string {
   const base = relInFolder.split("/").pop() ?? relInFolder;
   const noExt = base.replace(/\.(md|markdown|mdx)$/i, "");
-  const noLeadingNum = noExt.replace(/^\d+[-_]?/, "");
+  // Strip leading sort-prefix conventions: "04-", "00a-", "12_", "1b-".
+  // The optional letter handles dir-letter ordering (e.g., 00a-foo, 00b-bar).
+  const noLeadingNum = noExt.replace(/^\d+[a-z]?[-_]?/i, "");
   if (!noLeadingNum) return noExt;
   return noLeadingNum
     .split(/[-_\s]+/)
