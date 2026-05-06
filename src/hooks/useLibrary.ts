@@ -32,6 +32,7 @@ export interface Library {
   scans: Record<string, RootScan>;
   activeScan: RootScan | undefined;
   pickDirectory: () => Promise<void>;
+  addRoot: (path: string) => Promise<void>;
   removeRoot: (path: string) => Promise<void>;
   selectRoot: (path: string) => Promise<void>;
   rescan: (root: string) => Promise<void>;
@@ -172,20 +173,27 @@ export function useLibrary(): Library {
     }
   }, []);
 
+  const addRoot = useCallback(
+    async (path: string) => {
+      setRoots((prev) => {
+        if (prev.includes(path)) return prev;
+        const next = [...prev, path];
+        void saveRoots(next);
+        return next;
+      });
+      setActiveRoot(path);
+      await saveLastSelected(path);
+      await hydrateFromCache(path);
+      void rescan(path);
+    },
+    [hydrateFromCache, rescan]
+  );
+
   const pickDirectory = useCallback(async () => {
     const picked = await open({ directory: true, multiple: false, title: "Select docs folder" });
     if (!picked || typeof picked !== "string") return;
-    setRoots((prev) => {
-      if (prev.includes(picked)) return prev;
-      const next = [...prev, picked];
-      void saveRoots(next);
-      return next;
-    });
-    setActiveRoot(picked);
-    await saveLastSelected(picked);
-    await hydrateFromCache(picked);
-    void rescan(picked);
-  }, [hydrateFromCache, rescan]);
+    await addRoot(picked);
+  }, [addRoot]);
 
   const removeRoot = useCallback(
     async (path: string) => {
@@ -318,6 +326,7 @@ export function useLibrary(): Library {
     scans,
     activeScan,
     pickDirectory,
+    addRoot,
     removeRoot,
     selectRoot,
     rescan,

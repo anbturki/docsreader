@@ -7,7 +7,8 @@ use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
+use tauri::path::BaseDirectory;
+use tauri::{AppHandle, Emitter, Manager};
 use walkdir::{DirEntry, WalkDir};
 
 const PROGRESS_EVENT: &str = "scan-progress";
@@ -244,6 +245,41 @@ fn read_partial(path: &Path) -> std::io::Result<String> {
     let n = file.read(&mut buf)?;
     buf.truncate(n);
     Ok(String::from_utf8_lossy(&buf).into_owned())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        let from = entry.path();
+        let to = dst.join(entry.file_name());
+        if ty.is_dir() {
+            copy_dir_recursive(&from, &to)?;
+        } else if ty.is_file() {
+            std::fs::copy(&from, &to)?;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn install_welcome_workspace(app: AppHandle) -> Result<String, String> {
+    let src = app
+        .path()
+        .resolve("resources/welcome", BaseDirectory::Resource)
+        .map_err(|e| format!("could not resolve welcome resource: {e}"))?;
+    let dst_root = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("could not resolve app data dir: {e}"))?;
+    let dst = dst_root.join("welcome");
+
+    if !dst.exists() {
+        copy_dir_recursive(&src, &dst).map_err(|e| format!("copy welcome: {e}"))?;
+    }
+
+    Ok(dst.to_string_lossy().to_string())
 }
 
 fn load_docs_yaml(root: &Path) -> (Option<DocsYaml>, Option<String>) {
@@ -563,7 +599,10 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .invoke_handler(tauri::generate_handler![scan_markdown])
+        .invoke_handler(tauri::generate_handler![
+            scan_markdown,
+            install_welcome_workspace
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

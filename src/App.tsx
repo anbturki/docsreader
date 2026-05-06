@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { ListTree, Settings as SettingsIcon } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
@@ -242,6 +243,16 @@ function App() {
     [viewSettings]
   );
 
+  const handleOpenWelcome = useCallback(async () => {
+    try {
+      const path = await invoke<string>("install_welcome_workspace");
+      await library.addRoot(path);
+      viewSettings.update({ ...viewSettings.settings, welcomeOpened: true });
+    } catch (err) {
+      console.error("install_welcome_workspace failed", err);
+    }
+  }, [library, viewSettings]);
+
   return (
     <TooltipProvider delayDuration={200}>
       <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen}>
@@ -254,6 +265,11 @@ function App() {
           onSelectRoot={(path) => void library.selectRoot(path)}
           onRemoveRoot={(path) => void library.removeRoot(path)}
           onRescan={() => library.activeRoot && void library.rescan(library.activeRoot)}
+          onOpenWelcome={
+            viewSettings.settings.welcomeOpened
+              ? undefined
+              : () => void handleOpenWelcome()
+          }
           lens={viewSettings.settings.sidebarLens}
           onLensChange={handleLensChange}
           search={search}
@@ -325,6 +341,7 @@ function App() {
                     settings={viewSettings.settings}
                     onChange={viewSettings.update}
                     initialSection={settingsSection}
+                    onOpenWelcome={() => void handleOpenWelcome()}
                   />
                 </Suspense>
               )}

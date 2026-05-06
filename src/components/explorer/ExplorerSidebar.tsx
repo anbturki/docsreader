@@ -32,6 +32,7 @@ interface Props {
   onSelectRoot: (path: string) => void;
   onRemoveRoot: (path: string) => void;
   onRescan: () => void;
+  onOpenWelcome: (() => void) | undefined;
 
   // lens
   lens: SidebarLens;
@@ -74,6 +75,7 @@ export function ExplorerSidebar({
   onSelectRoot,
   onRemoveRoot,
   onRescan,
+  onOpenWelcome,
   lens,
   onLensChange,
   search,
@@ -157,7 +159,14 @@ export function ExplorerSidebar({
                 Add a folder of markdown to start.
               </EmptyDescription>
             </EmptyHeader>
-            <Button onClick={onPickDirectory}>Add folder</Button>
+            <div className="flex flex-col items-center gap-2">
+              <Button onClick={onPickDirectory}>Add folder</Button>
+              {onOpenWelcome && (
+                <Button variant="ghost" size="sm" onClick={onOpenWelcome}>
+                  Or open the welcome workspace
+                </Button>
+              )}
+            </div>
           </Empty>
         ) : activeScan?.scanning ? (
           <ScanProgressView

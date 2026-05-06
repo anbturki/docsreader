@@ -8,6 +8,7 @@ import type { DefaultFolderState, ViewSettings } from "@/lib/storage";
 interface Props {
   settings: ViewSettings;
   onChange: (next: ViewSettings) => void;
+  onOpenWelcome: () => void;
 }
 
 const pillClass =
@@ -16,7 +17,7 @@ const pillClass =
   "data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:border-primary/40 " +
   "data-[state=on]:hover:bg-primary/15";
 
-export function ExplorerSection({ settings, onChange }: Props) {
+export function ExplorerSection({ settings, onChange, onOpenWelcome }: Props) {
   const [draft, setDraft] = useState("");
 
   const addPattern = (raw: string) => {
@@ -114,6 +115,20 @@ export function ExplorerSection({ settings, onChange }: Props) {
             No patterns yet. Right-click a file in the explorer to hide it quickly.
           </p>
         )}
+      </Field>
+
+      <Field
+        label="Welcome workspace"
+        hint="The welcome workspace is your own copy at ~/Library/Application Support/DocsReader/welcome. Re-adding does not overwrite your edits."
+      >
+        <Button
+          type="button"
+          variant="outline"
+          onClick={onOpenWelcome}
+          className="self-start"
+        >
+          Open welcome workspace
+        </Button>
       </Field>
     </div>
   );

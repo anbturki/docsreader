@@ -66,6 +66,7 @@ export interface ViewSettings {
   defaultFolderState: DefaultFolderState;
   hidePatterns: string[];
   sidebarLens: SidebarLens;
+  welcomeOpened: boolean;
 }
 
 export const defaultViewSettings: ViewSettings = {
@@ -81,6 +82,7 @@ export const defaultViewSettings: ViewSettings = {
   defaultFolderState: "top-level",
   hidePatterns: [],
   sidebarLens: "tree",
+  welcomeOpened: false,
 };
 
 interface CachedScan {
@@ -163,6 +165,7 @@ export async function loadViewSettings(): Promise<ViewSettings> {
     defaultFolderState: normalizeDefaultFolderState(v.defaultFolderState),
     hidePatterns: normalizeHidePatterns(v.hidePatterns),
     sidebarLens: normalizeSidebarLens(v.sidebarLens),
+    welcomeOpened: v.welcomeOpened === true,
   };
 }
 

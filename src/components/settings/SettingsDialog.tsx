@@ -21,6 +21,7 @@ interface Props {
   settings: ViewSettings;
   onChange: (next: ViewSettings) => void;
   initialSection?: SettingsSection;
+  onOpenWelcome: () => void;
 }
 
 type SectionId = SettingsSection;
@@ -38,6 +39,7 @@ export default function SettingsDialog({
   settings,
   onChange,
   initialSection,
+  onOpenWelcome,
 }: Props) {
   const [active, setActive] = useState<SectionId>(initialSection ?? "appearance");
 
@@ -83,7 +85,11 @@ export default function SettingsDialog({
               <ReadingSection settings={settings} onChange={onChange} />
             )}
             {active === "explorer" && (
-              <ExplorerSection settings={settings} onChange={onChange} />
+              <ExplorerSection
+                settings={settings}
+                onChange={onChange}
+                onOpenWelcome={onOpenWelcome}
+              />
             )}
             {active === "shortcuts" && (
               <ShortcutsSection settings={settings} onChange={onChange} />
