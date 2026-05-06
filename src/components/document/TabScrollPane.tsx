@@ -1,9 +1,11 @@
-import { useEffect, useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { MarkdownFile } from "@/lib/scan";
 import type { ViewSettings } from "@/lib/storage";
 import type { Tab } from "@/hooks/useTabs";
+import { parseFrontmatter } from "@/lib/scan";
 import { DocumentView } from "./DocumentView";
+import { ExternalChangeBanner } from "./ExternalChangeBanner";
 
 interface Props {
   tab: Tab;
@@ -15,6 +17,8 @@ interface Props {
   onScrollChange: (path: string, value: number) => void;
   onNavigate: (path: string) => void;
   onActiveRefChange?: (el: HTMLElement | null) => void;
+  onAcceptPending: (id: string) => void;
+  onDismissPending: (id: string) => void;
 }
 
 export function TabScrollPane({
@@ -27,7 +31,13 @@ export function TabScrollPane({
   onScrollChange,
   onNavigate,
   onActiveRefChange,
+  onAcceptPending,
+  onDismissPending,
 }: Props) {
+  const pendingBody = useMemo(
+    () => (tab.pendingContent ? parseFrontmatter(tab.pendingContent).content : undefined),
+    [tab.pendingContent]
+  );
   const ref = useRef<HTMLDivElement>(null);
   const restoredRef = useRef(false);
 
@@ -98,6 +108,14 @@ export function TabScrollPane({
         onScrollChange(tab.path, e.currentTarget.scrollTop);
       }}
     >
+      {tab.pendingContent && pendingBody !== undefined && (
+        <ExternalChangeBanner
+          before={tab.content}
+          after={pendingBody}
+          onReload={() => onAcceptPending(tab.id)}
+          onDismiss={() => onDismissPending(tab.id)}
+        />
+      )}
       <DocumentView
         tab={tab}
         file={file}

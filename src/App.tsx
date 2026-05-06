@@ -466,6 +466,8 @@ function App() {
                       onScrollChange={tabs.setScrollTop}
                       onNavigate={tabs.openInActive}
                       onActiveRefChange={handleActiveRefChange}
+                      onAcceptPending={tabs.acceptPending}
+                      onDismissPending={tabs.dismissPending}
                     />
                   );
                 })

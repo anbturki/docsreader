@@ -13,6 +13,12 @@ export interface Tab {
   meta: Record<string, unknown>;
   error: string | undefined;
   loading: boolean;
+  // Set by the per-tab watcher when the file on disk diverges from
+  // `content`. While set, the document keeps showing `content` and the
+  // ExternalChangeBanner offers Reload/Show diff/Dismiss. Cleared on
+  // accept (reload) or close.
+  pendingContent?: string;
+  staleSince?: number;
 }
 
 export interface Tabs {
@@ -24,6 +30,8 @@ export interface Tabs {
   openInNew: (path: string) => void;
   activate: (id: string) => void;
   close: (id: string) => void;
+  acceptPending: (id: string) => void;
+  dismissPending: (id: string) => void;
   getScrollTop: (path: string) => number;
   setScrollTop: (path: string, value: number) => void;
 }
@@ -131,6 +139,69 @@ export function useTabs(): Tabs {
     [activeId]
   );
 
+  // Accept the pending external change: replace tab.content with the
+  // detected disk content and clear the pending state. Re-parses
+  // frontmatter so the document re-renders with current metadata.
+  const acceptPending = useCallback(
+    (id: string) => {
+      const current = tabsRef.current.find((t) => t.id === id);
+      if (!current?.pendingContent) return;
+      const { data, content } = parseFrontmatter(current.pendingContent);
+      updateTab(id, {
+        meta: data,
+        content,
+        pendingContent: undefined,
+        staleSince: undefined,
+        error: undefined,
+      });
+    },
+    [updateTab]
+  );
+
+  // Dismiss the banner without reloading. Tab keeps showing the prior
+  // content. The pendingContent is cleared so further unchanged
+  // modifications stay quiet; the next *content* divergence fires a
+  // fresh banner.
+  const dismissPending = useCallback(
+    (id: string) => {
+      updateTab(id, { pendingContent: undefined, staleSince: undefined });
+    },
+    [updateTab]
+  );
+
+  // Read the disk content for an open tab and decide whether the
+  // change is substantive. If the new content matches `current.content`
+  // (touch-only modify), do nothing. Otherwise stash it as pendingContent
+  // so the document can render the banner.
+  const handleExternalModify = useCallback(
+    async (id: string, path: string) => {
+      try {
+        const raw = await readTextFile(path);
+        const current = tabsRef.current.find((t) => t.id === id);
+        if (!current || current.path !== path) return;
+        if (raw === current.pendingContent) return;
+        // Compare against the rendered source (frontmatter + body
+        // re-stitched). We compare the raw file bytes against the raw
+        // bytes the tab was loaded from. To avoid storing both, we
+        // re-parse on demand: if frontmatter+body match, no banner.
+        const reparsed = parseFrontmatter(raw);
+        if (reparsed.content === current.content) {
+          // Frontmatter may have changed even when body didn't; still
+          // refresh meta silently to keep `meta` accurate.
+          updateTab(id, { meta: reparsed.data });
+          return;
+        }
+        updateTab(id, {
+          pendingContent: raw,
+          staleSince: Date.now(),
+        });
+      } catch (err) {
+        console.error("external modify read failed", err);
+      }
+    },
+    [updateTab]
+  );
+
   const watchersRef = useRef(new Map<string, { path: string; unwatch: UnwatchFn }>());
 
   useEffect(() => {
@@ -157,7 +228,15 @@ export function useTabs(): Tabs {
               const kind = describeEventKind(event.type);
               if (kind === "remove" || kind === "access") return;
               const current = tabsRef.current.find((t) => t.id === tab.id);
-              if (current && current.path === tab.path) void loadTab(tab.id, tab.path);
+              if (!current || current.path !== tab.path) return;
+              // Modify: surface as a pending external change so the
+              // user gets to consent before the rendered content shifts.
+              // Create/rename: file was replaced - full reload.
+              if (kind === "modify") {
+                void handleExternalModify(tab.id, tab.path);
+              } else {
+                void loadTab(tab.id, tab.path);
+              }
             },
             { recursive: false, delayMs: 400 }
           );
@@ -172,7 +251,7 @@ export function useTabs(): Tabs {
         }
       })();
     }
-  }, [tabs, loadTab]);
+  }, [tabs, loadTab, handleExternalModify]);
 
   useEffect(() => {
     const watchers = watchersRef.current;
@@ -260,6 +339,8 @@ export function useTabs(): Tabs {
     openInNew,
     activate,
     close,
+    acceptPending,
+    dismissPending,
     getScrollTop,
     setScrollTop,
   };
