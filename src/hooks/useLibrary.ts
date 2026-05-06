@@ -39,6 +39,64 @@ export interface Library {
 
 const emptyResult = (root: string): ScanResult => ({ root, files: [], truncated: false });
 
+// Debounce window after the most recent event before a rescan fires.
+const DEBOUNCE_MS = 600;
+// Minimum gap between two rescans regardless of how many events fire.
+const MIN_RESCAN_INTERVAL_MS = 2000;
+
+// Mirror of the Rust scanner's SKIP_DIRS in src-tauri/src/lib.rs. Any
+// directory segment in this set, OR any segment that starts with a dot
+// (other than "." and ".."), causes a watch event for that path to be
+// dropped without scheduling a rescan. The scanner already excludes
+// these paths, so a rescan triggered by them produces no new data.
+const SKIP_DIR_BASENAMES = new Set([
+  "node_modules",
+  "target",
+  ".git",
+  ".next",
+  "dist",
+  "build",
+  ".venv",
+  "venv",
+  ".cache",
+  ".turbo",
+  ".vercel",
+  ".idea",
+  ".vscode",
+  "Library",
+  "Applications",
+  "System",
+  "Pictures",
+  "Movies",
+  "Music",
+  ".Trash",
+  ".npm",
+  ".yarn",
+  ".pnpm-store",
+  ".cargo",
+  ".rustup",
+  ".bun",
+  ".local",
+  "Pods",
+  ".gradle",
+  "DerivedData",
+]);
+
+function isSkippedWatchPath(eventPath: string, root: string): boolean {
+  const norm = eventPath.replace(/\\/g, "/");
+  const r = root.replace(/\\/g, "/");
+  let rel: string;
+  if (norm === r) return false;
+  if (norm.startsWith(r + "/")) rel = norm.slice(r.length + 1);
+  else rel = norm; // event outside root: treat as relevant, not our problem
+  for (const seg of rel.split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg.startsWith(".") && seg !== "..") return true;
+    if (SKIP_DIR_BASENAMES.has(seg)) return true;
+  }
+  return false;
+}
+
 export function useLibrary(): Library {
   const [roots, setRoots] = useState<string[]>([]);
   const [activeRoot, setActiveRoot] = useState<string | undefined>();
@@ -158,6 +216,15 @@ export function useLibrary(): Library {
   // folders are created, removed, or renamed anywhere inside it.
   // Modify-only events for individual files are handled per-tab in
   // useTabs, so they're ignored here to avoid redundant scans.
+  //
+  // Two filters protect against runaway work:
+  //   1. Events whose path lies inside a hidden or known-noisy
+  //      directory are dropped before scheduling. These mirror the
+  //      Rust scanner's skip list (src-tauri/src/lib.rs SKIP_DIRS),
+  //      so the scan would have ignored those paths anyway.
+  //   2. Rescans are rate-limited to one every MIN_RESCAN_INTERVAL_MS
+  //      regardless of debounce, so sustained churn cannot loop the
+  //      scanner faster than the user can browse.
   const rescanRef = useRef(rescan);
   rescanRef.current = rescan;
   useEffect(() => {
@@ -165,13 +232,18 @@ export function useLibrary(): Library {
     let cancelled = false;
     let unwatch: UnwatchFn | undefined;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let lastRescanAt = 0;
 
     const scheduleRescan = () => {
       if (cancelled) return;
       if (debounceTimer) clearTimeout(debounceTimer);
+      const elapsed = Date.now() - lastRescanAt;
+      const wait = Math.max(DEBOUNCE_MS, MIN_RESCAN_INTERVAL_MS - elapsed);
       debounceTimer = setTimeout(() => {
-        if (!cancelled) void rescanRef.current(activeRoot);
-      }, 600);
+        if (cancelled) return;
+        lastRescanAt = Date.now();
+        void rescanRef.current(activeRoot);
+      }, wait);
     };
 
     void (async () => {
@@ -180,9 +252,16 @@ export function useLibrary(): Library {
           activeRoot,
           (event) => {
             const kind = describeEventKind(event.type);
-            if (kind === "create" || kind === "remove" || kind === "rename") {
-              scheduleRescan();
+            if (kind !== "create" && kind !== "remove" && kind !== "rename") {
+              return;
             }
+            // event.paths can contain multiple paths for batched events.
+            // Only schedule a rescan if at least one path is not skipped.
+            const paths = Array.isArray(event.paths) ? event.paths : [];
+            const someRelevant =
+              paths.length === 0 ||
+              paths.some((p) => !isSkippedWatchPath(p, activeRoot));
+            if (someRelevant) scheduleRescan();
           },
           { recursive: true, delayMs: 200 }
         );
