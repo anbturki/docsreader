@@ -31,6 +31,7 @@ export interface Library {
   activeRoot: string | undefined;
   scans: Record<string, RootScan>;
   activeScan: RootScan | undefined;
+  hydrated: boolean;
   pickDirectory: () => Promise<void>;
   addRoot: (path: string) => Promise<void>;
   removeRoot: (path: string) => Promise<void>;
@@ -111,6 +112,7 @@ export function useLibrary(): Library {
   const [roots, setRoots] = useState<string[]>([]);
   const [activeRoot, setActiveRoot] = useState<string | undefined>();
   const [scans, setScans] = useState<Record<string, RootScan>>({});
+  const [hydrated, setHydrated] = useState(false);
 
   const hydrateFromCache = useCallback(async (root: string) => {
     const cached = await loadScanCache(root);
@@ -130,6 +132,7 @@ export function useLibrary(): Library {
         setActiveRoot(initial);
         await hydrateFromCache(initial);
       }
+      setHydrated(true);
     })();
   }, [hydrateFromCache]);
 
@@ -325,6 +328,7 @@ export function useLibrary(): Library {
     activeRoot,
     scans,
     activeScan,
+    hydrated,
     pickDirectory,
     addRoot,
     removeRoot,

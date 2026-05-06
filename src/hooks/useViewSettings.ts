@@ -8,6 +8,7 @@ import {
 
 export interface ViewSettingsHook {
   settings: ViewSettings;
+  hydrated: boolean;
   update: (next: ViewSettings) => void;
 }
 
@@ -43,5 +44,5 @@ export function useViewSettings(): ViewSettingsHook {
     setSettings(next);
   }, []);
 
-  return { settings, update };
+  return { settings, hydrated, update };
 }

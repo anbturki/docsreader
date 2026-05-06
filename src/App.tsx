@@ -253,6 +253,26 @@ function App() {
     }
   }, [library, viewSettings]);
 
+  // Auto-open the welcome workspace exactly once for true first-time users:
+  // both stores hydrated, no roots persisted from previous sessions, and the
+  // welcomeOpened flag still false. The ref guards against React re-running
+  // the effect after handleOpenWelcome finishes (which sets the flag).
+  const autoInstalledWelcomeRef = useRef(false);
+  useEffect(() => {
+    if (autoInstalledWelcomeRef.current) return;
+    if (!viewSettings.hydrated || !library.hydrated) return;
+    if (viewSettings.settings.welcomeOpened) return;
+    if (library.roots.length > 0) return;
+    autoInstalledWelcomeRef.current = true;
+    void handleOpenWelcome();
+  }, [
+    viewSettings.hydrated,
+    viewSettings.settings.welcomeOpened,
+    library.hydrated,
+    library.roots.length,
+    handleOpenWelcome,
+  ]);
+
   return (
     <TooltipProvider delayDuration={200}>
       <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen}>
