@@ -43,9 +43,17 @@ export function ExternalChangeBanner({
           <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
-              onClick={onAlwaysAutoReload}
+              onClick={() => {
+                // Apply this pending change first so the user lands on
+                // the latest content. Then flip the global setting so
+                // future changes reload silently. Order matters: the
+                // setting flip clears all banners, which would
+                // otherwise drop this pending change.
+                onReload();
+                onAlwaysAutoReload();
+              }}
               className="mr-1 rounded px-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus:underline focus:outline-none"
-              title="Always reload silently from now on. Reversible in Settings -> Reading."
+              title="Reload this file and turn on auto-reload for future changes. Reversible in Settings -> Reading."
             >
               Always auto-reload
             </button>

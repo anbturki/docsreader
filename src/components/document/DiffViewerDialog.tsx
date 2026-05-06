@@ -64,7 +64,10 @@ export function DiffViewerDialog({
         className="max-w-4xl gap-0 overflow-hidden p-0 sm:max-w-4xl"
       >
         <DialogHeader className="flex flex-row items-center justify-between gap-4 border-b px-5 py-3">
-          <DialogTitle className="truncate text-base font-semibold">
+          <DialogTitle
+            className="truncate text-base font-semibold"
+            title={title ?? (hasBannerActions ? "External change diff" : "Diff")}
+          >
             {title ?? (hasBannerActions ? "External change diff" : "Diff")}
           </DialogTitle>
           <ToggleGroup

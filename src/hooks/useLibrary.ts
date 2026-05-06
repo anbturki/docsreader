@@ -265,6 +265,7 @@ export function useLibrary(): Library {
     let cancelled = false;
     let unwatch: UnwatchFn | undefined;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
+    let gitDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     let lastRescanAt = 0;
 
     const scheduleRescan = () => {
@@ -277,6 +278,27 @@ export function useLibrary(): Library {
         lastRescanAt = Date.now();
         void rescanRef.current(activeRoot);
       }, wait);
+    };
+
+    // Lighter than scheduleRescan: refreshes only the workspace's git
+    // status without re-walking the file tree. Used when a modify
+    // event lands on a file inside the workspace but not the manifest -
+    // the file set is unchanged but the git modified/clean state may
+    // have flipped.
+    const scheduleGitRefresh = () => {
+      if (cancelled) return;
+      if (gitDebounceTimer) clearTimeout(gitDebounceTimer);
+      gitDebounceTimer = setTimeout(() => {
+        if (cancelled) return;
+        void fetchGitStatus(activeRoot).then((gitStatus) => {
+          if (cancelled) return;
+          setScans((s) => {
+            const prev = s[activeRoot];
+            if (!prev) return s;
+            return { ...s, [activeRoot]: { ...prev, gitStatus } };
+          });
+        });
+      }, DEBOUNCE_MS);
     };
 
     void (async () => {
@@ -305,6 +327,17 @@ export function useLibrary(): Library {
               return;
             }
 
+            // Modify events on regular workspace files: skip the rescan
+            // (file set hasn't changed) but refresh git status so the
+            // file-tree decorations stay live.
+            if (kind === "modify") {
+              const someRelevant =
+                paths.length === 0 ||
+                paths.some((p) => !isSkippedWatchPath(p, activeRoot));
+              if (someRelevant) scheduleGitRefresh();
+              return;
+            }
+
             if (kind !== "create" && kind !== "remove" && kind !== "rename") {
               return;
             }
@@ -330,6 +363,7 @@ export function useLibrary(): Library {
     return () => {
       cancelled = true;
       if (debounceTimer) clearTimeout(debounceTimer);
+      if (gitDebounceTimer) clearTimeout(gitDebounceTimer);
       if (unwatch) void unwatch();
     };
   }, [activeRoot]);

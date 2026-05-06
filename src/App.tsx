@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
+import { message } from "@tauri-apps/plugin-dialog";
 import { ListTree, Settings as SettingsIcon } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
@@ -349,6 +350,11 @@ function App() {
         setGitDiffState({ before, after, title: rel });
       } catch (err) {
         console.error("git diff failed", err);
+        const detail = err instanceof Error ? err.message : String(err);
+        void message(`Could not load git diff for ${rel}.\n\n${detail}`, {
+          title: "Git diff",
+          kind: "error",
+        });
       }
     },
     [library.activeRoot]
@@ -404,7 +410,9 @@ function App() {
           crossLinks={crossLinks}
           manifestIssues={manifestIssues}
           gitStatusByPath={gitStatusByPath}
-          onShowGitDiff={(path) => void handleShowGitDiff(path)}
+          onShowGitDiff={
+            activeGitStatus ? (path) => void handleShowGitDiff(path) : undefined
+          }
           lens={viewSettings.settings.sidebarLens}
           onLensChange={handleLensChange}
           search={search}

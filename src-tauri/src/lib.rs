@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use rayon::prelude::*;
@@ -304,11 +304,13 @@ async fn install_welcome_workspace(app: AppHandle) -> Result<String, String> {
 
 // ─── Git integration ────────────────────────────────────────────────────────
 //
-// We shell out to /usr/bin/git for status and HEAD-content lookups. Three
-// reasons over a Rust git library: zero binary weight, no runtime
-// dependency on libgit2 in the bundle, and the user's installed git
-// always understands the user's repo. Workspaces without a `.git` (or
-// without git installed) silently skip git decorations.
+// We shell out to git for status and HEAD-content lookups. Three reasons
+// over a Rust git library: zero binary weight, no runtime dependency on
+// libgit2 in the bundle, and the user's installed git always understands
+// the user's repo. Workspaces without a `.git` (or without git installed)
+// silently skip git decorations. Commands run via tokio::process so the
+// async runtime isn't blocked, with a per-call timeout so a hung git
+// can't stall other Tauri commands indefinitely.
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GitFileStatus {
@@ -322,6 +324,47 @@ pub struct GitFileStatus {
 pub struct GitStatus {
     pub root: String,
     pub files: Vec<GitFileStatus>,
+}
+
+const GIT_TIMEOUT: Duration = Duration::from_secs(30);
+
+// Find the git executable. PATH on a GUI-launched macOS app is typically
+// minimal (no Homebrew dirs), so we probe a small set of common
+// install locations as a fallback. Cached after the first lookup.
+fn git_binary() -> Option<&'static str> {
+    static CACHED: OnceLock<Option<&'static str>> = OnceLock::new();
+    *CACHED.get_or_init(|| {
+        const CANDIDATES: &[&str] = &[
+            "git",
+            "/usr/bin/git",
+            "/opt/homebrew/bin/git",
+            "/usr/local/bin/git",
+        ];
+        for c in CANDIDATES {
+            let ok = std::process::Command::new(c)
+                .arg("--version")
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false);
+            if ok {
+                return Some(*c);
+            }
+        }
+        None
+    })
+}
+
+async fn run_git(args: &[&str]) -> Result<std::process::Output, String> {
+    let bin = match git_binary() {
+        Some(b) => b,
+        None => return Err("git not found".to_string()),
+    };
+    let fut = tokio::process::Command::new(bin).args(args).output();
+    match tokio::time::timeout(GIT_TIMEOUT, fut).await {
+        Ok(Ok(out)) => Ok(out),
+        Ok(Err(e)) => Err(format!("git {}: {e}", args.first().copied().unwrap_or(""))),
+        Err(_) => Err(format!("git {} timed out", args.first().copied().unwrap_or(""))),
+    }
 }
 
 fn classify_xy(xy: &str) -> &'static str {
@@ -351,15 +394,15 @@ fn classify_xy(xy: &str) -> &'static str {
 
 #[tauri::command]
 async fn git_status(workspace: String) -> Result<Option<GitStatus>, String> {
-    let toplevel_out = std::process::Command::new("git")
-        .args(["-C", &workspace, "rev-parse", "--show-toplevel"])
-        .output();
-    let toplevel_out = match toplevel_out {
+    if git_binary().is_none() {
+        return Ok(None);
+    }
+    let toplevel_out = match run_git(&["-C", &workspace, "rev-parse", "--show-toplevel"]).await {
         Ok(o) => o,
-        Err(_) => return Ok(None), // git not installed
+        Err(_) => return Ok(None),
     };
     if !toplevel_out.status.success() {
-        return Ok(None); // not in a git repo
+        return Ok(None);
     }
     let toplevel = String::from_utf8_lossy(&toplevel_out.stdout)
         .trim()
@@ -380,10 +423,7 @@ async fn git_status(workspace: String) -> Result<Option<GitStatus>, String> {
         .map(|p| p.to_string_lossy().replace('\\', "/"))
         .unwrap_or_default();
 
-    let status_out = std::process::Command::new("git")
-        .args(["-C", &workspace, "status", "--porcelain=v1", "-z"])
-        .output()
-        .map_err(|e| format!("git status: {e}"))?;
+    let status_out = run_git(&["-C", &workspace, "status", "--porcelain=v1", "-z"]).await?;
     if !status_out.status.success() {
         return Err(format!(
             "git status: {}",
@@ -411,14 +451,12 @@ async fn git_status(workspace: String) -> Result<Option<GitStatus>, String> {
         let is_rename = xy.contains('R') || xy.contains('C');
 
         let original_path = if is_rename {
-            // The next token is the original (pre-rename) path.
             iter.next()
                 .and_then(|t| std::str::from_utf8(t).ok().map(|s| s.to_string()))
         } else {
             None
         };
 
-        // Translate repo-relative path into workspace-relative.
         let final_path = if prefix.is_empty() {
             path.clone()
         } else if path == prefix {
@@ -426,7 +464,6 @@ async fn git_status(workspace: String) -> Result<Option<GitStatus>, String> {
         } else if let Some(rest) = path.strip_prefix(&format!("{}/", prefix)) {
             rest.to_string()
         } else {
-            // Outside our workspace subdir; skip.
             continue;
         };
 
@@ -445,12 +482,10 @@ async fn git_status(workspace: String) -> Result<Option<GitStatus>, String> {
 
 #[tauri::command]
 async fn git_show_head(workspace: String, path: String) -> Result<Option<String>, String> {
-    // Use the workspace-relative path. The shell-out runs from `workspace`,
-    // so git resolves the path against the repo's worktree correctly.
-    let out = std::process::Command::new("git")
-        .args(["-C", &workspace, "show", &format!("HEAD:./{}", path)])
-        .output()
-        .map_err(|e| format!("git show: {e}"))?;
+    if git_binary().is_none() {
+        return Ok(None);
+    }
+    let out = run_git(&["-C", &workspace, "show", &format!("HEAD:./{}", path)]).await?;
     if !out.status.success() {
         // Common case: file is untracked / new (no HEAD revision). Don't
         // treat as an error - the caller renders an "all added" diff.
