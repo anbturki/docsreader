@@ -39,7 +39,15 @@ Or install via [Homebrew or one-liner](#install).
 - **Search:** filename, path, frontmatter title, or tag
 - **Sticky favorites:** pin individual files to the top of any workspace
 - **Clutter rules:** glob patterns silently exclude files and folders from the explorer
-- **External-edit awareness:** modify a file in any other editor and the open doc refreshes
+- **External changes surfaced:** when a file you have open changes on disk (other editor, sync service, AI agent), a banner shows what changed with reload / keep / show-diff actions; configurable to silent reload
+
+**Project-aware**
+
+DocsReader stays "point it at any folder" by default. When a workspace happens to ship a `.docs.yaml` or live inside a git repo, extra signals light up automatically.
+
+- **`.docs.yaml` manifests:** projects shipping a [v0.1 manifest](https://github.com/anbturki/vinfra/blob/main/docs/spec/40-docs-portal-contract.md) get curated navigation (hand-curated `items` and auto-listed `folder` sections with sort, title-from, badges, and nesting), project metadata in the workspace switcher, automatic homepage open on first add, cross-project links between open workspaces, ignore patterns, a visibility toggle for previewing public-only views, and a sidebar pane that surfaces manifest issues
+- **Git status decorations:** in a git repo, the file tree shows per-file status badges (M / A / D / R / ? / U) that refresh as files change
+- **Git diff vs HEAD:** right-click any tracked file to see the diff between HEAD and your working tree, with unified or side-by-side views and word-level highlighting
 
 **Quiet by default**
 - **Minimal chrome:** flat active states, no badges, only user-initiated motion (ADHD-friendly, low visual load)

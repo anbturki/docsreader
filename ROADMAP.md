@@ -8,7 +8,7 @@ Layout uses **Now / Next / Later / Considering** - no fixed dates, no quarter co
 
 In active development.
 
-_(nothing actively in flight after v0.2.0 - on deck, picking from "Next")_
+_(picking from "Next" - v0.4 candidate features merged to main; see "Unreleased" below)_
 
 ## Next
 
@@ -62,6 +62,19 @@ Direction unclear, community input wanted before committing.
 
 ## Recently shipped
 
+### Unreleased (in main since v0.3.0)
+- **`.docs.yaml` v0.1 manifest support** - projects shipping a manifest get curated navigation (hand-curated `items` and auto-listed `folder` sections with sort, title-from, badges, nesting), project metadata in the workspace switcher, automatic homepage open on first add, cross-project links between open workspaces, ignore patterns, a visibility toggle for previewing public-only views, and a sidebar pane that surfaces manifest issues.
+- **Git integration (T1+T2)** - per-file status badges in the file tree (M / A / D / R / ? / U) for workspaces inside a git repo; "Show git diff" context menu opens a diff vs HEAD with unified or side-by-side view and word-level highlighting. Git binary auto-discovered across PATH plus common Homebrew locations.
+- **External-change banner** - when a file open in a tab changes on disk, a banner shows what changed with reload / show-diff / dismiss / always-auto-reload actions; same diff dialog as the git diff feature.
+- **Welcome workspace** - first-run installs auto-extract a small bundled tour (uses `.docs.yaml` itself) so empty-state users have something to read.
+- **Manifest in-place edit detection** - editing `.docs.yaml` triggers a rescan even though the file set is unchanged.
+
+### v0.3.0
+- Workspace-level filesystem watcher: edit / add / remove / rename anywhere in a workspace and the file tree updates without manual refresh.
+- Rate-limited watcher: events filtered against a skip list (mirrors the scanner's), 600ms debounce, 2-second minimum interval between rescans regardless of churn.
+- Async-then-staple release pipeline: ship the build immediately, swap in the stapled DMG once Apple's notary returns. CI no longer blocks for hours.
+- README rewrite around four feature groups (Reading / Browsing / Quiet by default / Trust); right-aligned header logo.
+
 ### v0.2.0
 - Quick Open (Cmd+P, configurable shortcut) jumps to any file across all roots.
 - Outline / TOC sidebar with active-heading scroll-spy.
@@ -69,7 +82,6 @@ Direction unclear, community input wanted before committing.
 - Configurable code-block themes (light + dark, 12 themes).
 - Sidebar collapse state, open tabs, active tab, and per-tab scroll position survive restarts.
 - Strict CSP, sanitized markdown HTML, scheme-allowlisted links.
-- Async-then-staple release pipeline - CI no longer blocks for hours waiting on Apple notarization.
 - README badge tracking pending notarization.
 
 ### v0.1.x
