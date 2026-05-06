@@ -1,4 +1,5 @@
-import { ListCollapse, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, ArrowRight, ChevronDown, ListCollapse, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import {
@@ -13,6 +14,7 @@ import type { TreeNode } from "@/lib/tree";
 import type { SidebarLens } from "@/lib/storage";
 import type { RootScan } from "@/hooks/useLibrary";
 import type { ProjectMeta } from "@/lib/docsYaml";
+import type { ManifestIssue } from "@/lib/manifestIssues";
 import { FileTree } from "./FileTree";
 import { LensTabs } from "./LensTabs";
 import { PinnedList } from "./PinnedList";
@@ -21,6 +23,13 @@ import { ScanProgressView } from "./ScanProgressView";
 import { SearchInput } from "./SearchInput";
 import { TagsList } from "./TagsList";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+
+export interface ResolvedCrossLink {
+  label: string;
+  description?: string;
+  targetRoot: string;
+  targetName: string;
+}
 
 interface Props {
   // workspaces
@@ -33,6 +42,8 @@ interface Props {
   onRemoveRoot: (path: string) => void;
   onRescan: () => void;
   onOpenWelcome: (() => void) | undefined;
+  crossLinks: ResolvedCrossLink[];
+  manifestIssues: ManifestIssue[];
 
   // lens
   lens: SidebarLens;
@@ -76,6 +87,8 @@ export function ExplorerSidebar({
   onRemoveRoot,
   onRescan,
   onOpenWelcome,
+  crossLinks,
+  manifestIssues,
   lens,
   onLensChange,
   search,
@@ -192,7 +205,13 @@ export function ExplorerSidebar({
         )}
       </SidebarContent>
 
-      <SidebarFooter className="text-xs text-muted-foreground">
+      <SidebarFooter className="gap-2 text-xs text-muted-foreground">
+        {manifestIssues.length > 0 && (
+          <ManifestIssuesSection issues={manifestIssues} />
+        )}
+        {crossLinks.length > 0 && (
+          <CrossLinksSection links={crossLinks} onSelect={onSelectRoot} />
+        )}
         <ExplorerFooter
           activeScan={activeScan}
           matchCount={filteredFiles.length}
@@ -293,6 +312,78 @@ function LensView({
       onOpenInNewTab={onOpenInNewTab}
       onTogglePin={onTogglePin}
     />
+  );
+}
+
+function CrossLinksSection({
+  links,
+  onSelect,
+}: {
+  links: ResolvedCrossLink[];
+  onSelect: (root: string) => void;
+}) {
+  return (
+    <div className="border-t pt-2">
+      <div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-wide opacity-70">
+        See also
+      </div>
+      <ul className="flex flex-col gap-0.5">
+        {links.map((link) => (
+          <li key={link.targetRoot}>
+            <button
+              type="button"
+              onClick={() => onSelect(link.targetRoot)}
+              className="group flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/60"
+              title={link.description ?? link.targetName}
+            >
+              <ArrowRight className="mt-0.5 size-3 shrink-0 opacity-60 group-hover:opacity-100" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-foreground/90">
+                  {link.targetName}
+                </span>
+                <span className="block truncate text-[11px] text-muted-foreground">
+                  {link.label}
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ManifestIssuesSection({ issues }: { issues: ManifestIssue[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-t pt-2">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left transition-colors hover:bg-sidebar-accent/60"
+      >
+        <AlertTriangle className="size-3.5 shrink-0 text-amber-500" />
+        <span className="flex-1 truncate text-[11px] font-medium">
+          {issues.length} manifest issue{issues.length === 1 ? "" : "s"}
+        </span>
+        <ChevronDown
+          className={`size-3 shrink-0 opacity-60 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+      {open && (
+        <ul className="mt-1 flex flex-col gap-1 px-2">
+          {issues.map((issue, idx) => (
+            <li
+              key={`${issue.kind}-${idx}`}
+              className="text-[11px] leading-relaxed text-muted-foreground"
+              title={issue.message}
+            >
+              {issue.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

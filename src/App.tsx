@@ -10,7 +10,10 @@ const QuickOpenDialog = lazy(() => import("@/components/quickopen/QuickOpenDialo
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { ExplorerSidebar } from "@/components/explorer/ExplorerSidebar";
+import {
+  ExplorerSidebar,
+  type ResolvedCrossLink,
+} from "@/components/explorer/ExplorerSidebar";
 import { EmptyDocument } from "@/components/document/EmptyDocument";
 import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
 import { TabBar } from "@/components/document/TabBar";
@@ -34,6 +37,7 @@ import {
   hasNavigation,
   type ProjectMeta,
 } from "@/lib/docsYaml";
+import { computeManifestIssues } from "@/lib/manifestIssues";
 import type { MarkdownFile } from "@/lib/scan";
 import "@/styles/code-theme.css";
 
@@ -82,6 +86,69 @@ function App() {
     }
     return out;
   }, [library.roots, library.scans]);
+
+  // Visibility filter: internal-only workspaces are hidden from the switcher
+  // and QuickOpen when the user is in "preview public" mode (showInternal=off).
+  const showInternal = viewSettings.settings.showInternal;
+  const visibleRoots = useMemo(() => {
+    if (showInternal) return library.roots;
+    return library.roots.filter(
+      (root) => library.scans[root]?.result.docsYaml?.visibility !== "internal"
+    );
+  }, [library.roots, library.scans, showInternal]);
+
+  // If the currently active workspace is now hidden by the visibility filter,
+  // switch to the first visible one so the content area reflects the filter.
+  useEffect(() => {
+    if (showInternal) return;
+    if (!library.activeRoot) return;
+    if (visibleRoots.includes(library.activeRoot)) return;
+    const fallback = visibleRoots[0];
+    if (fallback) void library.selectRoot(fallback);
+  }, [showInternal, library, library.activeRoot, visibleRoots]);
+
+  const rootBySlug = useMemo<Map<string, string>>(() => {
+    const map = new Map<string, string>();
+    for (const root of library.roots) {
+      const slug = library.scans[root]?.result.docsYaml?.project?.slug?.trim();
+      if (slug) map.set(slug, root);
+    }
+    return map;
+  }, [library.roots, library.scans]);
+
+  const manifestIssues = useMemo(() => {
+    const scan = library.activeScan;
+    if (!scan) return [];
+    return computeManifestIssues({
+      docsYaml: scan.result.docsYaml,
+      docsYamlError: scan.result.docsYamlError,
+      files: scan.result.files,
+      knownSlugs: new Set(rootBySlug.keys()),
+      ownSlug: scan.result.docsYaml?.project?.slug,
+    });
+  }, [library.activeScan, rootBySlug]);
+
+  const crossLinks = useMemo<ResolvedCrossLink[]>(() => {
+    const list = library.activeScan?.result.docsYaml?.cross_links;
+    if (!Array.isArray(list) || list.length === 0) return [];
+    const out: ResolvedCrossLink[] = [];
+    for (const link of list) {
+      const targetRoot = rootBySlug.get(link.project);
+      if (!targetRoot) continue;
+      if (targetRoot === library.activeRoot) continue; // don't link to self
+      const targetName =
+        library.scans[targetRoot]?.result.docsYaml?.project?.name?.trim() ||
+        targetRoot.split("/").pop() ||
+        link.project;
+      out.push({
+        label: link.label,
+        description: link.description,
+        targetRoot,
+        targetName,
+      });
+    }
+    return out;
+  }, [library.activeScan, library.activeRoot, library.scans, rootBySlug]);
 
   const activeDocsYamlError = library.activeScan?.result.docsYamlError;
   useEffect(() => {
@@ -134,7 +201,7 @@ function App() {
 
   const quickOpenFiles = useMemo<QuickOpenFile[]>(() => {
     const out: QuickOpenFile[] = [];
-    for (const root of library.roots) {
+    for (const root of visibleRoots) {
       const scan = library.scans[root];
       if (!scan) continue;
       const docsIgnore = getIgnorePatterns(scan.result.docsYaml);
@@ -148,7 +215,7 @@ function App() {
       }
     }
     return out;
-  }, [library.roots, library.scans, viewSettings.settings.hidePatterns]);
+  }, [visibleRoots, library.scans, viewSettings.settings.hidePatterns]);
 
   const quickOpenShortcut = useMemo(
     () => parseShortcut(viewSettings.settings.quickOpenShortcut),
@@ -277,7 +344,7 @@ function App() {
     <TooltipProvider delayDuration={200}>
       <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen}>
         <ExplorerSidebar
-          roots={library.roots}
+          roots={visibleRoots}
           activeRoot={library.activeRoot}
           activeScan={library.activeScan}
           projectMetaByRoot={projectMetaByRoot}
@@ -290,6 +357,8 @@ function App() {
               ? undefined
               : () => void handleOpenWelcome()
           }
+          crossLinks={crossLinks}
+          manifestIssues={manifestIssues}
           lens={viewSettings.settings.sidebarLens}
           onLensChange={handleLensChange}
           search={search}

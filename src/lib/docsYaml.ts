@@ -43,10 +43,18 @@ export interface DocsYamlNavSectionFolder {
 
 export type DocsYamlNavSection = DocsYamlNavSectionItems | DocsYamlNavSectionFolder;
 
+export interface DocsYamlCrossLink {
+  project: string;
+  label: string;
+  description?: string;
+  contexts?: string[];
+}
+
 export interface DocsYaml {
   spec_version?: string;
   project?: DocsYamlProject;
   navigation?: DocsYamlNavSection[];
+  cross_links?: DocsYamlCrossLink[];
   ignore?: string[];
   visibility?: string;
 }

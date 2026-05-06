@@ -67,6 +67,7 @@ export interface ViewSettings {
   hidePatterns: string[];
   sidebarLens: SidebarLens;
   welcomeOpened: boolean;
+  showInternal: boolean;
 }
 
 export const defaultViewSettings: ViewSettings = {
@@ -83,6 +84,7 @@ export const defaultViewSettings: ViewSettings = {
   hidePatterns: [],
   sidebarLens: "tree",
   welcomeOpened: false,
+  showInternal: true,
 };
 
 interface CachedScan {
@@ -166,6 +168,7 @@ export async function loadViewSettings(): Promise<ViewSettings> {
     hidePatterns: normalizeHidePatterns(v.hidePatterns),
     sidebarLens: normalizeSidebarLens(v.sidebarLens),
     welcomeOpened: v.welcomeOpened === true,
+    showInternal: typeof v.showInternal === "boolean" ? v.showInternal : true,
   };
 }
 

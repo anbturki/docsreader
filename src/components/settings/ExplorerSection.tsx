@@ -1,6 +1,7 @@
 import { useState, type KeyboardEvent } from "react";
 import { X } from "lucide-react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Toggle } from "@/components/ui/toggle";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import type { DefaultFolderState, ViewSettings } from "@/lib/storage";
@@ -115,6 +116,20 @@ export function ExplorerSection({ settings, onChange, onOpenWelcome }: Props) {
             No patterns yet. Right-click a file in the explorer to hide it quickly.
           </p>
         )}
+      </Field>
+
+      <Field
+        label="Internal-only workspaces"
+        hint="Workspaces whose .docs.yaml declares visibility: internal show in the switcher when this is on (default). Turn off to preview what a public-only audience would see."
+      >
+        <Toggle
+          variant="outline"
+          pressed={settings.showInternal}
+          onPressedChange={(v) => onChange({ ...settings, showInternal: v })}
+          className="self-start"
+        >
+          {settings.showInternal ? "Showing internal" : "Hidden"}
+        </Toggle>
       </Field>
 
       <Field

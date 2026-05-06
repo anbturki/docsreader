@@ -95,6 +95,16 @@ pub enum DocsYamlNavSection {
     },
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DocsYamlCrossLink {
+    pub project: String,
+    pub label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contexts: Vec<String>,
+}
+
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct DocsYaml {
     #[serde(default, rename = "spec_version", skip_serializing_if = "Option::is_none")]
@@ -103,6 +113,8 @@ pub struct DocsYaml {
     pub project: Option<DocsYamlProject>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub navigation: Vec<DocsYamlNavSection>,
+    #[serde(default, rename = "cross_links", skip_serializing_if = "Vec::is_empty")]
+    pub cross_links: Vec<DocsYamlCrossLink>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ignore: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -544,6 +556,10 @@ navigation:
   - title: Build curriculum
     folder: docs/phases/
     nested: true
+cross_links:
+  - project: agent
+    label: "Need voice AI?"
+    description: Vinfra Agent runs alongside.
 ignore:
   - docs/archived/**
   - "**/*.draft.md"
@@ -555,6 +571,9 @@ visibility: internal
         assert_eq!(project.name.as_deref(), Some("Vinfra Voice"));
         assert_eq!(parsed.navigation.len(), 3);
         assert_eq!(parsed.ignore.len(), 2);
+        assert_eq!(parsed.cross_links.len(), 1);
+        assert_eq!(parsed.cross_links[0].project, "agent");
+        assert_eq!(parsed.cross_links[0].label, "Need voice AI?");
 
         let (mut items, mut folder) = (false, false);
         for s in &parsed.navigation {
