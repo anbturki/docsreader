@@ -79,7 +79,7 @@ See [ROADMAP.md](./ROADMAP.md) for the full picture. Short version:
 | ![Light theme](docs/screenshots/light-theme.png) | ![Split view, side-by-side](docs/screenshots/split.png) |
 | ![Split view, stacked (dark)](docs/screenshots/horizontal-split.png) | ![Split view, dark](docs/screenshots/split-dark.png) |
 | ![Settings](docs/screenshots/settings.png) | ![Search](docs/screenshots/search.png) |
-| ![Context menu](docs/screenshots/context-menu.png) | |
+| ![Context menu](docs/screenshots/context-menu.png) | ![Quick Open (Cmd+P)](docs/screenshots/quick-open.png) |
 
 ## Install
 
