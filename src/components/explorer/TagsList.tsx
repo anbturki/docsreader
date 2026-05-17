@@ -9,6 +9,7 @@ interface Props {
   selectedPath: string | undefined;
   onSelect: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  onOpenInOtherPane?: (path: string) => void;
   isPinned: (path: string) => boolean;
   onTogglePin: (path: string) => void;
 }
@@ -18,6 +19,7 @@ export function TagsList({
   selectedPath,
   onSelect,
   onOpenInNewTab,
+  onOpenInOtherPane,
   isPinned,
   onTogglePin,
 }: Props) {
@@ -61,6 +63,7 @@ export function TagsList({
           selectedPath={selectedPath}
           onSelect={onSelect}
           onOpenInNewTab={onOpenInNewTab}
+          onOpenInOtherPane={onOpenInOtherPane}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
         />
@@ -72,6 +75,7 @@ export function TagsList({
           selectedPath={selectedPath}
           onSelect={onSelect}
           onOpenInNewTab={onOpenInNewTab}
+          onOpenInOtherPane={onOpenInOtherPane}
           isPinned={isPinned}
           onTogglePin={onTogglePin}
           defaultOpen={false}
@@ -87,6 +91,7 @@ interface GroupProps {
   selectedPath: string | undefined;
   onSelect: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  onOpenInOtherPane?: (path: string) => void;
   isPinned: (path: string) => boolean;
   onTogglePin: (path: string) => void;
   defaultOpen?: boolean;
@@ -98,6 +103,7 @@ function TagGroup({
   selectedPath,
   onSelect,
   onOpenInNewTab,
+  onOpenInOtherPane,
   isPinned,
   onTogglePin,
   defaultOpen = true,
@@ -124,6 +130,7 @@ function TagGroup({
                 path={f.path}
                 isFile
                 onOpenInNewTab={onOpenInNewTab}
+                onOpenInOtherPane={onOpenInOtherPane}
                 pinned={isPinned(f.path)}
                 onTogglePin={onTogglePin}
               >

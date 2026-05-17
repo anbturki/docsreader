@@ -3,7 +3,7 @@ import { readTextFile, watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { parseFrontmatter } from "@/lib/scan";
 import { describeEventKind } from "@/lib/events";
 import { basename } from "@/lib/path";
-import { loadTabsState, saveTabsState } from "@/lib/storage";
+import { loadTabsState, saveTabsState, TABS_KEY_PANE0 } from "@/lib/storage";
 
 export interface Tab {
   id: string;
@@ -59,9 +59,14 @@ function emptyTab(path: string): Tab {
 
 interface UseTabsOptions {
   autoReloadOnExternalChange: boolean;
+  // Storage key used by both load + save. Default is the legacy
+  // single-pane key, so existing users keep their state. Pane 1 in a
+  // split layout passes a different key.
+  storageKey?: string;
 }
 
 export function useTabs(options: UseTabsOptions): Tabs {
+  const storageKey = options.storageKey ?? TABS_KEY_PANE0;
   const autoReloadRef = useRef(options.autoReloadOnExternalChange);
   autoReloadRef.current = options.autoReloadOnExternalChange;
   // Per-tab sequence counter. Each handleExternalModify call increments
@@ -363,17 +368,20 @@ export function useTabs(options: UseTabsOptions): Tabs {
         if (openPaths.has(path)) trimmedScroll[path] = value;
       }
       scrollByPathRef.current = trimmedScroll;
-      void saveTabsState({
-        paths: currentTabs.map((t) => t.path),
-        activePath: active?.path,
-        scrollByPath: trimmedScroll,
-      });
+      void saveTabsState(
+        {
+          paths: currentTabs.map((t) => t.path),
+          activePath: active?.path,
+          scrollByPath: trimmedScroll,
+        },
+        storageKey
+      );
     }, delay);
-  }, []);
+  }, [storageKey]);
 
   useEffect(() => {
     let cancelled = false;
-    void loadTabsState().then((state) => {
+    void loadTabsState(storageKey).then((state) => {
       if (cancelled) return;
       scrollByPathRef.current = { ...state.scrollByPath };
       if (state.paths.length > 0) {
@@ -389,7 +397,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
     return () => {
       cancelled = true;
     };
-  }, [loadTab]);
+  }, [loadTab, storageKey]);
 
   useEffect(() => {
     if (!hydrated) return;

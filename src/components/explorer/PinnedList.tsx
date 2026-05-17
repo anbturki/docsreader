@@ -8,10 +8,18 @@ interface Props {
   selectedPath: string | undefined;
   onSelect: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  onOpenInOtherPane?: (path: string) => void;
   onTogglePin: (path: string) => void;
 }
 
-export function PinnedList({ files, selectedPath, onSelect, onOpenInNewTab, onTogglePin }: Props) {
+export function PinnedList({
+  files,
+  selectedPath,
+  onSelect,
+  onOpenInNewTab,
+  onOpenInOtherPane,
+  onTogglePin,
+}: Props) {
   if (files.length === 0) {
     return (
       <p className="px-4 py-6 text-sm text-muted-foreground">
@@ -28,6 +36,7 @@ export function PinnedList({ files, selectedPath, onSelect, onOpenInNewTab, onTo
             path={f.path}
             isFile
             onOpenInNewTab={onOpenInNewTab}
+            onOpenInOtherPane={onOpenInOtherPane}
             pinned
             onTogglePin={onTogglePin}
           >

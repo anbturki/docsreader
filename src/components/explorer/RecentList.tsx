@@ -9,6 +9,7 @@ interface Props {
   selectedPath: string | undefined;
   onSelect: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  onOpenInOtherPane?: (path: string) => void;
   isPinned: (path: string) => boolean;
   onTogglePin: (path: string) => void;
 }
@@ -61,6 +62,7 @@ export function RecentList({
   selectedPath,
   onSelect,
   onOpenInNewTab,
+  onOpenInOtherPane,
   isPinned,
   onTogglePin,
 }: Props) {
@@ -85,6 +87,7 @@ export function RecentList({
                 selected={f.path === selectedPath}
                 onSelect={onSelect}
                 onOpenInNewTab={onOpenInNewTab}
+                onOpenInOtherPane={onOpenInOtherPane}
                 pinned={isPinned(f.path)}
                 onTogglePin={onTogglePin}
               />
@@ -101,17 +104,27 @@ interface RowProps {
   selected: boolean;
   onSelect: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  onOpenInOtherPane?: (path: string) => void;
   pinned: boolean;
   onTogglePin: (path: string) => void;
 }
 
-function FileRow({ file, selected, onSelect, onOpenInNewTab, pinned, onTogglePin }: RowProps) {
+function FileRow({
+  file,
+  selected,
+  onSelect,
+  onOpenInNewTab,
+  onOpenInOtherPane,
+  pinned,
+  onTogglePin,
+}: RowProps) {
   return (
     <li>
       <EntryContextMenu
         path={file.path}
         isFile
         onOpenInNewTab={onOpenInNewTab}
+        onOpenInOtherPane={onOpenInOtherPane}
         pinned={pinned}
         onTogglePin={onTogglePin}
       >

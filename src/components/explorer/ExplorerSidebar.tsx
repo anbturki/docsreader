@@ -76,6 +76,7 @@ interface Props {
   selectedPath: string | undefined;
   onSelectFile: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  onOpenInOtherPane?: (path: string) => void;
 
   // git
   gitStatusByPath?: Map<string, GitFileStatusKind>;
@@ -113,6 +114,7 @@ export function ExplorerSidebar({
   selectedPath,
   onSelectFile,
   onOpenInNewTab,
+  onOpenInOtherPane,
   gitStatusByPath,
   onShowGitDiff,
 }: Props) {
@@ -208,6 +210,7 @@ export function ExplorerSidebar({
             onHide={onHide}
             onSelect={onSelectFile}
             onOpenInNewTab={onOpenInNewTab}
+            onOpenInOtherPane={onOpenInOtherPane}
             gitStatusByPath={gitStatusByPath}
             onShowGitDiff={onShowGitDiff}
           />
@@ -248,6 +251,7 @@ interface LensViewProps {
   onHide: (path: string) => void;
   onSelect: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  onOpenInOtherPane?: (path: string) => void;
   gitStatusByPath?: Map<string, GitFileStatusKind>;
   onShowGitDiff?: (path: string) => void;
 }
@@ -266,6 +270,7 @@ function LensView({
   onHide,
   onSelect,
   onOpenInNewTab,
+  onOpenInOtherPane,
   gitStatusByPath,
   onShowGitDiff,
 }: LensViewProps) {
@@ -284,6 +289,7 @@ function LensView({
         selectedPath={selectedPath}
         onSelect={onSelect}
         onOpenInNewTab={onOpenInNewTab}
+        onOpenInOtherPane={onOpenInOtherPane}
         isExpanded={isExpanded}
         onToggleExpanded={onToggleExpanded}
         isPinned={isPinned}
@@ -301,6 +307,7 @@ function LensView({
         selectedPath={selectedPath}
         onSelect={onSelect}
         onOpenInNewTab={onOpenInNewTab}
+        onOpenInOtherPane={onOpenInOtherPane}
         isPinned={isPinned}
         onTogglePin={onTogglePin}
       />
@@ -313,6 +320,7 @@ function LensView({
         selectedPath={selectedPath}
         onSelect={onSelect}
         onOpenInNewTab={onOpenInNewTab}
+        onOpenInOtherPane={onOpenInOtherPane}
         isPinned={isPinned}
         onTogglePin={onTogglePin}
       />
@@ -325,6 +333,7 @@ function LensView({
       selectedPath={selectedPath}
       onSelect={onSelect}
       onOpenInNewTab={onOpenInNewTab}
+      onOpenInOtherPane={onOpenInOtherPane}
       onTogglePin={onTogglePin}
     />
   );
