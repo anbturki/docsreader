@@ -16,6 +16,7 @@ interface Props {
   selectedPath?: string;
   onSelect: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  onOpenInOtherPane?: (path: string) => void;
   isExpanded: (key: string, depth: number) => boolean;
   onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
   isPinned: (path: string) => boolean;
@@ -31,6 +32,7 @@ export function FileTree({
   selectedPath,
   onSelect,
   onOpenInNewTab,
+  onOpenInOtherPane,
   isExpanded,
   onToggleExpanded,
   isPinned,
@@ -49,6 +51,7 @@ export function FileTree({
           selectedPath={selectedPath}
           onSelect={onSelect}
           onOpenInNewTab={onOpenInNewTab}
+          onOpenInOtherPane={onOpenInOtherPane}
           depth={0}
           isExpanded={isExpanded}
           onToggleExpanded={onToggleExpanded}
@@ -69,6 +72,7 @@ interface EntryProps {
   selectedPath?: string;
   onSelect: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
+  onOpenInOtherPane?: (path: string) => void;
   depth: number;
   isExpanded: (key: string, depth: number) => boolean;
   onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
@@ -87,6 +91,7 @@ function TreeEntry({
   selectedPath,
   onSelect,
   onOpenInNewTab,
+  onOpenInOtherPane,
   depth,
   isExpanded,
   onToggleExpanded,
@@ -140,6 +145,7 @@ function TreeEntry({
           path={node.path}
           isFile
           onOpenInNewTab={onOpenInNewTab}
+          onOpenInOtherPane={onOpenInOtherPane}
           pinned={isPinned(node.path)}
           onTogglePin={onTogglePin}
           onHide={onHide}
@@ -197,6 +203,7 @@ function TreeEntry({
                 selectedPath={selectedPath}
                 onSelect={onSelect}
                 onOpenInNewTab={onOpenInNewTab}
+                onOpenInOtherPane={onOpenInOtherPane}
                 depth={depth + 1}
                 isExpanded={isExpanded}
                 onToggleExpanded={onToggleExpanded}

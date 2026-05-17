@@ -56,13 +56,16 @@ Direction unclear, community input wanted before committing.
 
 - **Plugin API** - expose the parser registry as a community-extensible plugin system once usage justifies the API stability commitment. Obsidian-style if it earns it.
 - **Annotations** - highlights and notes that travel with the document. Would shift DocsReader from a reader to a research tool, meaningful identity change.
-- **Side-by-side view** - split panes for comparing two docs or following inline links.
+- **Drag tabs between panes / N-pane nesting** - extend the v0.5 split view to support dragging a tab from one pane to the other, plus arbitrary nesting beyond two panes. Deferred until the 2-pane MVP has real usage feedback.
 - **Local "smart" features** - related-docs ("you may also want…") via TF-IDF, extractive TL;DR via TextRank. AI-feeling, no AI service.
 - **Drag-to-update task status** - requires DocsReader to write user files (currently read-only). Trust shift.
 
 ## Recently shipped
 
-### Unreleased (in main since v0.3.0)
+### Unreleased (in main since v0.4.0)
+- **Split view** - side-by-side or stacked panes for reading two docs at once. Toggle from the header (single / horizontal / vertical), drag the splitter to resize, "Open in other pane" context-menu entry. Each pane keeps its own tabs, scroll, and external-change banner; the outline tracks whichever pane is focused. Keyboard shortcuts: `Cmd+\` toggles horizontal, `Cmd+Shift+\` toggles vertical, `Cmd+1` / `Cmd+2` focus pane 0 / pane 1. Pane 1's tabs persist across single/split toggles so re-splitting brings them back exactly as they were.
+
+### v0.4.0
 - **`.docs.yaml` v0.1 manifest support** - projects shipping a manifest get curated navigation (hand-curated `items` and auto-listed `folder` sections with sort, title-from, badges, nesting), project metadata in the workspace switcher, automatic homepage open on first add, cross-project links between open workspaces, ignore patterns, a visibility toggle for previewing public-only views, and a sidebar pane that surfaces manifest issues.
 - **Git integration (T1+T2)** - per-file status badges in the file tree (M / A / D / R / ? / U) for workspaces inside a git repo; "Show git diff" context menu opens a diff vs HEAD with unified or side-by-side view and word-level highlighting. Git binary auto-discovered across PATH plus common Homebrew locations.
 - **External-change banner** - when a file open in a tab changes on disk, a banner shows what changed with reload / show-diff / dismiss / always-auto-reload actions; same diff dialog as the git diff feature.

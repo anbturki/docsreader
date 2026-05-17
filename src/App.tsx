@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useR
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { message } from "@tauri-apps/plugin-dialog";
-import { ListTree, Settings as SettingsIcon } from "lucide-react";
+import { Columns2, ListTree, Rows2, Square, Settings as SettingsIcon } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
 import { OutlinePanel } from "@/components/document/OutlinePanel";
@@ -10,20 +10,25 @@ import { matchShortcut, parseShortcut } from "@/lib/shortcuts";
 
 const QuickOpenDialog = lazy(() => import("@/components/quickopen/QuickOpenDialog"));
 import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import {
   ExplorerSidebar,
   type ResolvedCrossLink,
 } from "@/components/explorer/ExplorerSidebar";
-import { EmptyDocument } from "@/components/document/EmptyDocument";
 import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
-import { TabBar } from "@/components/document/TabBar";
-import { TabScrollPane } from "@/components/document/TabScrollPane";
+import { PaneView } from "@/components/document/PaneView";
 
 const SettingsDialog = lazy(() => import("@/components/settings/SettingsDialog"));
 import { useLibrary } from "@/hooks/useLibrary";
-import { useTabs } from "@/hooks/useTabs";
+import { usePanes } from "@/hooks/usePanes";
+import type { SplitMode } from "@/lib/storage";
 import { useTheme } from "@/hooks/useTheme";
 import { useViewSettings } from "@/hooks/useViewSettings";
 import { useSidebarState } from "@/hooks/useSidebarState";
@@ -49,9 +54,10 @@ import "@/styles/code-theme.css";
 function App() {
   const library = useLibrary();
   const viewSettings = useViewSettings();
-  const tabs = useTabs({
+  const panes = usePanes({
     autoReloadOnExternalChange: viewSettings.settings.autoReloadOnExternalChange,
   });
+  const tabs = panes.activePane;
   const sidebar = useSidebarState(viewSettings.settings.defaultFolderState);
   const pinned = usePinned();
   useTheme(viewSettings.settings.colorScheme, viewSettings.settings.accentColor);
@@ -62,10 +68,17 @@ function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
   const [quickOpen, setQuickOpen] = useState(false);
   const [quickOpenMounted, setQuickOpenMounted] = useState(false);
-  const [activeScrollEl, setActiveScrollEl] = useState<HTMLElement | null>(null);
+  const [scrollElByPane, setScrollElByPane] = useState<[HTMLElement | null, HTMLElement | null]>([
+    null,
+    null,
+  ]);
+  const activeScrollEl = scrollElByPane[panes.layout.activePane];
 
-  const handleActiveRefChange = useCallback((el: HTMLElement | null) => {
-    setActiveScrollEl(el);
+  const handleScrollElChange0 = useCallback((el: HTMLElement | null) => {
+    setScrollElByPane(([_, b]) => [el, b]);
+  }, []);
+  const handleScrollElChange1 = useCallback((el: HTMLElement | null) => {
+    setScrollElByPane(([a, _]) => [a, el]);
   }, []);
 
   const toggleOutline = useCallback(() => {
@@ -168,10 +181,14 @@ function App() {
   // Auto-open project.homepage once per workspace per session: only fires on
   // the first time the active scan finishes with no tabs open in that root,
   // so closing the homepage tab doesn't keep reopening it on workspace switch.
+  // Homepage auto-open targets pane 0 specifically, regardless of which
+  // pane is currently active. Pane 0 is the canonical "main" pane and
+  // is the only one rendered when split is off.
   const autoOpenedHomepageRef = useRef<Set<string>>(new Set());
-  const tabsHydrated = tabs.hydrated;
-  const tabsList = tabs.tabs;
-  const tabsOpenInNew = tabs.openInNew;
+  const pane0 = panes.panes[0];
+  const tabsHydrated = pane0.hydrated;
+  const tabsList = pane0.tabs;
+  const tabsOpenInNew = pane0.openInNew;
   useEffect(() => {
     if (!tabsHydrated) return;
     if (!library.activeRoot) return;
@@ -242,6 +259,54 @@ function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [quickOpenShortcut]);
+
+  // Split-pane keyboard shortcuts. Cmd+\ toggles horizontal, Cmd+Shift+\
+  // toggles vertical, Cmd+1 / Cmd+2 focus pane 0 / pane 1. All no-op for
+  // form inputs so they don't fire while the user is typing.
+  const splitHorizontalShortcut = useMemo(() => parseShortcut("Mod+\\"), []);
+  const splitVerticalShortcut = useMemo(() => parseShortcut("Mod+Shift+\\"), []);
+  const focusPane0Shortcut = useMemo(() => parseShortcut("Mod+1"), []);
+  const focusPane1Shortcut = useMemo(() => parseShortcut("Mod+2"), []);
+  const currentSplit = panes.layout.split;
+  const panesSetSplit = panes.setSplit;
+  const panesFocusPane = panes.focusPane;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+      if (splitHorizontalShortcut && matchShortcut(e, splitHorizontalShortcut)) {
+        e.preventDefault();
+        panesSetSplit(currentSplit === "horizontal" ? "off" : "horizontal");
+        return;
+      }
+      if (splitVerticalShortcut && matchShortcut(e, splitVerticalShortcut)) {
+        e.preventDefault();
+        panesSetSplit(currentSplit === "vertical" ? "off" : "vertical");
+        return;
+      }
+      if (focusPane0Shortcut && matchShortcut(e, focusPane0Shortcut)) {
+        e.preventDefault();
+        panesFocusPane(0);
+        return;
+      }
+      if (focusPane1Shortcut && matchShortcut(e, focusPane1Shortcut)) {
+        e.preventDefault();
+        panesFocusPane(1);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [
+    splitHorizontalShortcut,
+    splitVerticalShortcut,
+    focusPane0Shortcut,
+    focusPane1Shortcut,
+    currentSplit,
+    panesSetSplit,
+    panesFocusPane,
+  ]);
 
   useEffect(() => {
     if (quickOpenMounted) return;
@@ -438,6 +503,7 @@ function App() {
           selectedPath={tabs.activeTab?.path}
           onSelectFile={tabs.openInActive}
           onOpenInNewTab={tabs.openInNew}
+          onOpenInOtherPane={panes.openInOtherPane}
         />
 
         <SidebarInset className="flex h-svh flex-col">
@@ -447,6 +513,39 @@ function App() {
               <PathBreadcrumb relPath={headerRelPath} onSegmentClick={setSearch} />
             )}
             <div className="ml-auto flex items-center gap-1">
+              <ToggleGroup
+                type="single"
+                value={panes.layout.split}
+                onValueChange={(v) => v && panes.setSplit(v as SplitMode)}
+                variant="outline"
+                spacing={4}
+                aria-label="Split layout"
+              >
+                <ToggleGroupItem
+                  value="off"
+                  className="h-7 px-2 text-xs"
+                  title="Single pane"
+                  aria-label="Single pane"
+                >
+                  <Square className="size-3" />
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="horizontal"
+                  className="h-7 px-2 text-xs"
+                  title="Side by side"
+                  aria-label="Side by side"
+                >
+                  <Columns2 className="size-3" />
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="vertical"
+                  className="h-7 px-2 text-xs"
+                  title="Stacked"
+                  aria-label="Stacked"
+                >
+                  <Rows2 className="size-3" />
+                </ToggleGroupItem>
+              </ToggleGroup>
               {tabs.activeTab && (
                 <Button
                   size="icon"
@@ -491,37 +590,48 @@ function App() {
             </div>
           </header>
 
-          <TabBar
-            tabs={tabs.tabs}
-            activeId={tabs.activeId}
-            onActivate={tabs.activate}
-            onClose={tabs.close}
-          />
-
           <div className="flex flex-1 min-h-0">
             <div className="relative flex-1 min-h-0">
-              {tabs.tabs.length === 0 ? (
-                <div className="absolute inset-0 overflow-y-auto">
-                  <EmptyDocument hasRoots={library.roots.length > 0} />
-                </div>
+              {panes.layout.split === "off" ? (
+                <PaneView
+                  pane={panes.panes[0]}
+                  files={allFiles}
+                  rootPath={library.activeRoot}
+                  viewSettings={deferredSettings}
+                  splitActive={false}
+                  isActivePane
+                  onFocusPane={() => panes.focusPane(0)}
+                  onActiveScrollElChange={handleScrollElChange0}
+                  onDiffViewModeChange={(mode) =>
+                    viewSettings.update({ ...viewSettings.settings, diffViewMode: mode })
+                  }
+                  onAlwaysAutoReload={() =>
+                    viewSettings.update({
+                      ...viewSettings.settings,
+                      autoReloadOnExternalChange: true,
+                    })
+                  }
+                  hasRoots={library.roots.length > 0}
+                />
               ) : (
-                tabs.tabs.map((tab) => {
-                  const file = allFiles.find((f) => f.path === tab.path);
-                  const active = tab.id === tabs.activeId;
-                  return (
-                    <TabScrollPane
-                      key={tab.id}
-                      tab={tab}
-                      file={file}
-                      active={active}
+                <ResizablePanelGroup
+                  key={panes.layout.split}
+                  orientation={panes.layout.split === "horizontal" ? "horizontal" : "vertical"}
+                  onLayoutChanged={(layout) => {
+                    const v = layout["pane0"];
+                    if (typeof v === "number") panes.setSplitSize(v);
+                  }}
+                >
+                  <ResizablePanel id="pane0" defaultSize={panes.layout.splitSize} minSize={15}>
+                    <PaneView
+                      pane={panes.panes[0]}
+                      files={allFiles}
                       rootPath={library.activeRoot}
                       viewSettings={deferredSettings}
-                      initialScrollTop={tabs.getScrollTop(tab.path)}
-                      onScrollChange={tabs.setScrollTop}
-                      onNavigate={tabs.openInActive}
-                      onActiveRefChange={handleActiveRefChange}
-                      onAcceptPending={tabs.acceptPending}
-                      onDismissPending={tabs.dismissPending}
+                      splitActive
+                      isActivePane={panes.layout.activePane === 0}
+                      onFocusPane={() => panes.focusPane(0)}
+                      onActiveScrollElChange={handleScrollElChange0}
                       onDiffViewModeChange={(mode) =>
                         viewSettings.update({ ...viewSettings.settings, diffViewMode: mode })
                       }
@@ -531,9 +641,33 @@ function App() {
                           autoReloadOnExternalChange: true,
                         })
                       }
+                      hasRoots={library.roots.length > 0}
                     />
-                  );
-                })
+                  </ResizablePanel>
+                  <ResizableHandle withHandle />
+                  <ResizablePanel id="pane1" defaultSize={100 - panes.layout.splitSize} minSize={15}>
+                    <PaneView
+                      pane={panes.panes[1]}
+                      files={allFiles}
+                      rootPath={library.activeRoot}
+                      viewSettings={deferredSettings}
+                      splitActive
+                      isActivePane={panes.layout.activePane === 1}
+                      onFocusPane={() => panes.focusPane(1)}
+                      onActiveScrollElChange={handleScrollElChange1}
+                      onDiffViewModeChange={(mode) =>
+                        viewSettings.update({ ...viewSettings.settings, diffViewMode: mode })
+                      }
+                      onAlwaysAutoReload={() =>
+                        viewSettings.update({
+                          ...viewSettings.settings,
+                          autoReloadOnExternalChange: true,
+                        })
+                      }
+                      hasRoots={library.roots.length > 0}
+                    />
+                  </ResizablePanel>
+                </ResizablePanelGroup>
               )}
             </div>
             {viewSettings.settings.outlineOpen && tabs.activeTab && !tabs.activeTab.loading && (

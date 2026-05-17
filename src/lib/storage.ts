@@ -8,8 +8,13 @@ const LAST_SELECTED_KEY = "lastSelected";
 const SCAN_CACHE_KEY = "scanCache";
 const VIEW_SETTINGS_KEY = "viewSettings";
 const TABS_STATE_KEY = "tabsState";
+const TABS_STATE_PANE1_KEY = "tabsState.pane1";
+const PANE_LAYOUT_KEY = "paneLayout";
 const SIDEBAR_STATE_KEY = "sidebarState";
 const PINNED_KEY = "pinnedByRoot";
+
+export const TABS_KEY_PANE0 = TABS_STATE_KEY;
+export const TABS_KEY_PANE1 = TABS_STATE_PANE1_KEY;
 
 export type ContentWidth = "narrow" | "full";
 export type FontFamily = "sans" | "serif" | "mono";
@@ -236,8 +241,8 @@ export interface TabsState {
 
 const emptyTabsState: TabsState = { paths: [], scrollByPath: {} };
 
-export async function loadTabsState(): Promise<TabsState> {
-  const v = await store.get<Partial<TabsState>>(TABS_STATE_KEY);
+export async function loadTabsState(key: string = TABS_STATE_KEY): Promise<TabsState> {
+  const v = await store.get<Partial<TabsState>>(key);
   if (!v || typeof v !== "object") return emptyTabsState;
   const paths = Array.isArray(v.paths) ? v.paths.filter((p) => typeof p === "string") : [];
   const activePath =
@@ -251,8 +256,41 @@ export async function loadTabsState(): Promise<TabsState> {
   return { paths, activePath, scrollByPath };
 }
 
-export async function saveTabsState(state: TabsState): Promise<void> {
-  await store.set(TABS_STATE_KEY, state);
+export async function saveTabsState(
+  state: TabsState,
+  key: string = TABS_STATE_KEY
+): Promise<void> {
+  await store.set(key, state);
+  await store.save();
+}
+
+export type SplitMode = "off" | "horizontal" | "vertical";
+
+export interface PaneLayout {
+  split: SplitMode;
+  splitSize: number; // pane 0 percentage (0..100); only meaningful when split !== "off"
+  activePane: 0 | 1;
+}
+
+export const defaultPaneLayout: PaneLayout = {
+  split: "off",
+  splitSize: 50,
+  activePane: 0,
+};
+
+export async function loadPaneLayout(): Promise<PaneLayout> {
+  const v = await store.get<Partial<PaneLayout>>(PANE_LAYOUT_KEY);
+  if (!v || typeof v !== "object") return defaultPaneLayout;
+  const split: SplitMode =
+    v.split === "horizontal" || v.split === "vertical" ? v.split : "off";
+  const rawSize = typeof v.splitSize === "number" && Number.isFinite(v.splitSize) ? v.splitSize : 50;
+  const splitSize = Math.min(85, Math.max(15, rawSize));
+  const activePane: 0 | 1 = v.activePane === 1 ? 1 : 0;
+  return { split, splitSize, activePane: split === "off" ? 0 : activePane };
+}
+
+export async function savePaneLayout(layout: PaneLayout): Promise<void> {
+  await store.set(PANE_LAYOUT_KEY, layout);
   await store.save();
 }
 

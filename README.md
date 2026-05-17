@@ -36,6 +36,7 @@ Or install via [Homebrew or one-liner](#install).
 - **Jump-to-file:** fuzzy finder across every workspace, opens with Cmd+P (binding configurable)
 - **Document outline:** auto-built TOC that follows the active heading as you scroll
 - **Tabs:** many docs open at once; scroll position remembered per tab
+- **Split view:** read two docs side-by-side or stacked; each pane keeps its own tabs, scroll, and external-change banner. Toggle from the header, drag the splitter to resize, or use Cmd+\ (horizontal), Cmd+Shift+\ (vertical), Cmd+1 / Cmd+2 to focus a pane. "Open in other pane" lives in the file context menu.
 - **Search:** filename, path, frontmatter title, or tag
 - **Sticky favorites:** pin individual files to the top of any workspace
 - **Clutter rules:** glob patterns silently exclude files and folders from the explorer
@@ -69,14 +70,16 @@ See [ROADMAP.md](./ROADMAP.md) for the full picture. Short version:
 
 - **Next:** find-in-page, full-text search, focus mode, recognition for markdown task formats (Backlog.md, taskmd, generic frontmatter).
 - **Later:** PDF export, kanban view over recognized task files, drag-a-folder-to-add-root, file management.
-- **Considering:** plugin API, annotations, side-by-side view, local "smart" features (related-docs, TL;DR).
+- **Considering:** plugin API, annotations, drag tabs between panes / N-pane nesting, local "smart" features (related-docs, TL;DR).
 
 ## Screenshots
 
 | | |
 |---|---|
-| ![Light theme](docs/screenshots/light-theme.png) | ![Settings](docs/screenshots/settings.png) |
-| ![Search](docs/screenshots/search.png) | ![Context menu](docs/screenshots/context-menu.png) |
+| ![Light theme](docs/screenshots/light-theme.png) | ![Split view, side-by-side](docs/screenshots/split.png) |
+| ![Split view, stacked (dark)](docs/screenshots/horizontal-split.png) | ![Split view, dark](docs/screenshots/split-dark.png) |
+| ![Settings](docs/screenshots/settings.png) | ![Search](docs/screenshots/search.png) |
+| ![Context menu](docs/screenshots/context-menu.png) | |
 
 ## Install
 
