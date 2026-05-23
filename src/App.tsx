@@ -24,6 +24,7 @@ import {
 } from "@/components/explorer/ExplorerSidebar";
 import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
 import { PaneView } from "@/components/document/PaneView";
+import { UpdateBanner } from "@/components/document/UpdateBanner";
 
 const SettingsDialog = lazy(() => import("@/components/settings/SettingsDialog"));
 import { useLibrary } from "@/hooks/useLibrary";
@@ -33,6 +34,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useViewSettings } from "@/hooks/useViewSettings";
 import { useSidebarState } from "@/hooks/useSidebarState";
 import { usePinned } from "@/hooks/usePinned";
+import { useUpdater } from "@/hooks/useUpdater";
 import { buildTree } from "@/lib/tree";
 import { buildCuratedTree } from "@/lib/curatedTree";
 import { collectDirKeys } from "@/components/explorer/FileTree";
@@ -60,6 +62,7 @@ function App() {
   const tabs = panes.activePane;
   const sidebar = useSidebarState(viewSettings.settings.defaultFolderState);
   const pinned = usePinned();
+  const updater = useUpdater();
   useTheme(viewSettings.settings.colorScheme, viewSettings.settings.accentColor);
   const deferredSettings = useDeferredValue(viewSettings.settings);
   const [search, setSearch] = useState("");
@@ -589,6 +592,17 @@ function App() {
               )}
             </div>
           </header>
+
+          <UpdateBanner
+            phase={updater.phase}
+            pendingVersion={updater.pendingVersion}
+            currentVersion={updater.currentVersion}
+            progressBytes={updater.progressBytes}
+            totalBytes={updater.totalBytes}
+            error={updater.error}
+            onInstall={updater.install}
+            onDismiss={updater.dismiss}
+          />
 
           <div className="flex flex-1 min-h-0">
             <div className="relative flex-1 min-h-0">
