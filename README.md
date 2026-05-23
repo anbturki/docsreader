@@ -5,7 +5,7 @@
 Point it at any folder. DocsReader scans the directory for Markdown files, organizes them into a navigable tree, and renders each one in a clean reader. macOS, Linux, Windows.
 
 [![Latest Release](https://img.shields.io/github/v/release/anbturki/docsreader?label=latest&color=7c3aed)](https://github.com/anbturki/docsreader/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/anbturki/docsreader/total?label=downloads&color=7c3aed)](https://github.com/anbturki/docsreader/releases)
+[![Downloads](https://img.shields.io/github/downloads/anbturki/docsreader/total?color=7c3aed)](https://github.com/anbturki/docsreader/releases)
 [![Notarization](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/anbturki/docsreader/main/.github/badges/notarization.json)](https://github.com/anbturki/docsreader/actions/workflows/notarize-staple.yml)
 [![Apple Notarized](https://img.shields.io/badge/macOS-signed%20%26%20notarized-000000?logo=apple&logoColor=white)](https://github.com/anbturki/docsreader/actions/workflows/notarize-staple.yml)
 
