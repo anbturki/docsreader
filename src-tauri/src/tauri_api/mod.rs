@@ -47,13 +47,19 @@ pub async fn convert_workspace(
 #[tauri::command]
 pub fn detect_agent_clients(app: AppHandle) -> Result<Vec<AgentClient>, String> {
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
-    Ok(agents::detect_clients(&home, &agents::sidecar_path()?))
+    let sidecar = agents::sidecar_path(&app_data_dir(&app)?)?;
+    Ok(agents::detect_clients(&home, &sidecar))
 }
 
 #[tauri::command]
 pub fn connect_agent_client(app: AppHandle, id: ClientId) -> Result<AgentClient, String> {
     let home = app.path().home_dir().map_err(|e| e.to_string())?;
-    agents::connect_client(&home, &agents::sidecar_path()?, id)
+    let sidecar = agents::sidecar_path(&app_data_dir(&app)?)?;
+    agents::connect_client(&home, &sidecar, id)
+}
+
+fn app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+    app.path().app_local_data_dir().map_err(|e| e.to_string())
 }
 
 #[tauri::command]

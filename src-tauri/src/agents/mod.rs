@@ -129,12 +129,32 @@ fn vscode_user_dir(home: &Path) -> PathBuf {
     }
 }
 
-pub fn sidecar_path() -> Result<PathBuf, String> {
+pub fn sidecar_path(app_data_dir: &Path) -> Result<PathBuf, String> {
     let exe = std::env::current_exe().map_err(|e| format!("resolve current executable: {e}"))?;
     let dir = exe
         .parent()
         .ok_or_else(|| format!("{} has no parent directory", exe.display()))?;
-    Ok(dir.join(format!("docsreader-mcp{}", std::env::consts::EXE_SUFFIX)))
+    let bundled = dir.join(format!("docsreader-mcp{}", std::env::consts::EXE_SUFFIX));
+    if std::env::var_os("APPIMAGE").is_none() {
+        return Ok(bundled);
+    }
+    // AppImages mount at an ephemeral per-launch path, so registered commands
+    // must point at a copy that outlives the mount. Refreshing on every
+    // resolution keeps the copy current across app updates.
+    stable_sidecar_copy(&bundled, &app_data_dir.join("bin"))
+}
+
+fn stable_sidecar_copy(bundled: &Path, bin_dir: &Path) -> Result<PathBuf, String> {
+    let name = bundled
+        .file_name()
+        .ok_or_else(|| format!("{} has no file name", bundled.display()))?;
+    let dest = bin_dir.join(name);
+    std::fs::create_dir_all(bin_dir).map_err(|e| format!("create {}: {e}", bin_dir.display()))?;
+    let tmp = dest.with_extension("docsreader-tmp");
+    std::fs::copy(bundled, &tmp)
+        .map_err(|e| format!("copy {} to {}: {e}", bundled.display(), tmp.display()))?;
+    std::fs::rename(&tmp, &dest).map_err(|e| format!("replace {}: {e}", dest.display()))?;
+    Ok(dest)
 }
 
 pub fn detect_clients(home: &Path, sidecar: &Path) -> Vec<AgentClient> {
@@ -274,6 +294,41 @@ mod tests {
         let root: serde_json::Value =
             serde_json::from_str(&fs::read_to_string(config).unwrap()).unwrap();
         assert_eq!(root["servers"][SERVER_NAME]["type"], "stdio");
+    }
+
+    #[test]
+    fn stable_copy_lands_in_bin_dir_and_refreshes() {
+        let dir = home();
+        let bundled = dir.path().join("docsreader-mcp");
+        let bin_dir = dir.path().join("data/bin");
+        fs::write(&bundled, "v1").unwrap();
+        let dest = stable_sidecar_copy(&bundled, &bin_dir).unwrap();
+        assert_eq!(dest, bin_dir.join("docsreader-mcp"));
+        assert_eq!(fs::read_to_string(&dest).unwrap(), "v1");
+        fs::write(&bundled, "v2").unwrap();
+        stable_sidecar_copy(&bundled, &bin_dir).unwrap();
+        assert_eq!(fs::read_to_string(&dest).unwrap(), "v2");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn stable_copy_preserves_executable_bit() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = home();
+        let bundled = dir.path().join("docsreader-mcp");
+        fs::write(&bundled, "bin").unwrap();
+        fs::set_permissions(&bundled, fs::Permissions::from_mode(0o755)).unwrap();
+        let dest = stable_sidecar_copy(&bundled, &dir.path().join("bin")).unwrap();
+        let mode = fs::metadata(&dest).unwrap().permissions().mode();
+        assert_ne!(mode & 0o111, 0, "executable bit lost: {mode:o}");
+    }
+
+    #[test]
+    fn stable_copy_fails_loud_when_bundled_missing() {
+        let dir = home();
+        let missing = dir.path().join("docsreader-mcp");
+        let err = stable_sidecar_copy(&missing, &dir.path().join("bin")).unwrap_err();
+        assert!(err.contains("copy"), "unexpected error: {err}");
     }
 
     #[test]
