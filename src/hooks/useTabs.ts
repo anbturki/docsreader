@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { readTextFile, watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
+import { readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { parseFrontmatter } from "@/lib/scan";
 import { describeEventKind } from "@/lib/events";
 import { basename } from "@/lib/path";
@@ -25,6 +25,11 @@ export interface Tab {
   // stop nagging." A genuinely new content divergence clears this and
   // raises a fresh banner.
   dismissedContent?: string;
+  // Quick-edit buffer holding the RAW file text (frontmatter included),
+  // read fresh from disk when editing starts. Presence means the tab is
+  // in edit mode; the rendered view is replaced by the editor.
+  draft?: string;
+  draftError?: string;
 }
 
 export interface Tabs {
@@ -38,6 +43,10 @@ export interface Tabs {
   close: (id: string) => void;
   acceptPending: (id: string) => void;
   dismissPending: (id: string) => void;
+  beginEdit: (id: string) => Promise<void>;
+  updateDraft: (id: string, value: string) => void;
+  cancelEdit: (id: string) => void;
+  saveEdit: (id: string) => Promise<void>;
   getScrollTop: (path: string) => number;
   setScrollTop: (path: string, value: number) => void;
 }
@@ -59,6 +68,10 @@ function emptyTab(path: string): Tab {
 
 interface UseTabsOptions {
   autoReloadOnExternalChange: boolean;
+  // True when the path belongs to a managed (.docsreader.yaml) workspace.
+  // Agents write to managed workspaces constantly, so external changes
+  // there reload silently instead of raising the consent banner.
+  isManagedPath: (path: string) => boolean;
   // Storage key used by both load + save. Default is the legacy
   // single-pane key, so existing users keep their state. Pane 1 in a
   // split layout passes a different key.
@@ -69,6 +82,8 @@ export function useTabs(options: UseTabsOptions): Tabs {
   const storageKey = options.storageKey ?? TABS_KEY_PANE0;
   const autoReloadRef = useRef(options.autoReloadOnExternalChange);
   autoReloadRef.current = options.autoReloadOnExternalChange;
+  const isManagedPathRef = useRef(options.isManagedPath);
+  isManagedPathRef.current = options.isManagedPath;
   // Per-tab sequence counter. Each handleExternalModify call increments
   // its tab's counter and captures a local copy; if a newer event has
   // fired before the readTextFile await resolves, the older one's
@@ -138,6 +153,8 @@ export function useTabs(options: UseTabsOptions): Tabs {
         meta: {},
         error: undefined,
         loading: true,
+        draft: undefined,
+        draftError: undefined,
       });
       void loadTab(active.id, path);
     },
@@ -200,6 +217,62 @@ export function useTabs(options: UseTabsOptions): Tabs {
     [updateTab]
   );
 
+  // Editing works on the raw disk text (not tab.content, which has the
+  // frontmatter stripped) so saving round-trips frontmatter untouched.
+  const beginEdit = useCallback(
+    async (id: string) => {
+      const current = tabsRef.current.find((t) => t.id === id);
+      if (!current || current.loading || current.draft !== undefined) return;
+      try {
+        const raw = await readTextFile(current.path);
+        updateTab(id, { draft: raw, draftError: undefined });
+      } catch (err) {
+        updateTab(id, {
+          draftError: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    [updateTab]
+  );
+
+  const updateDraft = useCallback(
+    (id: string, value: string) => updateTab(id, { draft: value }),
+    [updateTab]
+  );
+
+  const cancelEdit = useCallback(
+    (id: string) => updateTab(id, { draft: undefined, draftError: undefined }),
+    [updateTab]
+  );
+
+  // On failure the draft is kept so the user's edits survive; the error
+  // renders inline in the editor.
+  const saveEdit = useCallback(
+    async (id: string) => {
+      const current = tabsRef.current.find((t) => t.id === id);
+      if (current?.draft === undefined) return;
+      try {
+        await writeTextFile(current.path, current.draft);
+        const { data, content } = parseFrontmatter(current.draft);
+        updateTab(id, {
+          meta: data,
+          content,
+          error: undefined,
+          draft: undefined,
+          draftError: undefined,
+          pendingContent: undefined,
+          staleSince: undefined,
+          dismissedContent: undefined,
+        });
+      } catch (err) {
+        updateTab(id, {
+          draftError: err instanceof Error ? err.message : String(err),
+        });
+      }
+    },
+    [updateTab]
+  );
+
   // Read the disk content for an open tab and decide whether the
   // change is substantive. If the new content matches `current.content`
   // (touch-only modify), do nothing. Otherwise stash it as pendingContent
@@ -239,9 +312,9 @@ export function useTabs(options: UseTabsOptions): Tabs {
           return;
         }
 
-        // Body diverged. Either silent-reload (per user setting) or
-        // raise the banner.
-        if (autoReloadRef.current) {
+        // Body diverged. Silent-reload when the user opted in globally or
+        // the file lives in a managed workspace; otherwise raise the banner.
+        if (autoReloadRef.current || isManagedPathRef.current(path)) {
           updateTab(id, {
             meta: reparsed.data,
             content: reparsed.content,
@@ -433,6 +506,10 @@ export function useTabs(options: UseTabsOptions): Tabs {
     close,
     acceptPending,
     dismissPending,
+    beginEdit,
+    updateDraft,
+    cancelEdit,
+    saveEdit,
     getScrollTop,
     setScrollTop,
   };

@@ -85,6 +85,10 @@ export function PaneView({
                 onDismissPending={pane.dismissPending}
                 onDiffViewModeChange={onDiffViewModeChange}
                 onAlwaysAutoReload={onAlwaysAutoReload}
+                onBeginEdit={pane.beginEdit}
+                onDraftChange={pane.updateDraft}
+                onCancelEdit={pane.cancelEdit}
+                onSaveEdit={pane.saveEdit}
               />
             );
           })

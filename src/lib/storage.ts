@@ -12,6 +12,7 @@ const TABS_STATE_PANE1_KEY = "tabsState.pane1";
 const PANE_LAYOUT_KEY = "paneLayout";
 const SIDEBAR_STATE_KEY = "sidebarState";
 const PINNED_KEY = "pinnedByRoot";
+const CONVERT_DECLINED_KEY = "convertDeclined";
 
 export const TABS_KEY_PANE0 = TABS_STATE_KEY;
 export const TABS_KEY_PANE1 = TABS_STATE_PANE1_KEY;
@@ -73,7 +74,6 @@ export interface ViewSettings {
   hidePatterns: string[];
   sidebarLens: SidebarLens;
   welcomeOpened: boolean;
-  showInternal: boolean;
   autoReloadOnExternalChange: boolean;
   diffViewMode: DiffViewMode;
 }
@@ -92,7 +92,6 @@ export const defaultViewSettings: ViewSettings = {
   hidePatterns: [],
   sidebarLens: "tree",
   welcomeOpened: false,
-  showInternal: true,
   autoReloadOnExternalChange: false,
   diffViewMode: "unified",
 };
@@ -120,6 +119,18 @@ export async function loadLastSelected(): Promise<string | undefined> {
 export async function saveLastSelected(path: string | undefined): Promise<void> {
   if (path) await store.set(LAST_SELECTED_KEY, path);
   else await store.delete(LAST_SELECTED_KEY);
+  await store.save();
+}
+
+export async function loadConvertDeclined(): Promise<string[]> {
+  const v = await store.get<string[]>(CONVERT_DECLINED_KEY);
+  return Array.isArray(v) ? v : [];
+}
+
+export async function addConvertDeclined(root: string): Promise<void> {
+  const current = await loadConvertDeclined();
+  if (current.includes(root)) return;
+  await store.set(CONVERT_DECLINED_KEY, [...current, root]);
   await store.save();
 }
 
@@ -178,7 +189,6 @@ export async function loadViewSettings(): Promise<ViewSettings> {
     hidePatterns: normalizeHidePatterns(v.hidePatterns),
     sidebarLens: normalizeSidebarLens(v.sidebarLens),
     welcomeOpened: v.welcomeOpened === true,
-    showInternal: typeof v.showInternal === "boolean" ? v.showInternal : true,
     autoReloadOnExternalChange: v.autoReloadOnExternalChange === true,
     diffViewMode: v.diffViewMode === "split" ? "split" : "unified",
   };

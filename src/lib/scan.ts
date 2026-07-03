@@ -1,7 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import yaml from "js-yaml";
-import type { DocsYaml } from "./docsYaml";
 
 export interface MarkdownFile {
   path: string;
@@ -11,14 +10,20 @@ export interface MarkdownFile {
   tags: string[];
   modified?: number;
   size: number;
+  links?: string[];
+}
+
+export interface WorkspaceMarker {
+  slug: string;
+  name?: string;
+  homepage?: string;
 }
 
 export interface ScanResult {
   root: string;
   files: MarkdownFile[];
   truncated: boolean;
-  docsYaml?: DocsYaml;
-  docsYamlError?: string;
+  marker?: WorkspaceMarker;
 }
 
 export interface ScanProgress {

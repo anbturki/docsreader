@@ -25,6 +25,7 @@ export interface Panes {
 
 interface UsePanesOptions {
   autoReloadOnExternalChange: boolean;
+  isManagedPath: (path: string) => boolean;
 }
 
 export function usePanes(options: UsePanesOptions): Panes {
@@ -33,10 +34,12 @@ export function usePanes(options: UsePanesOptions): Panes {
 
   const pane0 = useTabs({
     autoReloadOnExternalChange: options.autoReloadOnExternalChange,
+    isManagedPath: options.isManagedPath,
     storageKey: TABS_KEY_PANE0,
   });
   const pane1 = useTabs({
     autoReloadOnExternalChange: options.autoReloadOnExternalChange,
+    isManagedPath: options.isManagedPath,
     storageKey: TABS_KEY_PANE1,
   });
 

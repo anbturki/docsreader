@@ -5,6 +5,7 @@ import { message } from "@tauri-apps/plugin-dialog";
 import { Columns2, ListTree, Rows2, Square, Settings as SettingsIcon } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
+import { BacklinksPanel } from "@/components/document/BacklinksPanel";
 import { OutlinePanel } from "@/components/document/OutlinePanel";
 import { matchShortcut, parseShortcut } from "@/lib/shortcuts";
 
@@ -18,16 +19,15 @@ import {
   ResizablePanel,
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
-import {
-  ExplorerSidebar,
-  type ResolvedCrossLink,
-} from "@/components/explorer/ExplorerSidebar";
+import { ExplorerSidebar } from "@/components/explorer/ExplorerSidebar";
+import { ConvertWorkspacePrompt } from "@/components/explorer/ConvertWorkspacePrompt";
 import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
 import { PaneView } from "@/components/document/PaneView";
 import { UpdateBanner } from "@/components/document/UpdateBanner";
 
 const SettingsDialog = lazy(() => import("@/components/settings/SettingsDialog"));
 import { useLibrary } from "@/hooks/useLibrary";
+import { useConvertPrompt } from "@/hooks/useConvertPrompt";
 import { usePanes } from "@/hooks/usePanes";
 import type { SplitMode } from "@/lib/storage";
 import { useTheme } from "@/hooks/useTheme";
@@ -36,17 +36,9 @@ import { useSidebarState } from "@/hooks/useSidebarState";
 import { usePinned } from "@/hooks/usePinned";
 import { useUpdater } from "@/hooks/useUpdater";
 import { buildTree } from "@/lib/tree";
-import { buildCuratedTree } from "@/lib/curatedTree";
 import { collectDirKeys } from "@/components/explorer/FileTree";
 import { buildHideMatcher } from "@/lib/match";
 import { basename } from "@/lib/path";
-import {
-  getIgnorePatterns,
-  getProjectMeta,
-  hasNavigation,
-  type ProjectMeta,
-} from "@/lib/docsYaml";
-import { computeManifestIssues } from "@/lib/manifestIssues";
 import { fetchGitHead, type GitFileStatusKind } from "@/lib/git";
 import { parseFrontmatter } from "@/lib/scan";
 import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
@@ -56,8 +48,18 @@ import "@/styles/code-theme.css";
 function App() {
   const library = useLibrary();
   const viewSettings = useViewSettings();
+  const managedRoots = useMemo(
+    () => library.roots.filter((root) => library.scans[root]?.result.marker),
+    [library.roots, library.scans]
+  );
+  const isManagedPath = useCallback(
+    (path: string) =>
+      managedRoots.some((root) => path === root || path.startsWith(root + "/")),
+    [managedRoots]
+  );
   const panes = usePanes({
     autoReloadOnExternalChange: viewSettings.settings.autoReloadOnExternalChange,
+    isManagedPath,
   });
   const tabs = panes.activePane;
   const sidebar = useSidebarState(viewSettings.settings.defaultFolderState);
@@ -91,97 +93,27 @@ function App() {
     });
   }, [viewSettings]);
 
-  const activeDocsIgnore = useMemo(
-    () => getIgnorePatterns(library.activeScan?.result.docsYaml),
-    [library.activeScan?.result.docsYaml]
-  );
-
   const hideMatcher = useMemo(
-    () => buildHideMatcher([...viewSettings.settings.hidePatterns, ...activeDocsIgnore]),
-    [viewSettings.settings.hidePatterns, activeDocsIgnore]
+    () => buildHideMatcher(viewSettings.settings.hidePatterns),
+    [viewSettings.settings.hidePatterns]
   );
 
-  const projectMetaByRoot = useMemo<Record<string, ProjectMeta>>(() => {
-    const out: Record<string, ProjectMeta> = {};
+  const convertPrompt = useConvertPrompt(
+    library.activeRoot,
+    library.activeScan,
+    library.rescan
+  );
+
+  const workspaceNamesByRoot = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
     for (const root of library.roots) {
-      const meta = getProjectMeta(library.scans[root]?.result.docsYaml);
-      if (meta) out[root] = meta;
+      const name = library.scans[root]?.result.marker?.name?.trim();
+      if (name) out[root] = name;
     }
     return out;
   }, [library.roots, library.scans]);
 
-  // Visibility filter: internal-only workspaces are hidden from the switcher
-  // and QuickOpen when the user is in "preview public" mode (showInternal=off).
-  const showInternal = viewSettings.settings.showInternal;
-  const visibleRoots = useMemo(() => {
-    if (showInternal) return library.roots;
-    return library.roots.filter(
-      (root) => library.scans[root]?.result.docsYaml?.visibility !== "internal"
-    );
-  }, [library.roots, library.scans, showInternal]);
-
-  // If the currently active workspace is now hidden by the visibility filter,
-  // switch to the first visible one. If no visible workspace exists, clear
-  // activeRoot - otherwise the content area would render files from a tab
-  // the user can no longer see in the switcher.
-  useEffect(() => {
-    if (showInternal) return;
-    if (!library.activeRoot) return;
-    if (visibleRoots.includes(library.activeRoot)) return;
-    void library.selectRoot(visibleRoots[0]);
-  }, [showInternal, library, library.activeRoot, visibleRoots]);
-
-  const rootBySlug = useMemo<Map<string, string>>(() => {
-    const map = new Map<string, string>();
-    for (const root of library.roots) {
-      const slug = library.scans[root]?.result.docsYaml?.project?.slug?.trim();
-      if (slug) map.set(slug, root);
-    }
-    return map;
-  }, [library.roots, library.scans]);
-
-  const manifestIssues = useMemo(() => {
-    const scan = library.activeScan;
-    if (!scan) return [];
-    return computeManifestIssues({
-      docsYaml: scan.result.docsYaml,
-      docsYamlError: scan.result.docsYamlError,
-      files: scan.result.files,
-      knownSlugs: new Set(rootBySlug.keys()),
-      ownSlug: scan.result.docsYaml?.project?.slug,
-    });
-  }, [library.activeScan, rootBySlug]);
-
-  const crossLinks = useMemo<ResolvedCrossLink[]>(() => {
-    const list = library.activeScan?.result.docsYaml?.cross_links;
-    if (!Array.isArray(list) || list.length === 0) return [];
-    const out: ResolvedCrossLink[] = [];
-    for (const link of list) {
-      const targetRoot = rootBySlug.get(link.project);
-      if (!targetRoot) continue;
-      if (targetRoot === library.activeRoot) continue; // don't link to self
-      const targetName =
-        library.scans[targetRoot]?.result.docsYaml?.project?.name?.trim() ||
-        targetRoot.split("/").pop() ||
-        link.project;
-      out.push({
-        label: link.label,
-        description: link.description,
-        targetRoot,
-        targetName,
-      });
-    }
-    return out;
-  }, [library.activeScan, library.activeRoot, library.scans, rootBySlug]);
-
-  const activeDocsYamlError = library.activeScan?.result.docsYamlError;
-  useEffect(() => {
-    if (activeDocsYamlError) {
-      console.warn("[docsreader] .docs.yaml parse error:", activeDocsYamlError);
-    }
-  }, [activeDocsYamlError]);
-
-  // Auto-open project.homepage once per workspace per session: only fires on
+  // Auto-open the marker homepage once per workspace per session: only fires on
   // the first time the active scan finishes with no tabs open in that root,
   // so closing the homepage tab doesn't keep reopening it on workspace switch.
   // Homepage auto-open targets pane 0 specifically, regardless of which
@@ -200,7 +132,7 @@ function App() {
     const root = library.activeRoot;
     if (autoOpenedHomepageRef.current.has(root)) return;
 
-    const homepage = scan.result.docsYaml?.project?.homepage?.trim();
+    const homepage = scan.result.marker?.homepage?.trim();
     if (!homepage) return;
 
     const homepageRel = homepage.replace(/\\/g, "/").replace(/^\.\//, "");
@@ -229,21 +161,16 @@ function App() {
 
   const quickOpenFiles = useMemo<QuickOpenFile[]>(() => {
     const out: QuickOpenFile[] = [];
-    for (const root of visibleRoots) {
+    for (const root of library.roots) {
       const scan = library.scans[root];
       if (!scan) continue;
-      const docsIgnore = getIgnorePatterns(scan.result.docsYaml);
-      const matcher =
-        docsIgnore.length === 0
-          ? buildHideMatcher(viewSettings.settings.hidePatterns)
-          : buildHideMatcher([...viewSettings.settings.hidePatterns, ...docsIgnore]);
       for (const f of scan.result.files) {
-        if (!matcher.empty && matcher.matchesPath(f.relPath)) continue;
+        if (!hideMatcher.empty && hideMatcher.matchesPath(f.relPath)) continue;
         out.push({ ...f, rootPath: root });
       }
     }
     return out;
-  }, [visibleRoots, library.scans, viewSettings.settings.hidePatterns]);
+  }, [library.roots, library.scans, hideMatcher]);
 
   const quickOpenShortcut = useMemo(
     () => parseShortcut(viewSettings.settings.quickOpenShortcut),
@@ -324,14 +251,10 @@ function App() {
     };
   }, [quickOpenMounted]);
   const filteredFiles = useFilteredFiles(allFiles, search);
-  const activeDocsYaml = library.activeScan?.result.docsYaml;
   const tree = useMemo(() => {
     if (!library.activeRoot) return undefined;
-    if (hasNavigation(activeDocsYaml)) {
-      return buildCuratedTree(library.activeRoot, filteredFiles, activeDocsYaml);
-    }
     return buildTree(library.activeRoot, filteredFiles);
-  }, [library.activeRoot, filteredFiles, activeDocsYaml]);
+  }, [library.activeRoot, filteredFiles]);
   const rootKey = library.activeRoot ?? "";
   const handleCollapseAll = useCallback(() => {
     if (!tree) return;
@@ -431,12 +354,15 @@ function App() {
   const handleOpenWelcome = useCallback(async () => {
     try {
       const path = await invoke<string>("install_welcome_workspace");
+      // The welcome workspace is a guided tour, not an agent target; never
+      // greet a first-time user with the convert dialog.
+      convertPrompt.declineRoot(path);
       await library.addRoot(path);
       viewSettings.update({ ...viewSettings.settings, welcomeOpened: true });
     } catch (err) {
       console.error("install_welcome_workspace failed", err);
     }
-  }, [library, viewSettings]);
+  }, [library, viewSettings, convertPrompt]);
 
   // Auto-open the welcome workspace exactly once for true first-time users:
   // both stores hydrated, no roots persisted from previous sessions, and the
@@ -462,10 +388,10 @@ function App() {
     <TooltipProvider delayDuration={200}>
       <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen}>
         <ExplorerSidebar
-          roots={visibleRoots}
+          roots={library.roots}
           activeRoot={library.activeRoot}
           activeScan={library.activeScan}
-          projectMetaByRoot={projectMetaByRoot}
+          workspaceNamesByRoot={workspaceNamesByRoot}
           onPickDirectory={() => void library.pickDirectory()}
           onSelectRoot={(path) => void library.selectRoot(path)}
           onRemoveRoot={(path) => void library.removeRoot(path)}
@@ -475,8 +401,6 @@ function App() {
               ? undefined
               : () => void handleOpenWelcome()
           }
-          crossLinks={crossLinks}
-          manifestIssues={manifestIssues}
           gitStatusByPath={gitStatusByPath}
           onShowGitDiff={
             activeGitStatus ? (path) => void handleShowGitDiff(path) : undefined
@@ -690,6 +614,11 @@ function App() {
                   content={tabs.activeTab.content}
                   scrollContainer={activeScrollEl}
                 />
+                <BacklinksPanel
+                  files={allFiles}
+                  activePath={tabs.activeTab.path}
+                  onNavigate={tabs.openInActive}
+                />
               </aside>
             )}
           </div>
@@ -703,6 +632,16 @@ function App() {
               onSelect={(path) => tabs.openInActive(path)}
             />
           </Suspense>
+        )}
+        {convertPrompt.candidateRoot && (
+          <ConvertWorkspacePrompt
+            folderName={basename(convertPrompt.candidateRoot)}
+            onConvert={() => void convertPrompt.convert()}
+            onDecline={() =>
+              convertPrompt.candidateRoot &&
+              convertPrompt.declineRoot(convertPrompt.candidateRoot)
+            }
+          />
         )}
         {gitDiffState && (
           <DiffViewerDialog

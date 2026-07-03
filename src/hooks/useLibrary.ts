@@ -101,13 +101,16 @@ function isSkippedWatchPath(eventPath: string, root: string): boolean {
   return false;
 }
 
-// True when the watch event refers to .docs.yaml or docs.yaml at the
-// workspace root - the manifest. We watch modifies for it specifically
-// because edits change the curated tree even when no files come/go.
+// True when the watch event refers to the workspace marker (or a legacy
+// manifest awaiting migration) at the workspace root. We watch modifies for
+// it specifically because edits change the workspace name/homepage even when
+// no files come/go.
+const MANIFEST_BASENAMES = [".docsreader.yaml", ".docs.yaml", "docs.yaml"] as const;
+
 function isManifestPath(eventPath: string, root: string): boolean {
   const norm = eventPath.replace(/\\/g, "/");
   const r = root.replace(/\\/g, "/");
-  return norm === `${r}/.docs.yaml` || norm === `${r}/docs.yaml`;
+  return MANIFEST_BASENAMES.some((name) => norm === `${r}/${name}`);
 }
 
 export function useLibrary(): Library {
@@ -311,7 +314,7 @@ export function useLibrary(): Library {
 
             // Manifest events bypass both the modify-skip and the
             // dotfile-skip filters. The dotfile filter would otherwise
-            // drop create/remove/rename of `.docs.yaml` because of its
+            // drop create/remove/rename of the marker file because of its
             // leading dot, and the modify-skip would drop in-place edits.
             const manifestTouched = paths.some((p) =>
               isManifestPath(p, activeRoot)
