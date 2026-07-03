@@ -50,8 +50,7 @@
       "entitlements": null,
       "exceptionDomain": null,
       "frameworks": []
-    },
-    "createUpdaterArtifacts": true
+    }
   },
   "plugins": {
     "updater": {
