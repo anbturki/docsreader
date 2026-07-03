@@ -45,10 +45,17 @@ const triple = process.env.TAURI_ENV_TARGET_TRIPLE ?? hostTriple();
 mkdirSync(outDir, { recursive: true });
 
 if (triple === "universal-apple-darwin") {
-  const slices = ["aarch64-apple-darwin", "x86_64-apple-darwin"].map(buildFor);
+  // tauri-build validates externalBin per compiled arch (appending the
+  // current cargo triple), so the per-arch slices must be staged alongside
+  // the lipo output the bundler embeds.
+  const slices = ["aarch64-apple-darwin", "x86_64-apple-darwin"].map((arch) => {
+    const staged = path.join(outDir, `docsreader-mcp-${arch}`);
+    copyFileSync(buildFor(arch), staged);
+    return staged;
+  });
   const dest = path.join(outDir, `docsreader-mcp-${triple}`);
   run("lipo", ["-create", ...slices, "-output", dest]);
-  console.log(`sidecar: ${dest} (universal)`);
+  console.log(`sidecar: ${dest} (universal + per-arch slices)`);
 } else {
   const ext = triple.includes("windows") ? ".exe" : "";
   const dest = path.join(outDir, `docsreader-mcp-${triple}${ext}`);
