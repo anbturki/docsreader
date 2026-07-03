@@ -256,7 +256,7 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
         })
         .collect();
 
-    files.sort_by(|a, b| a.rel_path.to_lowercase().cmp(&b.rel_path.to_lowercase()));
+    files.sort_by_key(|a| a.rel_path.to_lowercase());
 
     progress.emit(&ScanProgress {
         root: path.clone(),

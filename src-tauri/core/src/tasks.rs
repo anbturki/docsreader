@@ -198,7 +198,7 @@ fn all_tasks(root: &Path) -> Vec<TaskSummary> {
         .flatten()
         .filter_map(|entry| parse_task(&entry.path()))
         .collect();
-    tasks.sort_by(|a, b| task_ordinal(&a.id).cmp(&task_ordinal(&b.id)));
+    tasks.sort_by_key(|a| task_ordinal(&a.id));
     tasks
 }
 
