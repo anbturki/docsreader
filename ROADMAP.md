@@ -8,7 +8,7 @@ Layout uses **Now / Next / Later / Considering** - no fixed dates, no quarter co
 
 In active development.
 
-_(v0.6 - the MCP foundation - is merged to main and queued for release; see "Unreleased" below)_
+_(v0.6.0 - the MCP foundation - just shipped; next up: markdown task formats, see "Next")_
 
 ## Next
 
@@ -68,7 +68,7 @@ Direction unclear, community input wanted before committing.
 
 ## Recently shipped
 
-### Unreleased (v0.6 candidate, in main)
+### v0.6.0
 
 - **MCP server (`docsreader-mcp`)** - a bundled stdio MCP server AI agents write through: docs with a status-as-folder lifecycle (research / in-progress / done / archived, optional phase subfolders), topic-addressed memory, and Backlog.md-shaped tasks. Tools for the full lifecycle, every doc exposed as a resource, a self-describing onboarding resource, `start-task` / `record-decision` prompts, and recovery-bearing tool errors.
 - **Connect to AI agents** - Settings pane that detects installed MCP clients (Claude Code, Cursor, Windsurf, VS Code, Codex) and registers the server with each in one click; non-destructive config merges.
