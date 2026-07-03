@@ -185,33 +185,50 @@ const SCORE_TAG: u32 = 2;
 const SCORE_SLUG: u32 = 2;
 const SCORE_CONTENT: u32 = 1;
 
+// Every whitespace-separated term must match somewhere (AND); each term's
+// score sums the fields it hits. A single-word query scores exactly as it did
+// before tokenization; a multi-word query like "coturn flags" now matches an
+// entry containing both words even when they are not adjacent.
 pub(crate) fn score_match(
     title: Option<&str>,
     tags: &[String],
     slug: &str,
-    body_matches: bool,
+    body_lower: &str,
     query_lower: &str,
 ) -> u32 {
-    let mut score = 0u32;
-    if title.is_some_and(|t| t.to_lowercase().contains(query_lower)) {
-        score += SCORE_TITLE;
+    let title_lower = title.map(str::to_lowercase);
+    let slug_lower = slug.to_lowercase();
+    let tags_lower: Vec<String> = tags.iter().map(|t| t.to_lowercase()).collect();
+    let mut total = 0u32;
+    for term in query_lower.split_whitespace() {
+        let mut term_score = 0u32;
+        if title_lower.as_deref().is_some_and(|t| t.contains(term)) {
+            term_score += SCORE_TITLE;
+        }
+        if tags_lower.iter().any(|t| t == term) {
+            term_score += SCORE_TAG;
+        }
+        if slug_lower.contains(term) {
+            term_score += SCORE_SLUG;
+        }
+        if body_lower.contains(term) {
+            term_score += SCORE_CONTENT;
+        }
+        if term_score == 0 {
+            return 0;
+        }
+        total += term_score;
     }
-    if tags.iter().any(|t| t.to_lowercase() == query_lower) {
-        score += SCORE_TAG;
-    }
-    if slug.to_lowercase().contains(query_lower) {
-        score += SCORE_SLUG;
-    }
-    if body_matches {
-        score += SCORE_CONTENT;
-    }
-    score
+    total
 }
 
 fn content_snippet(content: &str, query_lower: &str) -> Option<String> {
     let body = split_frontmatter(content).1;
     let lower = body.to_lowercase();
-    let hit = lower.find(query_lower)?;
+    let hit = query_lower
+        .split_whitespace()
+        .filter_map(|term| lower.find(term))
+        .min()?;
     let start = body[..hit]
         .char_indices()
         .rev()
@@ -238,13 +255,8 @@ pub fn search_docs_core(
     let mut hits = Vec::new();
     for (doc, content) in collect_docs(root, filters)? {
         let snippet = content_snippet(&content, &q);
-        let score = score_match(
-            doc.title.as_deref(),
-            &doc.tags,
-            &doc.slug,
-            snippet.is_some(),
-            &q,
-        );
+        let body_lower = split_frontmatter(&content).1.to_lowercase();
+        let score = score_match(doc.title.as_deref(), &doc.tags, &doc.slug, &body_lower, &q);
         if score > 0 {
             hits.push(SearchHit {
                 doc,
@@ -364,6 +376,20 @@ mod tests {
         assert_eq!(hits[0].doc.slug, "alpha-guide", "title match first");
         assert!(hits[0].score > hits[1].score);
         assert!(hits[1].snippet.as_deref().unwrap().contains("alpha"));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn search_matches_multi_word_query_across_the_body() {
+        let root = test_dir("search_multi");
+        seed(&root).await;
+
+        // "use" and "alpha" both occur in Alpha Guide but are not adjacent;
+        // Beta Notes has "alpha" but not "use", so AND semantics drops it.
+        let hits = search_docs_core(&root, "alpha use", &DocFilters::default()).unwrap();
+        assert_eq!(hits.len(), 1, "only the doc with both terms matches");
+        assert_eq!(hits[0].doc.slug, "alpha-guide");
+        assert!(hits[0].snippet.is_some());
         let _ = std::fs::remove_dir_all(&root);
     }
 
