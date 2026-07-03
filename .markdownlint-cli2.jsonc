@@ -1,0 +1,12 @@
+{
+  "config": {
+    // Prose lines are not wrapped in this repo.
+    "MD013": false,
+    // The README uses inline HTML for the logo and download badges.
+    "MD033": false,
+    "MD041": false,
+    // Bold group labels inside Features are a deliberate style choice.
+    "MD036": false
+  },
+  "globs": ["README.md", "docs/*.md", "ROADMAP.md", "SECURITY.md"]
+}
