@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, FolderTree, Keyboard, Palette } from "lucide-react";
+import { BookOpen, Bot, FolderTree, Keyboard, Palette } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,12 +8,21 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { ViewSettings } from "@/lib/storage";
+import { AgentsSection } from "./AgentsSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { ExplorerSection } from "./ExplorerSection";
 import { ReadingSection } from "./ReadingSection";
 import { ShortcutsSection } from "./ShortcutsSection";
 
-export type SettingsSection = "appearance" | "reading" | "explorer" | "shortcuts";
+const SECTIONS = [
+  { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "reading", label: "Reading", icon: BookOpen },
+  { id: "explorer", label: "Explorer", icon: FolderTree },
+  { id: "agents", label: "AI agents", icon: Bot },
+  { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
+] as const;
+
+export type SettingsSection = (typeof SECTIONS)[number]["id"];
 
 interface Props {
   open: boolean;
@@ -24,15 +33,6 @@ interface Props {
   onOpenWelcome: () => void;
 }
 
-type SectionId = SettingsSection;
-
-const SECTIONS: { id: SectionId; label: string; icon: typeof Palette }[] = [
-  { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "reading", label: "Reading", icon: BookOpen },
-  { id: "explorer", label: "Explorer", icon: FolderTree },
-  { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
-];
-
 export default function SettingsDialog({
   open,
   onOpenChange,
@@ -41,7 +41,7 @@ export default function SettingsDialog({
   initialSection,
   onOpenWelcome,
 }: Props) {
-  const [active, setActive] = useState<SectionId>(initialSection ?? "appearance");
+  const [active, setActive] = useState<SettingsSection>(initialSection ?? "appearance");
 
   useEffect(() => {
     if (open && initialSection) setActive(initialSection);
@@ -57,7 +57,7 @@ export default function SettingsDialog({
           <DialogTitle className="text-base font-semibold">Settings</DialogTitle>
         </DialogHeader>
 
-        <div className="flex h-[520px]">
+        <div className="flex h-[520px] min-w-0">
           <nav className="w-44 shrink-0 border-r bg-muted/30 p-2">
             {SECTIONS.map(({ id, label, icon: Icon }) => (
               <button
@@ -77,7 +77,7 @@ export default function SettingsDialog({
             ))}
           </nav>
 
-          <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
             {active === "appearance" && (
               <AppearanceSection settings={settings} onChange={onChange} />
             )}
@@ -91,6 +91,7 @@ export default function SettingsDialog({
                 onOpenWelcome={onOpenWelcome}
               />
             )}
+            {active === "agents" && <AgentsSection />}
             {active === "shortcuts" && (
               <ShortcutsSection settings={settings} onChange={onChange} />
             )}
