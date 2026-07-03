@@ -68,7 +68,7 @@ Cursor (`~/.cursor/mcp.json`) and Windsurf (`~/.codeium/windsurf/mcp_config.json
 { "mcpServers": { "docsreader": { "command": "docsreader-mcp" } } }
 ```
 
-If `docsreader-mcp` is not on your PATH (macOS DMG install without Homebrew), use the full binary path from the table above instead.
+If `docsreader-mcp` is not on your PATH (macOS DMG install without Homebrew), use the full binary path from the table above instead. Homebrew users who installed before v0.6.0 and auto-updated in-app: run `brew upgrade --cask docsreader` once so Homebrew links the binary - the in-app updater cannot do that. The in-app Connect flow always writes the full path, so it works regardless.
 
 Then tell your agents how to use it: copy the [AGENTS template](docs/AGENTS-TEMPLATE.md) into your repo's `AGENTS.md` or `CLAUDE.md`.
 
