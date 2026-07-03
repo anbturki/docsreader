@@ -13,6 +13,7 @@ const PANE_LAYOUT_KEY = "paneLayout";
 const SIDEBAR_STATE_KEY = "sidebarState";
 const PINNED_KEY = "pinnedByRoot";
 const CONVERT_DECLINED_KEY = "convertDeclined";
+const DISMISSED_REGISTRY_KEY = "dismissedRegistry";
 
 export const TABS_KEY_PANE0 = TABS_STATE_KEY;
 export const TABS_KEY_PANE1 = TABS_STATE_PANE1_KEY;
@@ -106,9 +107,24 @@ export async function loadRoots(): Promise<string[]> {
   return Array.isArray(v) ? v : [];
 }
 
+// Serializes root/dismissal writes so concurrent callers (launch reconcile,
+// the registry watcher, and add/remove) cannot interleave a read-modify-write
+// and lose an entry.
+let writeChain: Promise<unknown> = Promise.resolve();
+function enqueueWrite<T>(fn: () => Promise<T>): Promise<T> {
+  const result = writeChain.then(fn, fn);
+  writeChain = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
 export async function saveRoots(roots: string[]): Promise<void> {
-  await store.set(ROOTS_KEY, roots);
-  await store.save();
+  await enqueueWrite(async () => {
+    await store.set(ROOTS_KEY, roots);
+    await store.save();
+  });
 }
 
 export async function loadLastSelected(): Promise<string | undefined> {
@@ -132,6 +148,32 @@ export async function addConvertDeclined(root: string): Promise<void> {
   if (current.includes(root)) return;
   await store.set(CONVERT_DECLINED_KEY, [...current, root]);
   await store.save();
+}
+
+export async function loadDismissedRegistry(): Promise<string[]> {
+  const v = await store.get<string[]>(DISMISSED_REGISTRY_KEY);
+  return Array.isArray(v) ? v : [];
+}
+
+export async function addDismissedRegistry(path: string): Promise<void> {
+  await enqueueWrite(async () => {
+    const current = await loadDismissedRegistry();
+    if (current.includes(path)) return;
+    await store.set(DISMISSED_REGISTRY_KEY, [...current, path]);
+    await store.save();
+  });
+}
+
+export async function removeDismissedRegistry(path: string): Promise<void> {
+  await enqueueWrite(async () => {
+    const current = await loadDismissedRegistry();
+    if (!current.includes(path)) return;
+    await store.set(
+      DISMISSED_REGISTRY_KEY,
+      current.filter((p) => p !== path),
+    );
+    await store.save();
+  });
 }
 
 export async function loadScanCache(root: string): Promise<CachedScan | undefined> {
