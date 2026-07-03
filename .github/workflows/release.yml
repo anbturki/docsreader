@@ -150,7 +150,11 @@ jobs:
           APP=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -name '*.app' -maxdepth 1 | head -1)
           SIDECAR="$APP/Contents/MacOS/docsreader-mcp"
           test -f "$SIDECAR" || { echo "::error::sidecar missing from $APP"; exit 1; }
-          lipo -archs "$SIDECAR" | grep -q "x86_64 arm64" || { echo "::error::sidecar is not universal"; exit 1; }
+          ARCHS=$(lipo -archs "$SIDECAR")
+          case "$ARCHS" in
+            *x86_64*arm64*|*arm64*x86_64*) ;;
+            *) echo "::error::sidecar is not universal (archs: $ARCHS)"; exit 1 ;;
+          esac
           codesign --verify --strict "$SIDECAR"
           echo "sidecar present, universal, and signed"
 
@@ -159,7 +163,10 @@ jobs:
         run: |
           set -euo pipefail
           DEB=$(find src-tauri/target/release/bundle/deb -name '*.deb' | head -1)
-          dpkg-deb -c "$DEB" | grep -q 'usr/bin/docsreader-mcp' || { echo "::error::sidecar missing from $DEB"; exit 1; }
+          # Capture the listing first: grep -q closing the pipe early makes
+          # dpkg-deb's tar child fail with EPIPE under pipefail.
+          CONTENTS=$(dpkg-deb -c "$DEB")
+          grep -q 'usr/bin/docsreader-mcp' <<<"$CONTENTS" || { echo "::error::sidecar missing from $DEB"; exit 1; }
           echo "sidecar present in deb"
 
       # macOS-only: submit the DMG to Apple async (no --wait), then stash
