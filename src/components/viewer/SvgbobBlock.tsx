@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import DOMPurify from "dompurify";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -29,7 +30,9 @@ export function SvgbobBlock({ code }: Props) {
     void (async () => {
       try {
         const bob = await loadBob();
-        const rendered = bob.render(code);
+        const rendered = DOMPurify.sanitize(bob.render(code), {
+          USE_PROFILES: { svg: true, svgFilters: true },
+        });
         if (!cancelled) setSvg(rendered);
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));

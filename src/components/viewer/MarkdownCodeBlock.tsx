@@ -11,6 +11,7 @@ import {
 } from "react";
 import { Check, Copy } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DIAGRAM_FLAGS } from "@/lib/diagramFence";
 
 const FEEDBACK_MS = 1400;
 const HIDDEN_LANGUAGES = new Set(["text", "plaintext", "plain", "txt"]);
@@ -22,6 +23,10 @@ const SvgbobBlock = lazy(() =>
   import("./SvgbobBlock").then((m) => ({ default: m.SvgbobBlock }))
 );
 
+const DIAGRAM_FALLBACK = (
+  <div className="my-5 text-xs text-muted-foreground">Loading diagram…</div>
+);
+
 export function MarkdownCodeBlock({
   className,
   children,
@@ -30,31 +35,15 @@ export function MarkdownCodeBlock({
   const ref = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const language = extractLanguage(children);
-  const isMermaid = hasFlag(children, "data-mermaid");
-  const isSvgbob = hasFlag(children, "data-svgbob");
+  const isMermaid = hasFlag(children, DIAGRAM_FLAGS.mermaid.attr);
+  const isSvgbob = hasFlag(children, DIAGRAM_FLAGS.svgbob.attr);
 
-  if (isMermaid) {
-    const code = extractText(children).trim();
+  if (isMermaid || isSvgbob) {
+    const code = isMermaid ? extractText(children).trim() : extractText(children);
+    if (!code.trim()) return null;
     return (
-      <Suspense
-        fallback={
-          <div className="my-5 text-xs text-muted-foreground">Loading diagram…</div>
-        }
-      >
-        <MermaidBlock code={code} />
-      </Suspense>
-    );
-  }
-
-  if (isSvgbob) {
-    const code = extractText(children);
-    return (
-      <Suspense
-        fallback={
-          <div className="my-5 text-xs text-muted-foreground">Loading diagram…</div>
-        }
-      >
-        <SvgbobBlock code={code} />
+      <Suspense fallback={DIAGRAM_FALLBACK}>
+        {isMermaid ? <MermaidBlock code={code} /> : <SvgbobBlock code={code} />}
       </Suspense>
     );
   }
@@ -115,7 +104,7 @@ function hasFlag(children: ReactNode, attr: string): boolean {
   for (const child of Children.toArray(children)) {
     if (!isValidElement(child)) continue;
     const el = child as ReactElement<Record<string, unknown>>;
-    if (el.type !== "code") continue;
+    if (el.type !== "code" && el.type !== "div") continue;
     if (el.props[attr] === "true") return true;
   }
   return false;
@@ -144,15 +133,15 @@ function extractText(node: ReactNode): string {
   if (isValidElement(node)) {
     const el = node as ReactElement<{ children?: ReactNode; className?: string }>;
     const inner = extractText(el.props.children);
-    if (
-      typeof el.type === "string" &&
-      el.type === "span" &&
-      typeof el.props.className === "string" &&
-      el.props.className.split(/\s+/).includes("line")
-    ) {
-      return inner + "\n";
-    }
-    return inner;
+    return isShikiLineSpan(el) ? inner + "\n" : inner;
   }
   return "";
+}
+
+function isShikiLineSpan(el: ReactElement<{ className?: string }>): boolean {
+  return (
+    el.type === "span" &&
+    typeof el.props.className === "string" &&
+    el.props.className.split(/\s+/).includes("line")
+  );
 }
