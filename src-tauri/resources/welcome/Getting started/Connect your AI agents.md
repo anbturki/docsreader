@@ -29,6 +29,8 @@ Cursor (`~/.cursor/mcp.json`) and Windsurf (`~/.codeium/windsurf/mcp_config.json
 
 Installed from the macOS DMG without Homebrew? Use the full path instead: `/Applications/DocsReader.app/Contents/MacOS/docsreader-mcp`.
 
+Installed with Homebrew before v0.6.0 and let the app update itself? Homebrew only links `docsreader-mcp` onto your PATH when the cask itself upgrades - run `brew upgrade --cask docsreader` once, or just use the one-click Connect above (it always writes the full path).
+
 ## What agents do with it
 
 - **Docs** land in folders that mirror their lifecycle - `research/`, `in-progress/`, `done/`, `archived/`. The folder is the status; moving the file is the status change.
