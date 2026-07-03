@@ -3,6 +3,7 @@ import { ChevronRight, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MarkdownFile } from "@/lib/scan";
 import { EntryContextMenu } from "./EntryContextMenu";
+import { SIDEBAR_ROW, sidebarRowState, fileOpenHandlers } from "./sidebarRow";
 
 interface Props {
   files: MarkdownFile[];
@@ -113,7 +114,7 @@ function TagGroup({
     <section>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-sm text-muted-foreground hover:text-foreground"
+        className={cn(SIDEBAR_ROW, "px-3 text-muted-foreground hover:text-foreground")}
         aria-expanded={open}
       >
         <ChevronRight
@@ -135,25 +136,11 @@ function TagGroup({
                 onTogglePin={onTogglePin}
               >
                 <button
-                  onClick={(e) => {
-                    if (e.metaKey || e.ctrlKey) {
-                      e.preventDefault();
-                      onOpenInNewTab(f.path);
-                      return;
-                    }
-                    onSelect(f.path);
-                  }}
-                  onAuxClick={(e) => {
-                    if (e.button === 1) {
-                      e.preventDefault();
-                      onOpenInNewTab(f.path);
-                    }
-                  }}
+                  {...fileOpenHandlers(f.path, onSelect, onOpenInNewTab)}
                   className={cn(
-                    "flex w-full items-center gap-2 px-3 pl-8 py-1.5 text-left text-sm transition-colors",
-                    f.path === selectedPath
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                      : "hover:bg-sidebar-accent/50"
+                    SIDEBAR_ROW,
+                    "px-3 pl-8",
+                    sidebarRowState(f.path === selectedPath)
                   )}
                   title={f.relPath}
                 >
