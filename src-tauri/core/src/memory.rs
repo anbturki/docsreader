@@ -157,13 +157,8 @@ pub fn search_memory_core(
         match &q {
             None => hits.push(hit),
             Some(q) => {
-                let score = score_match(
-                    hit.title.as_deref(),
-                    &hit.tags,
-                    &hit.slug,
-                    hit.content.to_lowercase().contains(q),
-                    q,
-                );
+                let body_lower = hit.content.to_lowercase();
+                let score = score_match(hit.title.as_deref(), &hit.tags, &hit.slug, &body_lower, q);
                 if score > 0 {
                     hits.push(MemoryHit { score, ..hit });
                 }
@@ -299,6 +294,31 @@ mod tests {
 
         let tagged = search_memory_core(&root, None, Some("stack")).unwrap();
         assert_eq!(tagged.len(), 1);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn search_matches_multi_word_query_with_and_semantics() {
+        let root = test_dir("search_multi");
+        write_memory_core(
+            &root,
+            "coturn config",
+            "coTURN 4.14 dropped the negative flags for positive ones.",
+            &["coturn".into()],
+            None,
+        )
+        .await
+        .unwrap();
+
+        // Both words are present but not adjacent - the old single-substring
+        // match returned nothing here.
+        let hits = search_memory_core(&root, Some("coturn flags"), None).unwrap();
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].slug, "coturn-config");
+
+        // A term absent from the entry excludes it (AND).
+        let none = search_memory_core(&root, Some("coturn kubernetes"), None).unwrap();
+        assert!(none.is_empty());
         let _ = std::fs::remove_dir_all(&root);
     }
 

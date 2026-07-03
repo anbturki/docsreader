@@ -8,5 +8,5 @@
     // Bold group labels inside Features are a deliberate style choice.
     "MD036": false
   },
-  "globs": ["README.md", "docs/*.md", "ROADMAP.md", "SECURITY.md"]
+  "globs": ["README.md", "docs/*.md", "SECURITY.md"]
 }

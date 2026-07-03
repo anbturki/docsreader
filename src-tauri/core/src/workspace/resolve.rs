@@ -41,6 +41,12 @@ fn ambient_workspace(
     home: &Path,
 ) -> Result<ResolvedWorkspace, CoreError> {
     for base in roots_hint.iter().map(PathBuf::as_path).chain(walk_up(cwd)) {
+        // ~/notes is the user default, not a project workspace; skip the home
+        // directory so the walk-up never tags it Project. user_default below
+        // classifies it as User, keeping scope consistent with the registry.
+        if base == home {
+            continue;
+        }
         if let Some(found) = project_workspace_at(base)? {
             return Ok(found);
         }
@@ -180,6 +186,23 @@ mod tests {
         let resolved = resolve_workspace(None, &[], &cwd, &home, &[]).unwrap();
         assert_eq!(resolved.root, home.join("notes"));
         assert_eq!(resolved.slug, DEFAULT_USER_SLUG);
+        assert_eq!(resolved.scope, WorkspaceScope::User);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn home_notes_stays_user_scope_when_reached_by_walk_up() {
+        let dir = test_dir("res_home_scope");
+        let home = dir.join("home");
+        save_marker(&home.join("notes"), &marker("ali-notes")).unwrap();
+        // cwd is inside home but not inside any project workspace, so the
+        // walk-up reaches ~/notes. It must stay User, matching the registry.
+        let cwd = home.join("projects/some-repo");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let resolved = resolve_workspace(None, &[], &cwd, &home, &[]).unwrap();
+        assert_eq!(resolved.root, home.join("notes"));
+        assert_eq!(resolved.slug, "ali-notes");
         assert_eq!(resolved.scope, WorkspaceScope::User);
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -122,14 +122,6 @@ Then tell your agents how to use it: copy the [AGENTS template](docs/AGENTS-TEMP
 
 Found a bug, want a feature, or have feedback? [Open an issue](https://github.com/anbturki/docsreader/issues/new) - I'm actively building this and feedback shapes the roadmap.
 
-## Roadmap
-
-See [ROADMAP.md](./ROADMAP.md) for the full picture. Short version:
-
-- **Next:** find-in-page, full-text search, focus mode.
-- **Later:** PDF export, kanban view over task files, drag-a-folder-to-add-root, file management.
-- **Considering:** plugin API, annotations, drag tabs between panes / N-pane nesting, local "smart" features (related-docs, TL;DR).
-
 ## Screenshots
 
 | | |
