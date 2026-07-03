@@ -9,14 +9,18 @@ import {
 import { fetchGitStatus, type GitStatus } from "@/lib/git";
 import { describeEventKind } from "@/lib/events";
 import {
+  addDismissedRegistry,
   deleteScanCache,
+  loadDismissedRegistry,
   loadLastSelected,
   loadRoots,
   loadScanCache,
+  removeDismissedRegistry,
   saveLastSelected,
   saveRoots,
   saveScanCache,
 } from "@/lib/storage";
+import { listRegistryWorkspaces, registryDir } from "@/lib/workspaces";
 
 export interface RootScan {
   result: ScanResult;
@@ -47,8 +51,10 @@ const emptyResult = (root: string): ScanResult => ({ root, files: [], truncated:
 const DEBOUNCE_MS = 600;
 // Minimum gap between two rescans regardless of how many events fire.
 const MIN_RESCAN_INTERVAL_MS = 2000;
+// Coalescing window the fs watcher applies before delivering events.
+const WATCH_DELAY_MS = 200;
 
-// Mirror of the Rust scanner's SKIP_DIRS in src-tauri/src/lib.rs. Any
+// Mirror of the Rust scanner's SKIP_DIRS in src-tauri/core/src/scan.rs. Any
 // directory segment in this set, OR any segment that starts with a dot
 // (other than "." and ".."), causes a watch event for that path to be
 // dropped without scheduling a rescan. The scanner already excludes
@@ -119,6 +125,18 @@ export function useLibrary(): Library {
   const [scans, setScans] = useState<Record<string, RootScan>>({});
   const [hydrated, setHydrated] = useState(false);
 
+  // Mirror of `roots` for reads inside async callbacks (reconcile, watcher)
+  // that must see the latest list without re-subscribing. Every mutation
+  // path (addRoot/removeRoot/reconcile) writes it synchronously before its
+  // setRoots, so the no-await sections stay race-free against each other.
+  const rootsRef = useRef<string[]>(roots);
+  rootsRef.current = roots;
+
+  // Paths currently in the MCP registry, from the last reconcile. Used so
+  // removeRoot only tombstones actual registry workspaces, not manually
+  // added folders.
+  const registryPathsRef = useRef<Set<string>>(new Set());
+
   const hydrateFromCache = useCallback(async (root: string) => {
     const cached = await loadScanCache(root);
     if (!cached) return;
@@ -127,19 +145,6 @@ export function useLibrary(): Library {
       [root]: { result: cached.result, scanning: false, cachedAt: cached.cachedAt },
     }));
   }, []);
-
-  useEffect(() => {
-    (async () => {
-      const [stored, last] = await Promise.all([loadRoots(), loadLastSelected()]);
-      setRoots(stored);
-      if (stored.length > 0) {
-        const initial = stored.includes(last ?? "") ? (last as string) : stored[0];
-        setActiveRoot(initial);
-        await hydrateFromCache(initial);
-      }
-      setHydrated(true);
-    })();
-  }, [hydrateFromCache]);
 
   const rescan = useCallback(async (root: string) => {
     const startedAt = performance.now();
@@ -192,14 +197,69 @@ export function useLibrary(): Library {
     }
   }, []);
 
+  // Merge workspaces the MCP server created (agents write to ~/notes and
+  // project-scoped folders, recorded in ~/.docsreader/workspaces.json) into
+  // the displayed roots, so agent-created workspaces stop being invisible.
+  // Skips ones already shown and ones the user explicitly removed. Never
+  // changes the active root or the persisted selection.
+  const reconcileRegistry = useCallback(async () => {
+    let registry: Awaited<ReturnType<typeof listRegistryWorkspaces>>;
+    try {
+      registry = await listRegistryWorkspaces();
+    } catch (err) {
+      console.error("read workspace registry failed", err);
+      return;
+    }
+    registryPathsRef.current = new Set(registry.map((w) => w.path));
+    const dismissed = new Set(await loadDismissedRegistry());
+    const shown = new Set(rootsRef.current);
+    const additions = registry
+      .map((w) => w.path)
+      .filter((p) => !shown.has(p) && !dismissed.has(p));
+    if (additions.length === 0) return;
+    const wasEmpty = rootsRef.current.length === 0;
+    const next = [...rootsRef.current, ...additions];
+    rootsRef.current = next;
+    setRoots(next);
+    await saveRoots(next);
+    // When the app had nothing open, select the first synced workspace so
+    // the reported empty-app case lands on a doc instead of a blank pane.
+    if (wasEmpty) {
+      setActiveRoot(additions[0]);
+      await saveLastSelected(additions[0]);
+    }
+    for (const path of additions) {
+      void hydrateFromCache(path);
+      void rescan(path);
+    }
+  }, [hydrateFromCache, rescan]);
+
+  useEffect(() => {
+    (async () => {
+      const [stored, last] = await Promise.all([loadRoots(), loadLastSelected()]);
+      setRoots(stored);
+      rootsRef.current = stored;
+      if (stored.length > 0) {
+        const initial = stored.includes(last ?? "") ? (last as string) : stored[0];
+        setActiveRoot(initial);
+        await hydrateFromCache(initial);
+      }
+      setHydrated(true);
+      await reconcileRegistry();
+    })();
+  }, [hydrateFromCache, reconcileRegistry]);
+
   const addRoot = useCallback(
     async (path: string) => {
-      setRoots((prev) => {
-        if (prev.includes(path)) return prev;
-        const next = [...prev, path];
+      // A manual re-add of a previously removed registry workspace clears
+      // its dismissal, so future syncs keep showing it.
+      void removeDismissedRegistry(path);
+      if (!rootsRef.current.includes(path)) {
+        const next = [...rootsRef.current, path];
+        rootsRef.current = next;
+        setRoots(next);
         void saveRoots(next);
-        return next;
-      });
+      }
       setActiveRoot(path);
       await saveLastSelected(path);
       await hydrateFromCache(path);
@@ -216,12 +276,15 @@ export function useLibrary(): Library {
 
   const removeRoot = useCallback(
     async (path: string) => {
-      let nextRoots: string[] = [];
-      setRoots((prev) => {
-        nextRoots = prev.filter((r) => r !== path);
-        void saveRoots(nextRoots);
-        return nextRoots;
-      });
+      // Tombstone only actual registry workspaces, so a synced workspace
+      // does not reappear on the next launch while a manually added folder
+      // leaves no lingering suppression. addRoot clears the tombstone. The
+      // workspace and its files on disk are untouched either way.
+      if (registryPathsRef.current.has(path)) void addDismissedRegistry(path);
+      const nextRoots = rootsRef.current.filter((r) => r !== path);
+      rootsRef.current = nextRoots;
+      setRoots(nextRoots);
+      void saveRoots(nextRoots);
       await deleteScanCache(path);
       setScans((s) => {
         const c = { ...s };
@@ -256,7 +319,7 @@ export function useLibrary(): Library {
   // Two filters protect against runaway work:
   //   1. Events whose path lies inside a hidden or known-noisy
   //      directory are dropped before scheduling. These mirror the
-  //      Rust scanner's skip list (src-tauri/src/lib.rs SKIP_DIRS),
+  //      Rust scanner's skip list (src-tauri/core/src/scan.rs SKIP_DIRS),
   //      so the scan would have ignored those paths anyway.
   //   2. Rescans are rate-limited to one every MIN_RESCAN_INTERVAL_MS
   //      regardless of debounce, so sustained churn cannot loop the
@@ -351,7 +414,7 @@ export function useLibrary(): Library {
               paths.some((p) => !isSkippedWatchPath(p, activeRoot));
             if (someRelevant) scheduleRescan();
           },
-          { recursive: true, delayMs: 200 }
+          { recursive: true, delayMs: WATCH_DELAY_MS }
         );
         if (cancelled) {
           void unwatchFn();
@@ -370,6 +433,51 @@ export function useLibrary(): Library {
       if (unwatch) void unwatch();
     };
   }, [activeRoot]);
+
+  // Registry watcher: when an agent creates a workspace while the app is
+  // open, ~/.docsreader/workspaces.json changes and the new workspace
+  // appears without a restart. A window-focus pass is the fallback for the
+  // rare case the directory did not exist when the watch was set up.
+  useEffect(() => {
+    let cancelled = false;
+    let unwatch: UnwatchFn | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const scheduleReconcile = () => {
+      if (cancelled) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!cancelled) void reconcileRegistry();
+      }, DEBOUNCE_MS);
+    };
+
+    void (async () => {
+      try {
+        const dir = await registryDir();
+        const unwatchFn = await watch(dir, scheduleReconcile, {
+          recursive: false,
+          delayMs: WATCH_DELAY_MS,
+        });
+        if (cancelled) {
+          void unwatchFn();
+          return;
+        }
+        unwatch = unwatchFn;
+      } catch (err) {
+        // The registry dir may not exist until the first agent write; the
+        // focus fallback and next launch still pick new workspaces up.
+        console.debug("registry watch not active yet", err);
+      }
+    })();
+
+    window.addEventListener("focus", scheduleReconcile);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      window.removeEventListener("focus", scheduleReconcile);
+      if (unwatch) void unwatch();
+    };
+  }, [reconcileRegistry]);
 
   const activeScan = activeRoot ? scans[activeRoot] : undefined;
 

@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager};
@@ -7,7 +7,9 @@ use crate::agents::{self, AgentClient, ClientId};
 use docsreader_core::git::{git_show_head_core, git_status_core, GitStatus};
 use docsreader_core::scan::{run_scan, ScanProgress, ScanProgressSink, ScanResult};
 use docsreader_core::workspace::init::{convert_workspace_core, InitializedWorkspace};
-use docsreader_core::workspace::registry::default_registry_path;
+use docsreader_core::workspace::registry::{
+    default_registry_path, existing_workspaces, load_registry, WorkspaceEntry,
+};
 
 const PROGRESS_EVENT: &str = "scan-progress";
 
@@ -35,7 +37,7 @@ pub async fn convert_workspace(
     app: AppHandle,
     path: String,
 ) -> Result<InitializedWorkspace, String> {
-    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let home = home_dir(&app)?;
     let registry = default_registry_path(&home);
     tauri::async_runtime::spawn_blocking(move || {
         convert_workspace_core(Path::new(&path), &registry).map_err(|e| e.message)
@@ -46,19 +48,40 @@ pub async fn convert_workspace(
 
 #[tauri::command]
 pub fn detect_agent_clients(app: AppHandle) -> Result<Vec<AgentClient>, String> {
-    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let home = home_dir(&app)?;
     let sidecar = agents::sidecar_path(&app_data_dir(&app)?)?;
     Ok(agents::detect_clients(&home, &sidecar))
 }
 
 #[tauri::command]
 pub fn connect_agent_client(app: AppHandle, id: ClientId) -> Result<AgentClient, String> {
-    let home = app.path().home_dir().map_err(|e| e.to_string())?;
+    let home = home_dir(&app)?;
     let sidecar = agents::sidecar_path(&app_data_dir(&app)?)?;
     agents::connect_client(&home, &sidecar, id)
 }
 
-fn app_data_dir(app: &AppHandle) -> Result<std::path::PathBuf, String> {
+#[tauri::command]
+pub fn list_registry_workspaces(app: AppHandle) -> Result<Vec<WorkspaceEntry>, String> {
+    let home = home_dir(&app)?;
+    let entries = load_registry(&default_registry_path(&home)).map_err(|e| e.message)?;
+    Ok(existing_workspaces(entries))
+}
+
+#[tauri::command]
+pub fn registry_dir(app: AppHandle) -> Result<String, String> {
+    let home = home_dir(&app)?;
+    let dir = default_registry_path(&home)
+        .parent()
+        .ok_or("registry path has no parent")?
+        .to_path_buf();
+    Ok(dir.to_string_lossy().into_owned())
+}
+
+fn home_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path().home_dir().map_err(|e| e.to_string())
+}
+
+fn app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     app.path().app_local_data_dir().map_err(|e| e.to_string())
 }
 

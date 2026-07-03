@@ -60,6 +60,12 @@ pub fn upsert_workspace(file: &Path, entry: WorkspaceEntry) -> Result<(), CoreEr
     save_registry(file, &workspaces)
 }
 
+/// Drops entries whose directory is gone, so the GUI never surfaces a broken
+/// empty root for a workspace deleted out from under the registry.
+pub fn existing_workspaces(entries: Vec<WorkspaceEntry>) -> Vec<WorkspaceEntry> {
+    entries.into_iter().filter(|w| w.path.is_dir()).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::test_dir;
@@ -96,6 +102,25 @@ mod tests {
         assert_eq!(entries.len(), 2);
         assert_eq!(entries[0].slug, "notes");
         assert_eq!(entries[1].slug, "renamed");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn existing_workspaces_drops_missing_dirs() {
+        let dir = test_dir("reg_existing");
+        let present = dir.join("present");
+        std::fs::create_dir_all(&present).unwrap();
+        let entries = vec![
+            WorkspaceEntry {
+                slug: "here".into(),
+                path: present.clone(),
+                scope: WorkspaceScope::User,
+            },
+            entry("gone", "/no/such/workspace/dir", WorkspaceScope::Project),
+        ];
+        let kept = existing_workspaces(entries);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].path, present);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

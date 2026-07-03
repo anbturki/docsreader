@@ -15,6 +15,8 @@ pub fn run() {
             tauri_api::convert_workspace,
             tauri_api::detect_agent_clients,
             tauri_api::connect_agent_client,
+            tauri_api::list_registry_workspaces,
+            tauri_api::registry_dir,
             tauri_api::install_welcome_workspace,
             tauri_api::git_status,
             tauri_api::git_show_head
