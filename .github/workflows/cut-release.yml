@@ -46,8 +46,13 @@ jobs:
           # Cargo.toml: only the [package] version, not deps
           sed -i '0,/^version = "[^"]*"/s//version = "'"$VERSION"'"/' src-tauri/Cargo.toml
 
-          # Cargo.lock: docsreader package entry
+          # docsreader-mcp reports its version in the MCP handshake; keep it
+          # in lockstep with the app.
+          sed -i '0,/^version = "[^"]*"/s//version = "'"$VERSION"'"/' src-tauri/mcp/Cargo.toml
+
+          # Cargo.lock: docsreader + docsreader-mcp package entries
           sed -i '/^name = "docsreader"$/{n;s/^version = "[^"]*"/version = "'"$VERSION"'"/}' src-tauri/Cargo.lock
+          sed -i '/^name = "docsreader-mcp"$/{n;s/^version = "[^"]*"/version = "'"$VERSION"'"/}' src-tauri/Cargo.lock
 
           # README.md: download URLs embed the version in asset filenames.
           # Scoped to /releases/latest/download/ paths so we don't accidentally
@@ -57,7 +62,9 @@ jobs:
           echo "After:"
           grep '"version"' src-tauri/tauri.conf.json | head -1
           grep '^version' src-tauri/Cargo.toml | head -1
+          grep '^version' src-tauri/mcp/Cargo.toml | head -1
           grep -A1 '^name = "docsreader"$' src-tauri/Cargo.lock | head -2
+          grep -A1 '^name = "docsreader-mcp"$' src-tauri/Cargo.lock | head -2
           grep -E 'DocsReader_[0-9]' README.md | head -2 || true
 
       - name: Commit, tag, push
@@ -67,7 +74,7 @@ jobs:
           set -e
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/Cargo.lock README.md
+          git add src-tauri/tauri.conf.json src-tauri/Cargo.toml src-tauri/mcp/Cargo.toml src-tauri/Cargo.lock README.md
           git commit -m "chore(release): v$VERSION"
           git tag "v$VERSION"
           git push origin HEAD:main

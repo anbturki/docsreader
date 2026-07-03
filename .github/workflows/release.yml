@@ -31,9 +31,13 @@ jobs:
     steps:
       - id: pick
         run: |
-          MAC='{"platform":"macos-latest","args":"--target universal-apple-darwin --skip-stapling"}'
-          LIN='{"platform":"ubuntu-22.04","args":""}'
-          WIN='{"platform":"windows-latest","args":""}'
+          # The sidecar overlay adds bundle.externalBin (docsreader-mcp) and a
+          # beforeBuildCommand that builds it; the base config stays sidecar-free
+          # so plain `cargo build`/`tauri dev` never require the staged binary.
+          SIDECAR='--config src-tauri/tauri.sidecar.conf.json'
+          MAC="{\"platform\":\"macos-latest\",\"args\":\"--target universal-apple-darwin --skip-stapling $SIDECAR\"}"
+          LIN="{\"platform\":\"ubuntu-22.04\",\"args\":\"$SIDECAR\"}"
+          WIN="{\"platform\":\"windows-latest\",\"args\":\"$SIDECAR\"}"
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG="${{ inputs.tag }}"
             case "${{ inputs.platforms }}" in
@@ -135,6 +139,28 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      # The bundler copies externalBin into the app bundle and signs it with
+      # the app (tauri-bundler sign_paths), so DMG notarization covers the
+      # sidecar too. These asserts fail the release if the sidecar is absent.
+      - name: Verify sidecar in bundle (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          set -euo pipefail
+          APP=$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -name '*.app' -maxdepth 1 | head -1)
+          SIDECAR="$APP/Contents/MacOS/docsreader-mcp"
+          test -f "$SIDECAR" || { echo "::error::sidecar missing from $APP"; exit 1; }
+          lipo -archs "$SIDECAR" | grep -q "x86_64 arm64" || { echo "::error::sidecar is not universal"; exit 1; }
+          codesign --verify --strict "$SIDECAR"
+          echo "sidecar present, universal, and signed"
+
+      - name: Verify sidecar in bundle (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          set -euo pipefail
+          DEB=$(find src-tauri/target/release/bundle/deb -name '*.deb' | head -1)
+          dpkg-deb -c "$DEB" | grep -q 'usr/bin/docsreader-mcp' || { echo "::error::sidecar missing from $DEB"; exit 1; }
+          echo "sidecar present in deb"
 
       # macOS-only: submit the DMG to Apple async (no --wait), then stash
       # the submission id in the release body alongside a user-facing
