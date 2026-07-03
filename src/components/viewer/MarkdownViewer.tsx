@@ -57,6 +57,7 @@ import {
 } from "@/lib/storage";
 import { useWebRoot } from "@/hooks/useWebRoot";
 import { remarkMermaid } from "@/lib/remarkMermaid";
+import { DIAGRAM_FLAGS } from "@/lib/diagramFence";
 import { remarkSvgbob } from "@/lib/remarkSvgbob";
 import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
 import { MarkdownImage } from "./MarkdownImage";
@@ -174,7 +175,7 @@ interface MemoBodyProps {
 
 const REMARK_PLUGINS: Pluggable[] = [remarkGfm, remarkMath, remarkMermaid, remarkSvgbob];
 
-const SANITIZE_SCHEMA: typeof defaultSchema = {
+export const SANITIZE_SCHEMA: typeof defaultSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
@@ -190,8 +191,6 @@ const SANITIZE_SCHEMA: typeof defaultSchema = {
       "style",
       "dataLanguage",
       "dataTheme",
-      "dataMermaid",
-      "dataSvgbob",
     ],
     pre: [
       ...(defaultSchema.attributes?.pre ?? []),
@@ -201,7 +200,12 @@ const SANITIZE_SCHEMA: typeof defaultSchema = {
       "dataTheme",
       "tabIndex",
     ],
-    div: [...(defaultSchema.attributes?.div ?? []), "className"],
+    div: [
+      ...(defaultSchema.attributes?.div ?? []),
+      "className",
+      DIAGRAM_FLAGS.mermaid.hast,
+      DIAGRAM_FLAGS.svgbob.hast,
+    ],
     "*": [...(defaultSchema.attributes?.["*"] ?? []), "id"],
   },
 };

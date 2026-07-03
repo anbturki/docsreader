@@ -8,12 +8,13 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import type { ProjectMeta } from "@/lib/docsYaml";
+
+const SCROLL_STEP_PX = 120;
 
 interface Props {
   roots: string[];
   activeRoot: string | undefined;
-  projectMetaByRoot: Record<string, ProjectMeta>;
+  workspaceNamesByRoot: Record<string, string>;
   onSelect: (path: string) => void;
   onRemove: (path: string) => void;
   onAdd: () => void;
@@ -22,7 +23,7 @@ interface Props {
 export function WorkspaceSwitcher({
   roots,
   activeRoot,
-  projectMetaByRoot,
+  workspaceNamesByRoot,
   onSelect,
   onRemove,
   onAdd,
@@ -58,7 +59,10 @@ export function WorkspaceSwitcher({
   const scrollBy = (dir: "left" | "right") => {
     const el = scrollerRef.current;
     if (!el) return;
-    el.scrollBy({ left: dir === "left" ? -120 : 120, behavior: "smooth" });
+    el.scrollBy({
+      left: dir === "left" ? -SCROLL_STEP_PX : SCROLL_STEP_PX,
+      behavior: "smooth",
+    });
   };
 
   if (roots.length === 0) return null;
@@ -82,9 +86,9 @@ export function WorkspaceSwitcher({
       >
         {roots.map((root) => {
           const folderLabel = root.split("/").filter(Boolean).pop() || root;
-          const meta = projectMetaByRoot[root];
-          const label = meta?.name ?? folderLabel;
-          const tooltip = formatTooltip(root, meta);
+          const name = workspaceNamesByRoot[root];
+          const label = name ?? folderLabel;
+          const tooltip = name ? `${name}\n${root}` : root;
           const active = root === activeRoot;
           return (
             <ContextMenu key={root}>
@@ -94,7 +98,7 @@ export function WorkspaceSwitcher({
                   onClick={() => onSelect(root)}
                   title={tooltip}
                   className={cn(
-                    "shrink-0 max-w-[10rem] truncate py-1 text-sm",
+                    "shrink-0 max-w-[10rem] truncate py-1 text-[13px]",
                     active
                       ? "font-semibold text-foreground"
                       : "text-muted-foreground hover:text-foreground"
@@ -136,14 +140,4 @@ export function WorkspaceSwitcher({
       </Button>
     </div>
   );
-}
-
-function formatTooltip(root: string, meta: ProjectMeta | undefined): string {
-  if (!meta) return root;
-  const lines: string[] = [meta.name];
-  if (meta.tagline) lines.push(meta.tagline);
-  const scopeLine = meta.scope;
-  if (scopeLine) lines.push(scopeLine);
-  lines.push(root);
-  return lines.join("\n");
 }

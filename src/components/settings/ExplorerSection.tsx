@@ -118,29 +118,6 @@ export function ExplorerSection({ settings, onChange, onOpenWelcome }: Props) {
       </Field>
 
       <Field
-        label="Internal-only workspaces"
-        hint="Workspaces whose .docs.yaml declares visibility: internal can be hidden from the switcher to preview what a public-only audience would see."
-      >
-        <ToggleGroup
-          type="single"
-          value={settings.showInternal ? "show" : "hide"}
-          onValueChange={(v) =>
-            v && onChange({ ...settings, showInternal: v === "show" })
-          }
-          variant="outline"
-          spacing={8}
-          className="grid w-full grid-cols-2"
-        >
-          <ToggleGroupItem value="show" className={pillClass}>
-            Show internal
-          </ToggleGroupItem>
-          <ToggleGroupItem value="hide" className={pillClass}>
-            Hide internal
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </Field>
-
-      <Field
         label="Welcome workspace"
         hint="The welcome workspace is your own copy at ~/Library/Application Support/DocsReader/welcome. Re-adding does not overwrite your edits."
       >

@@ -79,6 +79,7 @@ jobs:
             homepage "https://github.com/anbturki/docsreader"
 
             app "DocsReader.app"
+            binary "#{appdir}/DocsReader.app/Contents/MacOS/docsreader-mcp"
 
             zap trash: [
               "~/Library/Application Support/com.docsreader.app",

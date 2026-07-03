@@ -5,7 +5,7 @@
 If you have discovered a security vulnerability in DocsReader, please report it
 through GitHub's private vulnerability reporting:
 
-https://github.com/anbturki/docsreader/security/advisories/new
+<https://github.com/anbturki/docsreader/security/advisories/new>
 
 Please do **not** open a public issue or pull request that describes the
 vulnerability before a fix is released.

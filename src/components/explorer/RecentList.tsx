@@ -3,6 +3,7 @@ import { FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { MarkdownFile } from "@/lib/scan";
 import { EntryContextMenu } from "./EntryContextMenu";
+import { SIDEBAR_ROW, sidebarRowState, fileOpenHandlers } from "./sidebarRow";
 
 interface Props {
   files: MarkdownFile[];
@@ -19,14 +20,16 @@ interface Bucket {
   files: MarkdownFile[];
 }
 
+const MS_PER_DAY = 86_400_000;
+
 function bucketize(files: MarkdownFile[]): Bucket[] {
   const now = Date.now();
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   const todayMs = startOfToday.getTime();
-  const yesterdayMs = todayMs - 86_400_000;
-  const weekMs = todayMs - 6 * 86_400_000;
-  const monthMs = todayMs - 29 * 86_400_000;
+  const yesterdayMs = todayMs - MS_PER_DAY;
+  const weekMs = todayMs - 6 * MS_PER_DAY;
+  const monthMs = todayMs - 29 * MS_PER_DAY;
 
   const today: MarkdownFile[] = [];
   const yesterday: MarkdownFile[] = [];
@@ -129,26 +132,8 @@ function FileRow({
         onTogglePin={onTogglePin}
       >
         <button
-          onClick={(e) => {
-            if (e.metaKey || e.ctrlKey) {
-              e.preventDefault();
-              onOpenInNewTab(file.path);
-              return;
-            }
-            onSelect(file.path);
-          }}
-          onAuxClick={(e) => {
-            if (e.button === 1) {
-              e.preventDefault();
-              onOpenInNewTab(file.path);
-            }
-          }}
-          className={cn(
-            "flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
-            selected
-              ? "bg-sidebar-accent text-sidebar-accent-foreground"
-              : "hover:bg-sidebar-accent/50"
-          )}
+          {...fileOpenHandlers(file.path, onSelect, onOpenInNewTab)}
+          className={cn(SIDEBAR_ROW, "px-3", sidebarRowState(selected))}
           title={file.relPath}
         >
           <FileText className="size-3.5 shrink-0 text-muted-foreground" />
