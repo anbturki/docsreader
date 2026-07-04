@@ -22,9 +22,8 @@ interface Props {
   onDiffViewModeChange: (mode: ViewSettings["diffViewMode"]) => void;
   onAlwaysAutoReload: () => void;
   onBeginEdit: (id: string) => Promise<void>;
-  onDraftChange: (id: string, value: string) => void;
   onCancelEdit: (id: string) => void;
-  onSaveEdit: (id: string) => Promise<void>;
+  onSaveEdit: (id: string, markdown: string) => Promise<void>;
   onToggleTask: (id: string, index: number) => Promise<void>;
 }
 
@@ -43,7 +42,6 @@ export function TabScrollPane({
   onDiffViewModeChange,
   onAlwaysAutoReload,
   onBeginEdit,
-  onDraftChange,
   onCancelEdit,
   onSaveEdit,
   onToggleTask,
@@ -140,9 +138,8 @@ export function TabScrollPane({
         viewSettings={viewSettings}
         onNavigate={onNavigate}
         onBeginEdit={() => void onBeginEdit(tab.id)}
-        onDraftChange={(value) => onDraftChange(tab.id, value)}
         onCancelEdit={() => onCancelEdit(tab.id)}
-        onSaveEdit={() => onSaveEdit(tab.id)}
+        onSaveEdit={(markdown) => onSaveEdit(tab.id, markdown)}
         onToggleTask={(index) => void onToggleTask(tab.id, index)}
       />
     </div>

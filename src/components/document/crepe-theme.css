@@ -1,0 +1,111 @@
+/* Aligns Crepe's frame theme with the DocsReader reader: swap in the
+   app's Geist fonts, and drive dark mode from the app's own `.dark`
+   toggle rather than the theme's separate dark stylesheet. The dark
+   palette below is frame-dark's own, applied only under `.dark`. */
+
+.milkdown {
+  --crepe-font-default: var(--font-sans, "Geist Variable", sans-serif);
+  --crepe-font-title: var(--font-sans, "Geist Variable", sans-serif);
+  --crepe-font-code: var(--font-mono, "Geist Mono Variable", ui-monospace, monospace);
+}
+
+/* Read like the document, not a boxed input. Crepe's frame theme paints
+   its own surface and pads the editor 60px/120px; the host already sits
+   inside the reader's padded, width-capped column, so drop both and let
+   the page background and column show through. Fill the height so a short
+   doc still reads as a full editing surface, not a textarea. */
+.crepe-host .milkdown {
+  background: transparent;
+}
+
+.crepe-host .milkdown .ProseMirror {
+  padding: 0;
+  min-height: 70vh;
+}
+
+/* Mirror the reader exactly. The reader renders through Tailwind Typography
+   (`prose`) off a configurable base size (13/16/20px) set on .crepe-host;
+   Crepe pins its own larger px scale. These override Crepe with prose's
+   own em scale + line-heights (from @tailwindcss/typography DEFAULT, base
+   16) so read and edit render at identical sizes at any base. */
+.crepe-host .milkdown .ProseMirror {
+  line-height: 1.75;
+}
+.crepe-host .milkdown .ProseMirror p,
+.crepe-host .milkdown .ProseMirror li {
+  font-size: 1em;
+  line-height: 1.75;
+}
+.crepe-host .milkdown .ProseMirror h1 {
+  font-size: 2.25em;
+  line-height: 1.1111;
+  font-weight: 800;
+}
+.crepe-host .milkdown .ProseMirror h2 {
+  font-size: 1.5em;
+  line-height: 1.3333;
+  font-weight: 700;
+}
+.crepe-host .milkdown .ProseMirror h3 {
+  font-size: 1.25em;
+  line-height: 1.6;
+  font-weight: 600;
+}
+.crepe-host .milkdown .ProseMirror h4 {
+  font-size: 1em;
+  line-height: 1.5;
+  font-weight: 600;
+}
+.crepe-host .milkdown .ProseMirror h5 {
+  font-size: 1em;
+}
+.crepe-host .milkdown .ProseMirror h6 {
+  font-size: 0.875em;
+}
+.crepe-host .milkdown .ProseMirror :not(pre) > code {
+  font-size: 0.875em;
+}
+
+/* Crepe renders bullets, numbers, and checkboxes all inside .label-wrapper.
+   Keep plain list markers muted (matching the reader's prose bullets) and
+   reserve the app accent for the checkbox icon only (matching the reader's
+   accent-coloured task checkbox). */
+.crepe-host .milkdown .milkdown-list-item-block li .label-wrapper {
+  color: var(--muted-foreground);
+}
+.crepe-host .milkdown .milkdown-list-item-block li .label-wrapper svg {
+  fill: var(--muted-foreground);
+}
+.crepe-host .milkdown .milkdown-list-item-block li .label-wrapper .checked svg,
+.crepe-host .milkdown .milkdown-list-item-block li .label-wrapper .unchecked svg {
+  fill: var(--primary);
+}
+
+/* HTML comments (e.g. the AC:BEGIN/AC:END task-progress delimiters) are
+   invisible in the reader; milkdown renders each as a literal text span
+   (toDOM sets data-type="html", data-value=<raw comment>). Hide comment
+   spans so edit matches read. The node stays in the document model, so
+   getMarkdown() still serialises it and the delimiters survive the save. */
+.crepe-host .milkdown [data-type="html"][data-value^="<!--"] {
+  display: none;
+}
+
+.dark .milkdown {
+  --crepe-color-background: #1a1a1a;
+  --crepe-color-on-background: #e6e6e6;
+  --crepe-color-surface: #121212;
+  --crepe-color-surface-low: #1c1c1c;
+  --crepe-color-on-surface: #d1d1d1;
+  --crepe-color-on-surface-variant: #a9a9a9;
+  --crepe-color-outline: #757575;
+  --crepe-color-primary: #b5b5b5;
+  --crepe-color-secondary: #4d4d4d;
+  --crepe-color-on-secondary: #d6d6d6;
+  --crepe-color-inverse: #e5e5e5;
+  --crepe-color-on-inverse: #2a2a2a;
+  --crepe-color-inline-code: #ff6666;
+  --crepe-color-error: #ff6666;
+  --crepe-color-hover: #232323;
+  --crepe-color-selected: #2f2f2f;
+  --crepe-color-inline-area: #2b2b2b;
+}

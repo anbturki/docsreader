@@ -12,7 +12,7 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 - **Code blocks:** 20 bundled language grammars via Shiki, twelve highlighter palettes (5 light, 7 dark)
 - **Appearance:** light, dark, or follow-system, with six accent hues
 - **Type controls:** font family, body size, and reading column width
-- **Quick edit:** a pencil on any open doc flips to the raw markdown for fast human fixes; agents stay the primary writers
+- **WYSIWYG edit:** a pencil on any open doc opens an in-place editor with a slash menu, block drag handles, a selection toolbar, and live tables - edit the doc as it reads, not raw markdown; agents stay the primary writers. Frontmatter is preserved untouched, an unchanged doc is never rewritten, and a save is refused if an agent changed the file on disk while you were editing
 
 ![A rendered doc with a Mermaid diagram, highlighted code, and a clickable checklist](screenshots/main.png)
 

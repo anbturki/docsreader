@@ -36,12 +36,15 @@ export interface ScanProgress {
 
 export type ProgressCallback = (progress: ScanProgress) => void;
 
+const BOM = "﻿";
+const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+
 export function parseFrontmatter(source: string): {
   data: Record<string, unknown>;
   content: string;
 } {
-  const trimmed = source.replace(/^﻿/, "");
-  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(trimmed);
+  const trimmed = source.startsWith(BOM) ? source.slice(1) : source;
+  const match = FRONTMATTER_PATTERN.exec(trimmed);
   if (!match) return { data: {}, content: trimmed };
   // Strip the matched frontmatter region regardless of whether the
   // YAML inside parsed cleanly. If the parse failed (malformed YAML),
@@ -54,6 +57,16 @@ export function parseFrontmatter(source: string): {
   } catch {
     return { data: {}, content };
   }
+}
+
+// prefix + body === source. The prefix is re-attached verbatim on save so
+// frontmatter never round-trips through the editor's markdown serializer.
+export function splitFrontmatter(source: string): { prefix: string; body: string } {
+  const bom = source.startsWith(BOM) ? BOM : "";
+  const rest = bom ? source.slice(1) : source;
+  const match = FRONTMATTER_PATTERN.exec(rest);
+  if (!match) return { prefix: bom, body: rest };
+  return { prefix: bom + match[0], body: rest.slice(match[0].length) };
 }
 
 export async function scanDirectory(
