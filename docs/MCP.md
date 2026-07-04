@@ -1,10 +1,34 @@
 # MCP tools
 
-DocsReader ships a local stdio MCP server, `docsreader-mcp`, that your AI agents drive. [Connect it](../README.md#connect-your-ai-agents) once and agents call these tools directly.
+DocsReader ships a local stdio MCP server, `docsreader-mcp`, that your AI agents drive. Connect it once and agents call the tools below directly.
+
+## Connect
+
+In DocsReader, **Settings → AI agents → Connect** detects installed clients and registers `docsreader-mcp` with each in one click, user-wide. To register manually, point any stdio MCP client at the binary - there is no URL, each client spawns it:
+
+| Client | Command |
+| --- | --- |
+| Claude Code | `claude mcp add --scope user docsreader -- docsreader-mcp` |
+| Codex CLI | `codex mcp add docsreader -- docsreader-mcp` |
+| VS Code | `code --add-mcp '{"name":"docsreader","command":"docsreader-mcp"}'` |
+| Cursor / Windsurf | add `{ "docsreader": { "command": "docsreader-mcp" } }` under `mcpServers` in the client's MCP config |
+
+If `docsreader-mcp` is not on your PATH, use the full binary path instead:
+
+| Install | Binary location |
+| --- | --- |
+| Homebrew (macOS) | `docsreader-mcp` (on PATH) |
+| DMG (macOS) | `/Applications/DocsReader.app/Contents/MacOS/docsreader-mcp` |
+| deb (Linux) | `/usr/bin/docsreader-mcp` (on PATH) |
+| Windows | `docsreader-mcp.exe` next to `DocsReader.exe` |
+
+Homebrew users from before v0.6.0: run `brew upgrade --cask docsreader` once so the binary links onto PATH. Then copy the [AGENTS template](AGENTS-TEMPLATE.md) into your repo's `AGENTS.md` or `CLAUDE.md`.
+
+## Tools
 
 Every tool takes an optional `workspace` slug - omit it to use the resolved default (a project `./notes` if present, else `~/notes`). Tool errors carry recovery hints, so agents self-correct instead of stalling.
 
-## Workspaces
+### Workspaces
 
 | Tool | What it does |
 | --- | --- |
@@ -12,7 +36,7 @@ Every tool takes an optional `workspace` slug - omit it to use the resolved defa
 | `init_workspace` | Create and register a workspace (`~/notes`, or `<path>/notes` for a project). Fails if the target already has content. |
 | `ping` | Health check; returns `pong`. |
 
-## Docs
+### Docs
 
 | Tool | What it does |
 | --- | --- |
@@ -27,14 +51,14 @@ Every tool takes an optional `workspace` slug - omit it to use the resolved defa
 | `rename_doc` | Change the title; becomes the new frontmatter title and slug/filename. Stays in its status and phase. |
 | `delete_doc` | Permanently delete a doc (or a memory/task by its path). Outside git history this cannot be undone; prefer `archive`. |
 
-## Memory
+### Memory
 
 | Tool | What it does |
 | --- | --- |
 | `write_memory` | Save a topic-addressed fact. One entry per topic: writing the same topic overwrites its content wholesale. |
 | `search_memory` | Recall memories, ranked over topic, tags, and content, each with full content. Omit the query to list every entry newest first. |
 
-## Tasks
+### Tasks
 
 | Tool | What it does |
 | --- | --- |
