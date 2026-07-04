@@ -13,104 +13,109 @@ The human window into an agent-managed markdown corpus. Your AI agents write doc
 [![Download for Windows](https://img.shields.io/badge/Windows-Download-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/anbturki/docsreader/releases/latest/download/DocsReader_0.7.0_x64-setup.exe)
 [![Download for Linux](https://img.shields.io/badge/Linux-Download-FCC624?style=for-the-badge&logo=linux&logoColor=black)](https://github.com/anbturki/docsreader/releases/latest/download/DocsReader_0.7.0_amd64.AppImage)
 
-Linux: AppImage works on most distros - for `.deb` (Debian/Ubuntu) or `.rpm` (Fedora/RHEL), see [Releases](https://github.com/anbturki/docsreader/releases/latest).
-
-Or install via [Homebrew or one-liner](#install).
+Linux AppImage works on most distros; for `.deb` or `.rpm` see [Releases](https://github.com/anbturki/docsreader/releases/latest). Or install via [Homebrew or one-liner](#install).
 
 ![DocsReader](docs/screenshots/main.png)
 
 ## How it works
 
-Everything is plain markdown on disk - no database, no lock-in, greppable, and versionable with git. Agents are the primary writers; DocsReader is where you watch the corpus grow, and open docs reload live as agents write.
+Everything is plain markdown on disk - no database, greppable, versionable with git. A **workspace** is a folder of markdown (your default `~/notes`, or a project's `<project>/notes`) with three namespaces:
 
-A **workspace** is a folder of markdown. Your default one lives at `~/notes` (created on first write); any project can opt in to its own `<project>/notes`. Three namespaces live inside:
+| Namespace | Lives in | Holds |
+| --- | --- | --- |
+| **Docs** | `research/` `in-progress/` `done/` `archived/` | Research, plans, decisions. The folder IS the status - moving the file IS the status change. Phase subfolders (`research/v2-launch/`) group work. |
+| **Memory** | `memory/` | Short topic-addressed facts, one entry per topic, rewritten wholesale. |
+| **Tasks** | `tasks/` | [Backlog.md](https://github.com/MrLesk/Backlog.md)-shaped files: `task-N` ids, status in frontmatter, an acceptance-criteria checklist. |
 
-- **Docs** hold the substance: research, plans, decisions. Each doc sits in the folder matching its lifecycle status - `research/`, `in-progress/`, `done/`, `archived/` - so the folder IS the status, and moving the file IS the status change. Optional phase subfolders (`research/v2-launch/`) group work inside a status.
-- **Memory** (`memory/`) holds short topic-addressed facts ("user prefers tabs", "we deploy to staging"). One entry per topic; writing a topic again replaces it wholesale.
-- **Tasks** (`tasks/`) are [Backlog.md](https://github.com/MrLesk/Backlog.md)-shaped files: `task-N` ids, status in frontmatter, an acceptance-criteria checklist agents tick as they go.
-
-The MCP server exposes tools for all of it (`write_doc`, `search_docs`, `set_status`, `write_memory`, `write_task`, ...), a `docsreader://onboarding` resource that teaches agents the model, and every doc as a readable MCP resource. Tool errors carry recovery hints, so agents self-correct instead of stalling.
+Agents write through the MCP server (`write_doc`, `search_docs`, `set_status`, `write_memory`, `write_task`, ...); open docs reload live as they write. A `docsreader://onboarding` resource teaches agents the model, and tool errors carry recovery hints so they self-correct instead of stalling.
 
 ## Connect your AI agents
 
-In DocsReader: **Settings → AI agents → Connect**. The app detects installed clients (Claude Code, Cursor, Windsurf, VS Code, Codex) and registers the bundled `docsreader-mcp` server with each - one click, user-wide.
+In DocsReader, **Settings → AI agents → Connect** detects installed clients (Claude Code, Cursor, Windsurf, VS Code, Codex) and registers the bundled `docsreader-mcp` with each in one click, user-wide.
 
-To register manually, point any stdio-capable MCP client at the binary:
+To register manually, point any stdio MCP client at the binary - there is no URL, each client spawns it:
+
+| Client | Command |
+| --- | --- |
+| Claude Code | `claude mcp add --scope user docsreader -- docsreader-mcp` |
+| Codex CLI | `codex mcp add docsreader -- docsreader-mcp` |
+| VS Code | `code --add-mcp '{"name":"docsreader","command":"docsreader-mcp"}'` |
+| Cursor / Windsurf | add `{ "docsreader": { "command": "docsreader-mcp" } }` under `mcpServers` in the client's MCP config |
+
+If `docsreader-mcp` is not on your PATH, use the full binary path instead:
 
 | Install | Binary location |
 | --- | --- |
 | Homebrew (macOS) | `docsreader-mcp` (on PATH) |
 | DMG (macOS) | `/Applications/DocsReader.app/Contents/MacOS/docsreader-mcp` |
 | deb (Linux) | `/usr/bin/docsreader-mcp` (on PATH) |
-| Windows | `docsreader-mcp.exe` next to `DocsReader.exe` in the install folder |
+| Windows | `docsreader-mcp.exe` next to `DocsReader.exe` |
 
-`docsreader-mcp` is a local stdio server - there is no URL to add; each client spawns the binary itself. With Claude Code:
+Homebrew users from before v0.6.0: run `brew upgrade --cask docsreader` once so the binary links onto PATH. Then copy the [AGENTS template](docs/AGENTS-TEMPLATE.md) into your repo's `AGENTS.md` or `CLAUDE.md`.
 
-```sh
-claude mcp add --scope user docsreader -- docsreader-mcp
+## MCP tools
+
+Agents drive the workspace through the MCP server. Every tool takes an optional `workspace` slug; errors carry recovery hints so agents self-correct.
+
+| Group | Tools |
+| --- | --- |
+| Workspaces | `list_workspaces` · `init_workspace` · `ping` |
+| Docs | `write_doc` · `read_doc` · `list_docs` · `search_docs` · `update_doc` · `set_status` · `set_phase` · `archive` · `rename_doc` · `delete_doc` |
+| Memory | `write_memory` · `search_memory` |
+| Tasks | `write_task` · `list_tasks` · `set_task_status` · `update_task` |
+
+For example, capturing a decision and the work it implies:
+
+```jsonc
+write_doc       { "title": "Use Postgres", "status": "done", "body": "..." }
+write_task      { "title": "Add connection pooling",
+                  "acceptance_criteria": ["Bounded pool", "Clean 503 on timeout"] }
+set_task_status { "id": "task-1", "status": "In Progress" }
 ```
 
-Codex CLI:
-
-```sh
-codex mcp add docsreader -- docsreader-mcp
-```
-
-VS Code:
-
-```sh
-code --add-mcp '{"name":"docsreader","command":"docsreader-mcp"}'
-```
-
-Cursor (`~/.cursor/mcp.json`) and Windsurf (`~/.codeium/windsurf/mcp_config.json`):
-
-```json
-{ "mcpServers": { "docsreader": { "command": "docsreader-mcp" } } }
-```
-
-If `docsreader-mcp` is not on your PATH (macOS DMG install without Homebrew), use the full binary path from the table above instead. Homebrew users who installed before v0.6.0 and auto-updated in-app: run `brew upgrade --cask docsreader` once so Homebrew links the binary - the in-app updater cannot do that. The in-app Connect flow always writes the full path, so it works regardless.
-
-Then tell your agents how to use it: copy the [AGENTS template](docs/AGENTS-TEMPLATE.md) into your repo's `AGENTS.md` or `CLAUDE.md`.
+Full reference - every tool, its parameters, and the `docsreader://` resources - in [docs/MCP.md](docs/MCP.md).
 
 ## Claude Code plugin
 
-If you use Claude Code, the bundled plugin surfaces DocsReader tasks right in the terminal. Add this repo as a plugin marketplace, then install:
+If you use Claude Code, the bundled plugin surfaces DocsReader tasks in the terminal:
 
 ```shell
 /plugin marketplace add anbturki/docsreader
 /plugin install docsreader@docsreader
 ```
 
-What you get:
+| Surface | What it does |
+| --- | --- |
+| `/docsreader:board` | Print the To Do / In Progress / Done board on demand |
+| `/docsreader:sync` | Pull fresh task state into context |
+| Statusline | Live `To Do / In Progress / Done` count (one-time setup) |
+| Auto-sync hook | Hands the assistant updated counts after a status change via the MCP |
 
-- **`/docsreader:board`** - print the To Do / In Progress / Done board on demand
-- **`/docsreader:sync`** - pull fresh task state into context before continuing
-- **Statusline** - a live task-count bar (`To Do / In Progress / Done`), one-time setup
-- **Auto-sync hook** - after a task status changes via the MCP, the assistant gets the updated counts on its next turn
-
-It registers the same `docsreader-mcp` server (so agents can call `list_tasks` / `write_task` / `set_task_status`), so it needs `docsreader-mcp` on your PATH (installed with the app or Homebrew) and `jq`. Full setup - the statusline config and which workspace it reads - is in the [plugin README](plugins/docsreader/README.md).
+Registers the same `docsreader-mcp` server, so it needs `docsreader-mcp` on your PATH and `jq`. Full setup in the [plugin README](plugins/docsreader/README.md).
 
 ## Features
 
-- **Rich rendering** - GitHub-flavored Markdown, KaTeX math, Mermaid diagrams, and Shiki code highlighting across twelve themes
-- **Interactive checklists** - toggle any checkbox from the rendered view; the change writes back to the file
-- **Five lenses** - Tree, Recent, Tags, Pinned, and a Tasks kanban board over one library
-- **Split view** - two docs side-by-side or stacked, each with its own tabs and scroll
-- **Task board** - To Do / In Progress / Done with drag-to-advance and acceptance-criteria progress, consistent with the MCP
-- **Agent-aware** - open docs reload live as agents write; on-disk changes surface a diff; git status shows in the tree
-- **Quiet and local** - minimal chrome, no telemetry, signed updates, notarized on macOS
+| Feature | |
+| --- | --- |
+| **Rich rendering** | GitHub-flavored Markdown, KaTeX math, Mermaid diagrams, and Shiki code highlighting across twelve themes |
+| **Interactive checklists** | Toggle any checkbox from the rendered view; the change writes back to the file |
+| **Five lenses** | Tree, Recent, Tags, Pinned, and a Tasks kanban board over one library |
+| **Split view** | Two docs side-by-side or stacked, each with its own tabs and scroll |
+| **Task board** | To Do / In Progress / Done with drag-to-advance and acceptance-criteria progress, consistent with the MCP |
+| **Agent-aware** | Open docs reload live as agents write; on-disk changes surface a diff; git status shows in the tree |
+| **Quiet and local** | Minimal chrome, no telemetry, signed updates, notarized on macOS |
 
-See the [full feature list](docs/FEATURES.md) for everything.
-
-Found a bug, want a feature, or have feedback? [Open an issue](https://github.com/anbturki/docsreader/issues/new) - I'm actively building this and feedback shapes the roadmap.
+Full list in [docs/FEATURES.md](docs/FEATURES.md). Found a bug or want a feature? [Open an issue](https://github.com/anbturki/docsreader/issues/new).
 
 ## What's new in v0.7.0
 
-- **Task board.** A Tasks lens with a To Do / In Progress / Done kanban, drag-to-advance that writes status through the same core agents use, and filters by title, priority, and label.
-- **Task headers.** Docs the MCP wrote as tasks render a status pill, priority, assignee, and an acceptance-criteria progress bar.
-- **Interactive checklists.** Toggle any task-list checkbox from the rendered view; the change writes back to the file and moves a task's progress with it.
-- **Refreshed UI.** An integrated overlay toolbar, a draggable window, and the design tokens applied across the settings dialog and the board.
-- **Claude Code plugin.** Board and sync skills, a live task statusline, and a task-sync hook.
+| Change | |
+| --- | --- |
+| **Task board** | A Tasks lens with a kanban, drag-to-advance through the same core agents use, and filters by title, priority, and label |
+| **Task headers** | Task docs render a status pill, priority, assignee, and an acceptance-criteria progress bar |
+| **Interactive checklists** | Toggle checkboxes from the rendered view; the change writes back and moves task progress with it |
+| **Refreshed UI** | An integrated overlay toolbar, a draggable window, and design tokens across settings and the board |
+| **Claude Code plugin** | Board and sync skills, a live task statusline, and a task-sync hook |
 
 Full history on the [releases page](https://github.com/anbturki/docsreader/releases).
 
@@ -128,27 +133,13 @@ Full history on the [releases page](https://github.com/anbturki/docsreader/relea
 
 ## Install
 
-### macOS (Homebrew)
-
-```sh
-brew install --cask anbturki/tap/docsreader
-```
-
-### macOS / Linux (curl)
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/anbturki/docsreader/main/install.sh | bash
-```
-
-### Manual
-
-From [Releases](https://github.com/anbturki/docsreader/releases/latest):
-
-| OS | File |
+| Method | Command |
 | --- | --- |
-| macOS (Intel + Apple Silicon) | `DocsReader_*_universal.dmg` |
-| Linux | `DocsReader_*_amd64.AppImage` or `.deb` |
-| Windows | `DocsReader_*_x64-setup.exe` |
+| macOS (Homebrew) | `brew install --cask anbturki/tap/docsreader` |
+| macOS / Linux (curl) | `curl -fsSL https://raw.githubusercontent.com/anbturki/docsreader/main/install.sh \| bash` |
+| Manual | Download from [Releases](https://github.com/anbturki/docsreader/releases/latest) (see below) |
+
+Manual downloads: `DocsReader_*_universal.dmg` (macOS Intel + Apple Silicon), `DocsReader_*_amd64.AppImage` or `.deb` (Linux), `DocsReader_*_x64-setup.exe` (Windows).
 
 ## Security
 
@@ -158,7 +149,7 @@ See [SECURITY.md](./SECURITY.md).
 
 ## Development
 
-Built with [Tauri 2](https://tauri.app/), React, and Rust. Requires [Bun](https://bun.sh/), [Rust](https://rustup.rs/), and the [Tauri 2 system deps](https://tauri.app/start/prerequisites/) for your OS.
+Built with [Tauri 2](https://tauri.app/), React, and Rust. Requires [Bun](https://bun.sh/), [Rust](https://rustup.rs/), and the [Tauri 2 system deps](https://tauri.app/start/prerequisites/).
 
 ```sh
 bun install
@@ -171,6 +162,4 @@ The MCP server is a separate tauri-free binary in the same cargo workspace:
 cargo build --manifest-path src-tauri/Cargo.toml -p docsreader-mcp
 ```
 
-### Releasing
-
-GitHub → Actions → **Cut Release** → enter the version (e.g. `0.1.2`). The workflow bumps `tauri.conf.json` + `Cargo.toml` + `Cargo.lock`, commits, tags, and triggers the release pipeline (signs, notarizes the macOS bundle, drafts a GitHub Release, updates the Homebrew tap).
+**Releasing:** GitHub → Actions → **Cut Release** → enter the version. The workflow bumps `tauri.conf.json` + `Cargo.toml` + `Cargo.lock`, commits, tags, and triggers the release pipeline (signs, notarizes the macOS bundle, drafts a GitHub Release, updates the Homebrew tap).

@@ -1,0 +1,64 @@
+# MCP tools
+
+DocsReader ships a local stdio MCP server, `docsreader-mcp`, that your AI agents drive. [Connect it](../README.md#connect-your-ai-agents) once and agents call these tools directly.
+
+Every tool takes an optional `workspace` slug - omit it to use the resolved default (a project `./notes` if present, else `~/notes`). Tool errors carry recovery hints, so agents self-correct instead of stalling.
+
+## Workspaces
+
+| Tool | What it does |
+| --- | --- |
+| `list_workspaces` | List all known workspaces: registered projects plus the default `~/notes`. Call before choosing where to write. |
+| `init_workspace` | Create and register a workspace (`~/notes`, or `<path>/notes` for a project). Fails if the target already has content. |
+| `ping` | Health check; returns `pong`. |
+
+## Docs
+
+| Tool | What it does |
+| --- | --- |
+| `write_doc` | Create a doc in the folder matching its status (`research` / `in-progress` / `done` / `archived`), with generated frontmatter. Handles slugs, collisions, and git staging. |
+| `read_doc` | Read a doc by slug or status-relative path. Concise (frontmatter + snippet) by default, or `detailed` for the full body. |
+| `list_docs` | List docs newest first; filter by status, phase, or tag (filters AND together). |
+| `search_docs` | Rank matches across title, tags, slug, and content; returns snippets and `docsreader://` resource URIs. |
+| `update_doc` | Edit in place by exact string replacement; `old_str` must appear exactly once. |
+| `set_status` | Move a doc between `research` / `in-progress` / `done` / `archived`. The move IS the status change; phase is preserved. |
+| `set_phase` | Move a doc into a phase subfolder within its status, or out of it when phase is omitted. |
+| `archive` | Shorthand for `set_status(path, "archived")`. |
+| `rename_doc` | Change the title; becomes the new frontmatter title and slug/filename. Stays in its status and phase. |
+| `delete_doc` | Permanently delete a doc (or a memory/task by its path). Outside git history this cannot be undone; prefer `archive`. |
+
+## Memory
+
+| Tool | What it does |
+| --- | --- |
+| `write_memory` | Save a topic-addressed fact. One entry per topic: writing the same topic overwrites its content wholesale. |
+| `search_memory` | Recall memories, ranked over topic, tags, and content, each with full content. Omit the query to list every entry newest first. |
+
+## Tasks
+
+| Tool | What it does |
+| --- | --- |
+| `write_task` | Create a [Backlog.md](https://github.com/MrLesk/Backlog.md)-shaped task: `task-N` id, frontmatter status, a Description and an Acceptance Criteria checklist. |
+| `list_tasks` | List tasks ordered by id; filter by status (`To Do` / `In Progress` / `Done`) or label. |
+| `set_task_status` | Move a task between `To Do` / `In Progress` / `Done` by rewriting its frontmatter. |
+| `update_task` | Edit a task by string replacement, e.g. tick a criterion by replacing `- [ ] #1 ...` with `- [x] #1 ...`, or append notes. |
+
+## Resources
+
+Beyond tools, the server exposes read-only MCP resources:
+
+- **`docsreader://onboarding`** - teaches an agent the workspace model (docs / memory / tasks, statuses, phases) on connect.
+- **`docsreader://<workspace>/<path>`** - every doc, memory entry, and task as a readable resource. `list_docs` and `search_docs` return these URIs.
+
+## A typical flow
+
+```jsonc
+list_workspaces {}                         // pick where to write, or omit `workspace`
+write_doc     { "title": "Use Postgres", "status": "done", "body": "..." }
+write_task    { "title": "Add connection pooling",
+                "description": "...",
+                "acceptance_criteria": ["Bounded pool", "Clean 503 on timeout"] }
+update_task   { "id": "task-1", "old_str": "- [ ] #1", "new_str": "- [x] #1" }
+set_task_status { "id": "task-1", "status": "Done" }
+search_memory { "query": "deploy process" }   // check before re-deriving facts
+```
