@@ -25,6 +25,7 @@ interface Props {
   onDraftChange: (id: string, value: string) => void;
   onCancelEdit: (id: string) => void;
   onSaveEdit: (id: string) => Promise<void>;
+  onToggleTask: (id: string, index: number) => Promise<void>;
 }
 
 export function TabScrollPane({
@@ -45,6 +46,7 @@ export function TabScrollPane({
   onDraftChange,
   onCancelEdit,
   onSaveEdit,
+  onToggleTask,
 }: Props) {
   const pendingBody = useMemo(
     () => (tab.pendingContent ? parseFrontmatter(tab.pendingContent).content : undefined),
@@ -141,6 +143,7 @@ export function TabScrollPane({
         onDraftChange={(value) => onDraftChange(tab.id, value)}
         onCancelEdit={() => onCancelEdit(tab.id)}
         onSaveEdit={() => onSaveEdit(tab.id)}
+        onToggleTask={(index) => void onToggleTask(tab.id, index)}
       />
     </div>
   );

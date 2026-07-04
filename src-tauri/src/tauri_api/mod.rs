@@ -6,6 +6,7 @@ use tauri::{AppHandle, Emitter, Manager};
 use crate::agents::{self, AgentClient, ClientId};
 use docsreader_core::git::{git_show_head_core, git_status_core, GitStatus};
 use docsreader_core::scan::{run_scan, ScanProgress, ScanProgressSink, ScanResult};
+use docsreader_core::tasks::{list_tasks_core, set_task_status_core, TaskSummary};
 use docsreader_core::workspace::init::{convert_workspace_core, InitializedWorkspace};
 use docsreader_core::workspace::registry::{
     default_registry_path, existing_workspaces, load_registry, WorkspaceEntry,
@@ -93,6 +94,31 @@ pub async fn git_status(workspace: String) -> Result<Option<GitStatus>, String> 
 #[tauri::command]
 pub async fn git_show_head(workspace: String, path: String) -> Result<Option<String>, String> {
     git_show_head_core(workspace, path).await
+}
+
+#[tauri::command]
+pub async fn list_tasks(
+    workspace: String,
+    status: Option<String>,
+    label: Option<String>,
+) -> Result<Vec<TaskSummary>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        list_tasks_core(Path::new(&workspace), status.as_deref(), label.as_deref())
+            .map_err(|e| e.message)
+    })
+    .await
+    .map_err(|e| format!("list_tasks task panicked: {e}"))?
+}
+
+#[tauri::command]
+pub async fn set_task_status(
+    workspace: String,
+    id: String,
+    status: String,
+) -> Result<TaskSummary, String> {
+    set_task_status_core(Path::new(&workspace), &id, &status)
+        .await
+        .map_err(|e| e.message)
 }
 
 #[tauri::command]

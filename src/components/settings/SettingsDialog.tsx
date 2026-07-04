@@ -53,22 +53,22 @@ export default function SettingsDialog({
         showCloseButton
         className="max-w-3xl gap-0 overflow-hidden p-0 sm:max-w-3xl"
       >
-        <DialogHeader className="border-b px-5 py-3">
-          <DialogTitle className="text-base font-semibold">Settings</DialogTitle>
+        <DialogHeader className="border-b px-4 py-2">
+          <DialogTitle className="text-sm font-semibold">Settings</DialogTitle>
         </DialogHeader>
 
         <div className="flex h-[520px] min-w-0">
-          <nav className="w-44 shrink-0 border-r bg-muted/30 p-2">
+          <nav className="w-44 shrink-0 border-r bg-muted/30 py-2">
             {SECTIONS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setActive(id)}
                 className={cn(
-                  "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+                  "flex w-full items-center gap-2 border-l-2 px-3 py-1.5 text-sm transition-colors",
                   active === id
-                    ? "bg-primary/10 text-primary"
-                    : "text-foreground/80 hover:bg-accent"
+                    ? "border-primary bg-accent font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                 )}
               >
                 <Icon className="size-4" />
@@ -77,7 +77,7 @@ export default function SettingsDialog({
             ))}
           </nav>
 
-          <div className="min-w-0 flex-1 overflow-y-auto px-6 py-5">
+          <div className="min-w-0 flex-1 overflow-y-auto px-5 py-4">
             {active === "appearance" && (
               <AppearanceSection settings={settings} onChange={onChange} />
             )}

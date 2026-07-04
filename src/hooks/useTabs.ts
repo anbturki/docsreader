@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
 import { parseFrontmatter } from "@/lib/scan";
+import { toggleTaskCheckbox } from "@/lib/checklist";
 import { describeEventKind } from "@/lib/events";
 import { basename } from "@/lib/path";
 import { loadTabsState, saveTabsState, TABS_KEY_PANE0 } from "@/lib/storage";
@@ -47,6 +48,7 @@ export interface Tabs {
   updateDraft: (id: string, value: string) => void;
   cancelEdit: (id: string) => void;
   saveEdit: (id: string) => Promise<void>;
+  toggleTaskItem: (id: string, index: number) => Promise<void>;
   getScrollTop: (path: string) => number;
   setScrollTop: (path: string, value: number) => void;
 }
@@ -268,6 +270,35 @@ export function useTabs(options: UseTabsOptions): Tabs {
         updateTab(id, {
           draftError: err instanceof Error ? err.message : String(err),
         });
+      }
+    },
+    [updateTab]
+  );
+
+  // Toggle a rendered checkbox without entering edit mode: flip the Nth
+  // task-list item on disk and re-parse, so the view and any task progress
+  // reflect it immediately. Mirrors saveEdit's write+refresh, so a self-write
+  // is treated the same way (no external-change banner). No-op while editing.
+  const toggleTaskItem = useCallback(
+    async (id: string, index: number) => {
+      const current = tabsRef.current.find((t) => t.id === id);
+      if (!current || current.loading || current.draft !== undefined) return;
+      try {
+        const raw = await readTextFile(current.path);
+        const next = toggleTaskCheckbox(raw, index);
+        if (next === null) return;
+        await writeTextFile(current.path, next);
+        const { data, content } = parseFrontmatter(next);
+        updateTab(id, {
+          meta: data,
+          content,
+          error: undefined,
+          pendingContent: undefined,
+          staleSince: undefined,
+          dismissedContent: undefined,
+        });
+      } catch (err) {
+        console.error("toggleTaskItem failed", err);
       }
     },
     [updateTab]
@@ -510,6 +541,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
     updateDraft,
     cancelEdit,
     saveEdit,
+    toggleTaskItem,
     getScrollTop,
     setScrollTop,
   };

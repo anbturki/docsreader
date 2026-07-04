@@ -24,7 +24,8 @@ export type FontSize = "sm" | "md" | "lg";
 export type ColorScheme = "light" | "dark" | "system";
 export type AccentColor = "violet" | "blue" | "green" | "orange" | "rose" | "slate";
 export type DefaultFolderState = "expanded" | "top-level" | "collapsed";
-export type SidebarLens = "tree" | "recent" | "tags" | "pinned";
+export const SIDEBAR_LENSES = ["tree", "recent", "tags", "pinned", "tasks"] as const;
+export type SidebarLens = (typeof SIDEBAR_LENSES)[number];
 export type DiffViewMode = "unified" | "split";
 
 export const LIGHT_CODE_THEMES = [
@@ -48,8 +49,8 @@ export type DarkCodeTheme = (typeof DARK_CODE_THEMES)[number];
 
 export const FONT_SIZE_PX: Record<FontSize, number> = {
   sm: 13,
-  md: 15,
-  lg: 17,
+  md: 16,
+  lg: 20,
 };
 
 export const ACCENT_HUE: Record<AccentColor, number> = {
@@ -253,7 +254,9 @@ function normalizeHidePatterns(value: unknown): string[] {
 }
 
 function normalizeSidebarLens(value: unknown): SidebarLens {
-  return value === "recent" || value === "tags" || value === "pinned" ? value : "tree";
+  return typeof value === "string" && (SIDEBAR_LENSES as readonly string[]).includes(value)
+    ? (value as SidebarLens)
+    : "tree";
 }
 
 function normalizeFontSize(value: unknown): FontSize {

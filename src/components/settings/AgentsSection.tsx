@@ -39,7 +39,7 @@ export function AgentsSection() {
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <div className="text-sm font-medium">Connect to AI agents</div>
+        <div className="text-[13px] font-medium">Connect to AI agents</div>
         <div className="text-xs text-muted-foreground">
           Register the DocsReader MCP server with agent tools installed on this
           machine, so they can read and write your docs, memory, and tasks.
@@ -57,13 +57,13 @@ export function AgentsSection() {
             <li
               key={client.id}
               className={cn(
-                "flex flex-col gap-1 rounded-lg border bg-card px-3 py-2.5",
+                "flex flex-col gap-1 rounded-md border bg-card px-3 py-2.5",
                 !client.detected && "opacity-50"
               )}
             >
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">{client.name}</div>
+                  <div className="text-[13px] font-medium">{client.name}</div>
                   <div
                     className="truncate font-mono text-[11px] text-muted-foreground"
                     title={client.configPath}

@@ -89,6 +89,7 @@ export function PaneView({
                 onDraftChange={pane.updateDraft}
                 onCancelEdit={pane.cancelEdit}
                 onSaveEdit={pane.saveEdit}
+                onToggleTask={pane.toggleTaskItem}
               />
             );
           })

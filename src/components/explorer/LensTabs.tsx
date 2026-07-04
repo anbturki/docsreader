@@ -1,12 +1,13 @@
 import { cn } from "@/lib/utils";
-import type { SidebarLens } from "@/lib/storage";
+import { SIDEBAR_LENSES, type SidebarLens } from "@/lib/storage";
 
-const LENSES: Array<{ value: SidebarLens; label: string }> = [
-  { value: "tree", label: "Tree" },
-  { value: "recent", label: "Recent" },
-  { value: "tags", label: "Tags" },
-  { value: "pinned", label: "Pinned" },
-];
+const LENS_LABELS: Record<SidebarLens, string> = {
+  tree: "Tree",
+  recent: "Recent",
+  tags: "Tags",
+  pinned: "Pinned",
+  tasks: "Tasks",
+};
 
 interface Props {
   active: SidebarLens;
@@ -15,23 +16,23 @@ interface Props {
 
 export function LensTabs({ active, onChange }: Props) {
   return (
-    <div role="tablist" className="flex items-center gap-3 px-3 pt-1 text-sm">
-      {LENSES.map((l) => {
-        const isActive = active === l.value;
+    <div role="tablist" className="flex items-center gap-3 border-b border-border px-3 text-sm">
+      {SIDEBAR_LENSES.map((value) => {
+        const isActive = active === value;
         return (
           <button
-            key={l.value}
+            key={value}
             role="tab"
             aria-selected={isActive}
-            onClick={() => onChange(l.value)}
+            onClick={() => onChange(value)}
             className={cn(
-              "py-1.5",
+              "-mb-px border-b-2 py-1.5 transition-colors",
               isActive
-                ? "font-semibold text-foreground"
-                : "text-muted-foreground hover:text-foreground"
+                ? "border-primary font-medium text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
             )}
           >
-            {l.label}
+            {LENS_LABELS[value]}
           </button>
         );
       })}

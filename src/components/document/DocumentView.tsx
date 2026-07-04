@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { DocumentHeader } from "./DocumentHeader";
 import { Frontmatter } from "./Frontmatter";
 import { QuickEditor } from "./QuickEditor";
+import { TaskHeader } from "./TaskHeader";
 
 interface Props {
   tab: Tab;
@@ -19,6 +20,7 @@ interface Props {
   onDraftChange: (value: string) => void;
   onCancelEdit: () => void;
   onSaveEdit: () => Promise<void>;
+  onToggleTask: (index: number) => void;
 }
 
 export function DocumentView({
@@ -31,6 +33,7 @@ export function DocumentView({
   onDraftChange,
   onCancelEdit,
   onSaveEdit,
+  onToggleTask,
 }: Props) {
   const title = file?.title || file?.name || tab.title;
   const tags = file?.tags ?? [];
@@ -48,6 +51,13 @@ export function DocumentView({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <DocumentHeader title={title} tags={tags} modified={modified} />
+          {!editing && (
+            <TaskHeader
+              meta={tab.meta}
+              relPath={file?.relPath ?? tab.path}
+              content={tab.content}
+            />
+          )}
         </div>
         {editable && (
           <Button
@@ -89,6 +99,7 @@ export function DocumentView({
             currentFilePath={tab.path}
             rootPath={rootPath}
             onNavigate={onNavigate}
+            onToggleTask={onToggleTask}
           />
         )}
       </div>

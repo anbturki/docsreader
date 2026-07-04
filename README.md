@@ -77,6 +77,7 @@ Then tell your agents how to use it: copy the [AGENTS template](docs/AGENTS-TEMP
 **Reading**
 
 - **Rendering:** GitHub-flavored Markdown via remark-gfm (tables, task lists, footnotes, autolinks, strikethrough)
+- **Interactive checklists:** click any task-list checkbox in a rendered doc to toggle it - the change writes straight back to the markdown file, and a task's acceptance-criteria progress moves with it, no switching to edit mode
 - **Math expressions:** LaTeX rendered inline and in blocks via KaTeX
 - **Diagrams:** Mermaid renderer (lazy-loaded, follows theme)
 - **Box-drawing art:** svgbob converts ASCII diagrams to SVG (experimental)
@@ -88,7 +89,7 @@ Then tell your agents how to use it: copy the [AGENTS template](docs/AGENTS-TEMP
 **Browsing**
 
 - **Workspaces:** keep multiple unrelated folders open and pivot between them
-- **Lenses:** four browsing modes over the same library (Tree, Recent, Tags, Pinned)
+- **Lenses:** five browsing modes over the same library (Tree, Recent, Tags, Pinned, Tasks)
 - **Jump-to-file:** fuzzy finder across every workspace, opens with Cmd+P (binding configurable)
 - **Document outline:** auto-built TOC that follows the active heading as you scroll
 - **Backlinks:** the sidebar lists every doc that links to the one you are reading, grouped by folder
@@ -105,6 +106,13 @@ Then tell your agents how to use it: copy the [AGENTS template](docs/AGENTS-TEMP
 - **External changes surfaced:** in unmanaged folders, when a file you have open changes on disk (other editor, sync service, AI agent), a banner shows what changed with reload / keep / show-diff actions
 - **Git status decorations:** in a git repo, the file tree shows per-file status badges (M / A / D / R / ? / U) that refresh as files change
 - **Git diff vs HEAD:** right-click any tracked file to see the diff between HEAD and your working tree, with unified or side-by-side views and word-level highlighting
+
+**Tasks**
+
+- **Task header:** a doc the MCP wrote as a task (Backlog.md-shaped frontmatter) renders a header - status pill, priority, assignee, and an acceptance-criteria progress bar - instead of plain markdown
+- **Tasks board:** a kanban lens grouping tasks into To Do / In Progress / Done columns; cards show priority, assignee, and progress, and open the underlying file on click
+- **Drag-to-advance:** drag a card to another column to change its status; the write goes through the same core the agents use, so a GUI move and an MCP `set_task_status` stay consistent
+- **Board filters:** narrow by free-text title, priority, or label; filters compose
 
 **Quiet by default**
 
@@ -126,10 +134,12 @@ Found a bug, want a feature, or have feedback? [Open an issue](https://github.co
 
 | | |
 | --- | --- |
-| ![Light theme](docs/screenshots/light-theme.png) | ![Split view, dark](docs/screenshots/split-dark.png) |
-| ![Split view, stacked (dark)](docs/screenshots/horizontal-split.png) | ![Settings](docs/screenshots/settings.png) |
-| ![Search](docs/screenshots/search.png) | ![Context menu](docs/screenshots/context-menu.png) |
-| ![Quick Open (Cmd+P)](docs/screenshots/quick-open.png) | ![Images](docs/screenshots/images.png) |
+| ![Tree lens: status folders and phase subfolders](docs/screenshots/tree.png) | ![Light theme](docs/screenshots/light-theme.png) |
+| ![Split view, dark](docs/screenshots/split-dark.png) | ![Split view, stacked (dark)](docs/screenshots/horizontal-split.png) |
+| ![Settings](docs/screenshots/settings.png) | ![Search](docs/screenshots/search.png) |
+| ![Context menu](docs/screenshots/context-menu.png) | ![Quick Open (Cmd+P)](docs/screenshots/quick-open.png) |
+| ![Images](docs/screenshots/images.png) | ![Recognized task header with acceptance-criteria progress](docs/screenshots/tasks-header.png) |
+| ![Tasks lens: a card in To Do](docs/screenshots/tasks-board.png) | ![Drag-to-advance: card moved to In Progress, status written back to the file](docs/screenshots/tasks-drag-after.png) |
 
 ## Install
 

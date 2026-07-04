@@ -63,14 +63,14 @@ const DARK_PREVIEWS: Record<DarkCodeTheme, CodeThemePreview> = {
 };
 
 const cardClass =
-  "h-20 flex-col gap-1 rounded-lg border bg-card text-card-foreground transition-colors " +
+  "h-14 flex-col gap-1 rounded-md border bg-card text-card-foreground transition-colors " +
   "hover:bg-accent " +
   "data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:border-primary/40 " +
   "data-[state=on]:hover:bg-primary/15";
 
 export function AppearanceSection({ settings, onChange }: Props) {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <Field label="Color scheme" hint="Match your system or pick a fixed mode.">
         <ToggleGroup
           type="single"
@@ -82,7 +82,7 @@ export function AppearanceSection({ settings, onChange }: Props) {
         >
           {SCHEMES.map(({ value, label, icon: Icon }) => (
             <ToggleGroupItem key={value} value={value} className={cardClass}>
-              <Icon className="size-5" />
+              <Icon className="size-4" />
               <span className="text-xs font-normal">{label}</span>
             </ToggleGroupItem>
           ))}
@@ -102,7 +102,7 @@ export function AppearanceSection({ settings, onChange }: Props) {
             <ToggleGroupItem key={value} value={value} className={cardClass}>
               <span
                 aria-hidden
-                className="size-6 rounded-full border"
+                className="size-5 rounded-full border"
                 style={{ background: `oklch(0.6 0.2 ${ACCENT_HUE[value]})` }}
               />
               <span className="text-xs font-normal">{label}</span>
@@ -200,9 +200,9 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
       <div>
-        <div className="text-sm font-medium">{label}</div>
+        <div className="text-[13px] font-medium">{label}</div>
         {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
       </div>
       {children}

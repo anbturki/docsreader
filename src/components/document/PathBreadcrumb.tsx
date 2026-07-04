@@ -17,14 +17,16 @@ export function PathBreadcrumb({ relPath, onSegmentClick }: Props) {
   const segments = relPath.split(/[\\/]/).filter(Boolean);
   return (
     <Breadcrumb className="min-w-0">
-      <BreadcrumbList className="flex-nowrap">
+      <BreadcrumbList className="flex-nowrap gap-1 text-xs">
         {segments.map((segment, i) => {
           const isLast = i === segments.length - 1;
           return (
             <Fragment key={i}>
               <BreadcrumbItem className="min-w-0">
                 {isLast ? (
-                  <BreadcrumbPage className="truncate">{segment}</BreadcrumbPage>
+                  <BreadcrumbPage className="truncate font-normal text-muted-foreground">
+                    {segment}
+                  </BreadcrumbPage>
                 ) : (
                   <BreadcrumbLink
                     className="cursor-pointer hover:text-foreground truncate"

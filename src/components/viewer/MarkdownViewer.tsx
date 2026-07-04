@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeRaw from "rehype-raw";
@@ -59,6 +59,7 @@ import { useWebRoot } from "@/hooks/useWebRoot";
 import { remarkMermaid } from "@/lib/remarkMermaid";
 import { DIAGRAM_FLAGS } from "@/lib/diagramFence";
 import { remarkSvgbob } from "@/lib/remarkSvgbob";
+import { rehypeTaskList } from "@/lib/rehypeTaskList";
 import { MarkdownCodeBlock } from "./MarkdownCodeBlock";
 import { MarkdownImage } from "./MarkdownImage";
 import { MarkdownLink } from "./MarkdownLink";
@@ -118,6 +119,7 @@ interface Props {
   currentFilePath?: string;
   rootPath?: string;
   onNavigate?: (absolutePath: string) => void;
+  onToggleTask?: (index: number) => void;
 }
 
 const familyClass: Record<FontFamily, string> = {
@@ -135,6 +137,29 @@ const proseClass = cn(
   "prose-img:rounded-md",
   "prose-a:text-primary"
 );
+
+// GFM task-list checkbox. rehypeTaskList stamps each with dataTaskIndex; when a
+// toggle handler is present we make it interactive, otherwise it renders as the
+// default (disabled) checkbox.
+function TaskCheckbox({
+  node,
+  onToggleTask,
+  ...rest
+}: React.InputHTMLAttributes<HTMLInputElement> &
+  ExtraProps & { onToggleTask?: (index: number) => void }) {
+  const index = node?.properties?.dataTaskIndex;
+  if (typeof index === "number" && onToggleTask) {
+    return (
+      <input
+        type="checkbox"
+        checked={rest.checked === true}
+        onChange={() => onToggleTask(index)}
+        className="cursor-pointer"
+      />
+    );
+  }
+  return <input {...rest} />;
+}
 
 function useShikiPlugin(
   light: LightCodeTheme,
@@ -179,6 +204,10 @@ export const SANITIZE_SCHEMA: typeof defaultSchema = {
   ...defaultSchema,
   attributes: {
     ...defaultSchema.attributes,
+    // GFM task-list checkboxes carry their state in `checked`, which the
+    // default schema drops; allow it so the rendered checkbox reflects the
+    // source (and stays toggleable).
+    input: [...(defaultSchema.attributes?.input ?? []), "checked"],
     span: [
       ...(defaultSchema.attributes?.span ?? []),
       "className",
@@ -237,6 +266,7 @@ export function MarkdownViewer({
   currentFilePath,
   rootPath,
   onNavigate,
+  onToggleTask,
 }: Props) {
   const webRoot = useWebRoot(rootPath);
   const shikiPlugin = useShikiPlugin(codeThemeLight, codeThemeDark);
@@ -250,15 +280,18 @@ export function MarkdownViewer({
       a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
         <MarkdownLink {...props} ctx={ctx} onNavigate={onNavigate} />
       ),
+      input: (props: React.InputHTMLAttributes<HTMLInputElement> & ExtraProps) => (
+        <TaskCheckbox {...props} onToggleTask={onToggleTask} />
+      ),
       pre: MarkdownCodeBlock,
     };
-  }, [currentFilePath, webRoot, onNavigate]);
+  }, [currentFilePath, webRoot, onNavigate, onToggleTask]);
 
   const rehypePlugins = useMemo<Pluggable[]>(
     () =>
       shikiPlugin
-        ? [rehypeRaw, SANITIZE_PLUGIN, rehypeSlug, rehypeKatex, shikiPlugin]
-        : [rehypeRaw, SANITIZE_PLUGIN, rehypeSlug, rehypeKatex],
+        ? [rehypeRaw, SANITIZE_PLUGIN, rehypeSlug, rehypeKatex, shikiPlugin, rehypeTaskList]
+        : [rehypeRaw, SANITIZE_PLUGIN, rehypeSlug, rehypeKatex, rehypeTaskList],
     [shikiPlugin]
   );
 

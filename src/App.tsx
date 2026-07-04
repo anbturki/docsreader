@@ -2,7 +2,7 @@ import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useR
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { message } from "@tauri-apps/plugin-dialog";
-import { Columns2, ListTree, Rows2, Square, Settings as SettingsIcon } from "lucide-react";
+import { Columns2, ListCollapse, ListTree, Moon, PanelLeft, RefreshCw, Rows2, Search, Settings as SettingsIcon, Square, Sun } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
 import { BacklinksPanel } from "@/components/document/BacklinksPanel";
@@ -13,7 +13,7 @@ const QuickOpenDialog = lazy(() => import("@/components/quickopen/QuickOpenDialo
 import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import {
   ResizableHandle,
   ResizablePanel,
@@ -44,6 +44,8 @@ import { parseFrontmatter } from "@/lib/scan";
 import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
 import "@/styles/code-theme.css";
+
+const CHROME_ICON = "size-6 text-muted-foreground hover:text-foreground [&>svg]:size-4";
 
 function App() {
   const library = useLibrary();
@@ -264,6 +266,20 @@ function App() {
     ? allFiles.find((f) => f.path === tabs.activeTab?.path)
     : undefined;
   const headerRelPath = activeFile?.relPath ?? (tabs.activeTab && basename(tabs.activeTab.path));
+  // Resolve the effective scheme so the toggle reflects what is actually
+  // rendered, including when colorScheme is "system".
+  const [systemDark, setSystemDark] = useState(
+    () => window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => setSystemDark(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  const isDark =
+    viewSettings.settings.colorScheme === "dark" ||
+    (viewSettings.settings.colorScheme === "system" && systemDark);
 
   const pinnedFiles = useMemo(() => {
     if (!library.activeRoot) return [];
@@ -386,16 +402,154 @@ function App() {
 
   return (
     <TooltipProvider delayDuration={200}>
+      <header
+        data-tauri-drag-region
+        className={`fixed right-0 top-0 z-30 flex h-9 items-center gap-2 border-b bg-background pr-2 ${
+          sidebar.open ? "left-[16rem] pl-2" : "left-0 pl-[100px]"
+        }`}
+      >
+        <button
+          type="button"
+          onClick={() => sidebar.setOpen(!sidebar.open)}
+          title="Toggle sidebar"
+          aria-label="Toggle sidebar"
+          className={CHROME_ICON}
+        >
+          <PanelLeft />
+        </button>
+        {headerRelPath && (
+          <PathBreadcrumb relPath={headerRelPath} onSegmentClick={setSearch} />
+        )}
+
+        <div data-tauri-drag-region className="flex-1" />
+        <button
+          type="button"
+          onClick={() => {
+            setQuickOpenMounted(true);
+            setQuickOpen(true);
+          }}
+          className="flex h-7 w-52 items-center gap-2 rounded-md border bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover:bg-muted"
+        >
+          <Search className="size-3.5" />
+          <span>Search</span>
+          <kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[10px] leading-4">
+            {viewSettings.settings.quickOpenShortcut}
+          </kbd>
+        </button>
+        <div data-tauri-drag-region className="flex-1" />
+
+        <div className="flex items-center gap-0.5">
+          {library.activeRoot && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className={CHROME_ICON}
+              title="Refresh workspace"
+              aria-label="Refresh workspace"
+              disabled={!!library.activeScan?.scanning}
+              onClick={() => library.activeRoot && void library.rescan(library.activeRoot)}
+            >
+              <RefreshCw className={library.activeScan?.scanning ? "animate-spin" : ""} />
+            </Button>
+          )}
+          {library.activeRoot && viewSettings.settings.sidebarLens === "tree" && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className={CHROME_ICON}
+              title="Collapse all"
+              aria-label="Collapse all"
+              onClick={handleCollapseAll}
+            >
+              <ListCollapse />
+            </Button>
+          )}
+          <ToggleGroup
+            type="single"
+            value={panes.layout.split}
+            onValueChange={(v) => v && panes.setSplit(v as SplitMode)}
+            variant="outline"
+            spacing={0}
+            aria-label="Split layout"
+            className="mx-1"
+          >
+            <ToggleGroupItem value="off" className="size-6" title="Single pane" aria-label="Single pane">
+              <Square className="size-3.5" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="horizontal" className="size-6" title="Side by side" aria-label="Side by side">
+              <Columns2 className="size-3.5" />
+            </ToggleGroupItem>
+            <ToggleGroupItem value="vertical" className="size-6" title="Stacked" aria-label="Stacked">
+              <Rows2 className="size-3.5" />
+            </ToggleGroupItem>
+          </ToggleGroup>
+          {tabs.activeTab && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className={`${CHROME_ICON} aria-pressed:bg-accent aria-pressed:text-foreground`}
+              title={viewSettings.settings.outlineOpen ? "Hide outline" : "Show outline"}
+              aria-label="Toggle outline"
+              aria-pressed={viewSettings.settings.outlineOpen}
+              onClick={toggleOutline}
+            >
+              <ListTree />
+            </Button>
+          )}
+          <Button
+            size="icon"
+            variant="ghost"
+            className={CHROME_ICON}
+            title="Toggle light / dark"
+            aria-label="Toggle theme"
+            onClick={() =>
+              viewSettings.update({
+                ...viewSettings.settings,
+                colorScheme: isDark ? "light" : "dark",
+              })
+            }
+          >
+            {isDark ? <Sun /> : <Moon />}
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            className={CHROME_ICON}
+            title="Settings"
+            aria-label="Settings"
+            onMouseEnter={() => setSettingsMounted(true)}
+            onFocus={() => setSettingsMounted(true)}
+            onClick={() => {
+              setSettingsMounted(true);
+              setSettingsSection(undefined);
+              setSettingsOpen(true);
+            }}
+          >
+            <SettingsIcon />
+          </Button>
+          {settingsMounted && (
+            <Suspense fallback={null}>
+              <SettingsDialog
+                open={settingsOpen}
+                onOpenChange={setSettingsOpen}
+                settings={viewSettings.settings}
+                onChange={viewSettings.update}
+                initialSection={settingsSection}
+                onOpenWelcome={() => void handleOpenWelcome()}
+              />
+            </Suspense>
+          )}
+        </div>
+      </header>
       <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen}>
         <ExplorerSidebar
           roots={library.roots}
           activeRoot={library.activeRoot}
           activeScan={library.activeScan}
           workspaceNamesByRoot={workspaceNamesByRoot}
-          onPickDirectory={() => void library.pickDirectory()}
           onSelectRoot={(path) => void library.selectRoot(path)}
           onRemoveRoot={(path) => void library.removeRoot(path)}
-          onRescan={() => library.activeRoot && void library.rescan(library.activeRoot)}
+          onPickDirectory={() => void library.pickDirectory()}
           onOpenWelcome={
             viewSettings.settings.welcomeOpened
               ? undefined
@@ -415,7 +569,6 @@ function App() {
           rootKey={rootKey}
           isExpanded={sidebar.isExpanded}
           onToggleExpanded={sidebar.toggleExpanded}
-          onCollapseAll={handleCollapseAll}
           isPinned={(path) =>
             library.activeRoot ? pinned.isPinned(library.activeRoot, path) : false
           }
@@ -433,89 +586,7 @@ function App() {
           onOpenInOtherPane={panes.openInOtherPane}
         />
 
-        <SidebarInset className="flex h-svh flex-col">
-          <header className="flex shrink-0 items-center gap-2 px-4 py-3 border-b bg-background">
-            <SidebarTrigger />
-            {headerRelPath && (
-              <PathBreadcrumb relPath={headerRelPath} onSegmentClick={setSearch} />
-            )}
-            <div className="ml-auto flex items-center gap-1">
-              <ToggleGroup
-                type="single"
-                value={panes.layout.split}
-                onValueChange={(v) => v && panes.setSplit(v as SplitMode)}
-                variant="outline"
-                spacing={4}
-                aria-label="Split layout"
-              >
-                <ToggleGroupItem
-                  value="off"
-                  className="h-7 px-2 text-xs"
-                  title="Single pane"
-                  aria-label="Single pane"
-                >
-                  <Square className="size-3" />
-                </ToggleGroupItem>
-                <ToggleGroupItem
-                  value="horizontal"
-                  className="h-7 px-2 text-xs"
-                  title="Side by side"
-                  aria-label="Side by side"
-                >
-                  <Columns2 className="size-3" />
-                </ToggleGroupItem>
-                <ToggleGroupItem
-                  value="vertical"
-                  className="h-7 px-2 text-xs"
-                  title="Stacked"
-                  aria-label="Stacked"
-                >
-                  <Rows2 className="size-3" />
-                </ToggleGroupItem>
-              </ToggleGroup>
-              {tabs.activeTab && (
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className="size-8"
-                  title={viewSettings.settings.outlineOpen ? "Hide outline" : "Show outline"}
-                  aria-label="Toggle outline"
-                  aria-pressed={viewSettings.settings.outlineOpen}
-                  onClick={toggleOutline}
-                >
-                  <ListTree />
-                </Button>
-              )}
-              <Button
-                size="icon"
-                variant="ghost"
-                className="size-8"
-                title="Settings"
-                aria-label="Settings"
-                onMouseEnter={() => setSettingsMounted(true)}
-                onFocus={() => setSettingsMounted(true)}
-                onClick={() => {
-                  setSettingsMounted(true);
-                  setSettingsSection(undefined);
-                  setSettingsOpen(true);
-                }}
-              >
-                <SettingsIcon />
-              </Button>
-              {settingsMounted && (
-                <Suspense fallback={null}>
-                  <SettingsDialog
-                    open={settingsOpen}
-                    onOpenChange={setSettingsOpen}
-                    settings={viewSettings.settings}
-                    onChange={viewSettings.update}
-                    initialSection={settingsSection}
-                    onOpenWelcome={() => void handleOpenWelcome()}
-                  />
-                </Suspense>
-              )}
-            </div>
-          </header>
+        <SidebarInset className="flex h-svh flex-col pt-9">
 
           <UpdateBanner
             phase={updater.phase}

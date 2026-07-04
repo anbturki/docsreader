@@ -19,7 +19,9 @@ pub fn run() {
             tauri_api::registry_dir,
             tauri_api::install_welcome_workspace,
             tauri_api::git_status,
-            tauri_api::git_show_head
+            tauri_api::git_show_head,
+            tauri_api::list_tasks,
+            tauri_api::set_task_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

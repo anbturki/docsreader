@@ -7,20 +7,20 @@ interface Props {
 }
 
 const cardClass =
-  "h-20 flex-col gap-1 rounded-lg border bg-card text-card-foreground transition-colors " +
+  "h-14 flex-col gap-1 rounded-md border bg-card text-card-foreground transition-colors " +
   "hover:bg-accent " +
   "data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:border-primary/40 " +
   "data-[state=on]:hover:bg-primary/15";
 
 const pillClass =
-  "h-11 rounded-lg border bg-card text-card-foreground transition-colors text-sm font-medium " +
+  "h-11 rounded-md border bg-card text-card-foreground transition-colors text-[13px] font-medium " +
   "hover:bg-accent " +
   "data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:border-primary/40 " +
   "data-[state=on]:hover:bg-primary/15";
 
 export function ReadingSection({ settings, onChange }: Props) {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <Field label="Font family" hint="Used for the rendered article body.">
         <ToggleGroup
           type="single"
@@ -152,9 +152,9 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
       <div>
-        <div className="text-sm font-medium">{label}</div>
+        <div className="text-[13px] font-medium">{label}</div>
         {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
       </div>
       {children}

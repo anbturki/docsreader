@@ -1,4 +1,3 @@
-import { ListCollapse, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import {
@@ -21,6 +20,7 @@ import { ScanProgressView } from "./ScanProgressView";
 import { SearchInput } from "./SearchInput";
 import { TagsList } from "./TagsList";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { TasksBoard } from "@/components/tasks/TasksBoard";
 
 interface Props {
   // workspaces
@@ -28,10 +28,9 @@ interface Props {
   activeRoot: string | undefined;
   activeScan: RootScan | undefined;
   workspaceNamesByRoot: Record<string, string>;
-  onPickDirectory: () => void;
   onSelectRoot: (path: string) => void;
   onRemoveRoot: (path: string) => void;
-  onRescan: () => void;
+  onPickDirectory: () => void;
   onOpenWelcome: (() => void) | undefined;
 
   // lens
@@ -51,7 +50,6 @@ interface Props {
   rootKey: string;
   isExpanded: (key: string, depth: number) => boolean;
   onToggleExpanded: (key: string, currentlyOpen: boolean) => void;
-  onCollapseAll: () => void;
 
   // pin / hide
   isPinned: (path: string) => boolean;
@@ -76,10 +74,9 @@ export function ExplorerSidebar({
   activeRoot,
   activeScan,
   workspaceNamesByRoot,
-  onPickDirectory,
   onSelectRoot,
   onRemoveRoot,
-  onRescan,
+  onPickDirectory,
   onOpenWelcome,
   lens,
   onLensChange,
@@ -91,7 +88,6 @@ export function ExplorerSidebar({
   rootKey,
   isExpanded,
   onToggleExpanded,
-  onCollapseAll,
   isPinned,
   onTogglePin,
   onHide,
@@ -106,36 +102,7 @@ export function ExplorerSidebar({
 }: Props) {
   return (
     <Sidebar collapsible="offcanvas">
-      <SidebarHeader className="gap-0 p-0">
-        <div className="flex items-center justify-between px-3 pt-3 pb-1">
-          <span className="text-sm font-semibold tracking-tight">DocsReader</span>
-          <div className="flex items-center gap-0.5">
-            {activeRoot && lens === "tree" && (
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={onCollapseAll}
-                title="Collapse all"
-                className="size-7 text-muted-foreground"
-              >
-                <ListCollapse />
-              </Button>
-            )}
-            {activeRoot && (
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={onRescan}
-                disabled={!!activeScan?.scanning}
-                title="Refresh"
-                className="size-7 text-muted-foreground"
-              >
-                <RefreshCw className={activeScan?.scanning ? "animate-spin" : ""} />
-              </Button>
-            )}
-          </div>
-        </div>
-
+      <SidebarHeader data-tauri-drag-region className="gap-0 p-0 pt-9">
         {roots.length > 0 && (
           <WorkspaceSwitcher
             roots={roots}
@@ -146,7 +113,6 @@ export function ExplorerSidebar({
             onAdd={onPickDirectory}
           />
         )}
-
         {roots.length > 0 && (
           <LensTabs active={lens} onChange={onLensChange} />
         )}
@@ -176,7 +142,7 @@ export function ExplorerSidebar({
               )}
             </div>
           </Empty>
-        ) : activeScan?.scanning ? (
+        ) : activeScan?.scanning && activeScan.result.files.length === 0 ? (
           <ScanProgressView
             progress={activeScan.progress}
             startedAt={activeScan.startedAt}
@@ -184,6 +150,7 @@ export function ExplorerSidebar({
         ) : (
           <LensView
             lens={lens}
+            activeRoot={activeRoot}
             tree={tree}
             rootKey={rootKey}
             filteredFiles={filteredFiles}
@@ -219,6 +186,7 @@ export function ExplorerSidebar({
 
 interface LensViewProps {
   lens: SidebarLens;
+  activeRoot: string | undefined;
   tree: TreeNode | undefined;
   rootKey: string;
   filteredFiles: MarkdownFile[];
@@ -238,6 +206,7 @@ interface LensViewProps {
 
 function LensView({
   lens,
+  activeRoot,
   tree,
   rootKey,
   filteredFiles,
@@ -290,6 +259,17 @@ function LensView({
         onOpenInOtherPane={onOpenInOtherPane}
         isPinned={isPinned}
         onTogglePin={onTogglePin}
+      />
+    );
+  }
+  if (lens === "tasks") {
+    return (
+      <TasksBoard
+        activeRoot={activeRoot}
+        selectedPath={selectedPath}
+        onOpen={onSelect}
+        onOpenInNewTab={onOpenInNewTab}
+        onOpenInOtherPane={onOpenInOtherPane}
       />
     );
   }

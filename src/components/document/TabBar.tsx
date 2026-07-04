@@ -55,11 +55,11 @@ function TabItem({
         }
       }}
       className={cn(
-        "group flex h-9 min-w-0 max-w-[220px] shrink-0 items-center gap-2 border-r px-3 text-sm",
+        "group -mb-px flex h-7 min-w-0 max-w-[200px] shrink-0 items-center gap-1.5 border-r border-b-2 px-2.5 text-xs",
         "outline-none focus-visible:ring-2 focus-visible:ring-ring",
         active
-          ? "font-semibold text-foreground"
-          : "text-muted-foreground hover:text-foreground"
+          ? "border-b-primary font-medium text-foreground"
+          : "border-b-transparent text-muted-foreground hover:text-foreground"
       )}
     >
       <span className="truncate">{tab.title}</span>
