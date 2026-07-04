@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "docsreader"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "docsreader-core",
  "serde",
@@ -834,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "docsreader-mcp"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "chrono",
  "docsreader-core",
