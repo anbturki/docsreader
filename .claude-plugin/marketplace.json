@@ -3,11 +3,12 @@
   "owner": {
     "name": "Ali Turki"
   },
+  "description": "DocsReader tools for Claude Code: surface agent-managed markdown tasks in the terminal.",
   "plugins": [
     {
       "name": "docsreader",
       "source": "./plugins/docsreader",
-      "description": "Surface DocsReader tasks in the Claude Code terminal: board, task-count statusline, and auto-sync after status changes. Bundles the docsreader MCP server."
+      "description": "Surface DocsReader tasks in the Claude Code terminal: board, task-count statusline, and auto-sync after status changes. Registers the docsreader MCP server."
     }
   ]
 }

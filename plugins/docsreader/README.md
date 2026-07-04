@@ -8,7 +8,7 @@ Brings DocsReader task state into the Claude Code terminal:
 - **Auto-sync hook** - after a task status changes via the MCP, the assistant is
   handed the updated counts for its next turn.
 
-The plugin bundles the `docsreader` MCP server, so agents can also call
+The plugin registers the `docsreader` MCP server, so agents can also call
 `list_tasks` / `write_task` / `set_task_status` directly.
 
 > Claude Code's native task panel cannot be written to by plugins - it is

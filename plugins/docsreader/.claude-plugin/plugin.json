@@ -1,6 +1,6 @@
 {
   "name": "docsreader",
-  "description": "Surface DocsReader tasks in the Claude Code terminal: /docsreader:board and /docsreader:sync, a task-count statusline, and auto-sync after status changes. Bundles the docsreader MCP server.",
+  "description": "Surface DocsReader tasks in the Claude Code terminal: /docsreader:board and /docsreader:sync, a task-count statusline, and auto-sync after status changes. Registers the docsreader MCP server.",
   "version": "0.1.0",
   "author": {
     "name": "Ali Turki"
