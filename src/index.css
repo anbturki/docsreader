@@ -180,3 +180,22 @@
     display: none;
   }
 }
+
+/* Reader task lists render checkbox-only (no redundant bullet) with an
+   accent-coloured checkbox, matching the WYSIWYG editor's task rendering.
+   Only task lists are targeted; ordinary bullet lists keep their markers. */
+.prose ul.contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+.prose li.task-list-item {
+  padding-left: 0;
+}
+.prose input[type="checkbox"] {
+  accent-color: var(--primary);
+  width: 0.95em;
+  height: 0.95em;
+}
+.prose li::marker {
+  color: var(--muted-foreground);
+}

@@ -86,7 +86,6 @@ export function PaneView({
                 onDiffViewModeChange={onDiffViewModeChange}
                 onAlwaysAutoReload={onAlwaysAutoReload}
                 onBeginEdit={pane.beginEdit}
-                onDraftChange={pane.updateDraft}
                 onCancelEdit={pane.cancelEdit}
                 onSaveEdit={pane.saveEdit}
                 onToggleTask={pane.toggleTaskItem}

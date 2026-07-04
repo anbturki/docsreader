@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/plugin-fs";
-import { parseFrontmatter } from "@/lib/scan";
+import { parseFrontmatter, splitFrontmatter } from "@/lib/scan";
 import { toggleTaskCheckbox } from "@/lib/checklist";
 import { describeEventKind } from "@/lib/events";
 import { basename } from "@/lib/path";
@@ -45,9 +45,8 @@ export interface Tabs {
   acceptPending: (id: string) => void;
   dismissPending: (id: string) => void;
   beginEdit: (id: string) => Promise<void>;
-  updateDraft: (id: string, value: string) => void;
   cancelEdit: (id: string) => void;
-  saveEdit: (id: string) => Promise<void>;
+  saveEdit: (id: string, body: string) => Promise<void>;
   toggleTaskItem: (id: string, index: number) => Promise<void>;
   getScrollTop: (path: string) => number;
   setScrollTop: (path: string, value: number) => void;
@@ -237,25 +236,41 @@ export function useTabs(options: UseTabsOptions): Tabs {
     [updateTab]
   );
 
-  const updateDraft = useCallback(
-    (id: string, value: string) => updateTab(id, { draft: value }),
-    [updateTab]
-  );
-
   const cancelEdit = useCallback(
     (id: string) => updateTab(id, { draft: undefined, draftError: undefined }),
     [updateTab]
   );
 
+  // `body` is the edited markdown from the WYSIWYG editor (no frontmatter).
+  // The original frontmatter prefix captured at beginEdit is re-attached
+  // verbatim so it never round-trips through the editor's serializer.
   // On failure the draft is kept so the user's edits survive; the error
   // renders inline in the editor.
   const saveEdit = useCallback(
-    async (id: string) => {
+    async (id: string, body: string) => {
       const current = tabsRef.current.find((t) => t.id === id);
       if (current?.draft === undefined) return;
+      const { prefix } = splitFrontmatter(current.draft);
+      const raw = prefix + body;
       try {
-        await writeTextFile(current.path, current.draft);
-        const { data, content } = parseFrontmatter(current.draft);
+        // Refuse to clobber a concurrent write (an agent via MCP, or an
+        // external editor) that landed after editing began. The draft is
+        // kept so nothing is lost; the user reconciles manually.
+        const diskNow = await readTextFile(current.path);
+        if (diskNow !== current.draft) {
+          updateTab(id, {
+            draftError:
+              "This file changed on disk while you were editing, so it was not overwritten. Copy any changes you want to keep, then cancel and reopen to edit the latest version.",
+          });
+          return;
+        }
+        // Reconstructed content is byte-identical to disk: nothing to write.
+        if (raw === diskNow) {
+          updateTab(id, { draft: undefined, draftError: undefined });
+          return;
+        }
+        await writeTextFile(current.path, raw);
+        const { data, content } = parseFrontmatter(raw);
         updateTab(id, {
           meta: data,
           content,
@@ -538,7 +553,6 @@ export function useTabs(options: UseTabsOptions): Tabs {
     acceptPending,
     dismissPending,
     beginEdit,
-    updateDraft,
     cancelEdit,
     saveEdit,
     toggleTaskItem,

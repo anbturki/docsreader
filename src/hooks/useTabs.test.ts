@@ -27,6 +27,8 @@ vi.mock("@/lib/storage", async (importOriginal) => ({
 import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 const RAW = "---\ntitle: Note\n---\n\n# hello\n";
+const BODY = "\n# hello\n";
+const BODY_EDITED = "\n# hello edited\n";
 const EDITED = "---\ntitle: Note\n---\n\n# hello edited\n";
 const CHANGED_ON_DISK = "---\ntitle: Note\n---\n\n# changed by agent\n";
 
@@ -55,30 +57,48 @@ beforeEach(() => {
   vi.mocked(writeTextFile).mockResolvedValue();
 });
 
-describe("useTabs quick-edit", () => {
+describe("useTabs edit", () => {
   it("beginEdit loads the raw file including frontmatter", async () => {
     const { result } = await openTab();
     await act(() => result.current.beginEdit(result.current.activeTab!.id));
     expect(result.current.activeTab?.draft).toBe(RAW);
   });
 
-  it("saveEdit writes the draft to disk and re-renders the parsed body", async () => {
+  it("saveEdit re-attaches frontmatter to the edited body and re-renders", async () => {
     const { result } = await openTab();
     const id = result.current.activeTab!.id;
     await act(() => result.current.beginEdit(id));
-    act(() => result.current.updateDraft(id, EDITED));
-    await act(() => result.current.saveEdit(id));
+    await act(() => result.current.saveEdit(id, BODY_EDITED));
     expect(writeTextFile).toHaveBeenCalledWith("/ws/doc.md", EDITED);
     expect(result.current.activeTab?.draft).toBeUndefined();
     expect(result.current.activeTab?.content).toContain("# hello edited");
     expect(result.current.activeTab?.meta).toEqual({ title: "Note" });
   });
 
+  it("saveEdit skips the write when the reconstructed body is unchanged", async () => {
+    const { result } = await openTab();
+    const id = result.current.activeTab!.id;
+    await act(() => result.current.beginEdit(id));
+    await act(() => result.current.saveEdit(id, BODY));
+    expect(writeTextFile).not.toHaveBeenCalled();
+    expect(result.current.activeTab?.draft).toBeUndefined();
+  });
+
+  it("saveEdit refuses to overwrite a file changed on disk during editing", async () => {
+    const { result } = await openTab();
+    const id = result.current.activeTab!.id;
+    await act(() => result.current.beginEdit(id));
+    vi.mocked(readTextFile).mockResolvedValue(CHANGED_ON_DISK);
+    await act(() => result.current.saveEdit(id, BODY_EDITED));
+    expect(writeTextFile).not.toHaveBeenCalled();
+    expect(result.current.activeTab?.draft).toBe(RAW);
+    expect(result.current.activeTab?.draftError).toContain("changed on disk");
+  });
+
   it("cancelEdit discards the draft without writing", async () => {
     const { result } = await openTab();
     const id = result.current.activeTab!.id;
     await act(() => result.current.beginEdit(id));
-    act(() => result.current.updateDraft(id, EDITED));
     act(() => result.current.cancelEdit(id));
     expect(writeTextFile).not.toHaveBeenCalled();
     expect(result.current.activeTab?.draft).toBeUndefined();
@@ -110,10 +130,9 @@ describe("useTabs quick-edit", () => {
     const { result } = await openTab();
     const id = result.current.activeTab!.id;
     await act(() => result.current.beginEdit(id));
-    act(() => result.current.updateDraft(id, EDITED));
     vi.mocked(writeTextFile).mockRejectedValue(new Error("disk full"));
-    await act(() => result.current.saveEdit(id));
-    expect(result.current.activeTab?.draft).toBe(EDITED);
+    await act(() => result.current.saveEdit(id, BODY_EDITED));
+    expect(result.current.activeTab?.draft).toBe(RAW);
     expect(result.current.activeTab?.draftError).toBe("disk full");
   });
 });
