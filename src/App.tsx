@@ -23,7 +23,7 @@ import { ExplorerSidebar } from "@/components/explorer/ExplorerSidebar";
 import { ConvertWorkspacePrompt } from "@/components/explorer/ConvertWorkspacePrompt";
 import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
 import { PaneView } from "@/components/document/PaneView";
-import { UpdateBanner } from "@/components/document/UpdateBanner";
+import { UpdateToast } from "@/components/document/UpdateToast";
 
 const SettingsDialog = lazy(() => import("@/components/settings/SettingsDialog"));
 import { useLibrary } from "@/hooks/useLibrary";
@@ -536,6 +536,7 @@ function App() {
                 onChange={viewSettings.update}
                 initialSection={settingsSection}
                 onOpenWelcome={() => void handleOpenWelcome()}
+                updater={updater}
               />
             </Suspense>
           )}
@@ -588,13 +589,12 @@ function App() {
 
         <SidebarInset className="flex h-svh flex-col pt-9">
 
-          <UpdateBanner
+          <UpdateToast
             phase={updater.phase}
             pendingVersion={updater.pendingVersion}
             currentVersion={updater.currentVersion}
             progressBytes={updater.progressBytes}
             totalBytes={updater.totalBytes}
-            error={updater.error}
             onInstall={updater.install}
             onDismiss={updater.dismiss}
           />

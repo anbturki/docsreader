@@ -16,6 +16,13 @@ beforeEach(() => {
   vi.mocked(detectAgentClients).mockResolvedValue([]);
 });
 
+const noopUpdater = {
+  phase: "idle" as const,
+  install: vi.fn(),
+  dismiss: vi.fn(),
+  checkNow: vi.fn(),
+};
+
 function renderDialog() {
   return render(
     <SettingsDialog
@@ -24,6 +31,7 @@ function renderDialog() {
       settings={defaultViewSettings}
       onChange={vi.fn()}
       onOpenWelcome={vi.fn()}
+      updater={noopUpdater}
     />
   );
 }
@@ -32,7 +40,7 @@ describe("SettingsDialog", () => {
   it("opens on the appearance section with all nav entries", () => {
     renderDialog();
     expect(screen.getByText("Settings")).toBeInTheDocument();
-    for (const label of ["Appearance", "Reading", "Explorer", "AI agents", "Shortcuts"]) {
+    for (const label of ["Appearance", "Reading", "Explorer", "AI agents", "Shortcuts", "About"]) {
       expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
     expect(screen.getByRole("radio", { name: "Light" })).toBeInTheDocument();

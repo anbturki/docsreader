@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, Bot, FolderTree, Keyboard, Palette } from "lucide-react";
+import { BookOpen, Bot, FolderTree, Info, Keyboard, Palette } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { ViewSettings } from "@/lib/storage";
+import type { UpdaterControls, UpdaterState } from "@/hooks/useUpdater";
+import { AboutSection } from "./AboutSection";
 import { AgentsSection } from "./AgentsSection";
 import { AppearanceSection } from "./AppearanceSection";
 import { ExplorerSection } from "./ExplorerSection";
@@ -20,6 +22,7 @@ const SECTIONS = [
   { id: "explorer", label: "Explorer", icon: FolderTree },
   { id: "agents", label: "AI agents", icon: Bot },
   { id: "shortcuts", label: "Shortcuts", icon: Keyboard },
+  { id: "about", label: "About", icon: Info },
 ] as const;
 
 export type SettingsSection = (typeof SECTIONS)[number]["id"];
@@ -31,6 +34,7 @@ interface Props {
   onChange: (next: ViewSettings) => void;
   initialSection?: SettingsSection;
   onOpenWelcome: () => void;
+  updater: UpdaterState & UpdaterControls;
 }
 
 export default function SettingsDialog({
@@ -40,6 +44,7 @@ export default function SettingsDialog({
   onChange,
   initialSection,
   onOpenWelcome,
+  updater,
 }: Props) {
   const [active, setActive] = useState<SettingsSection>(initialSection ?? "appearance");
 
@@ -95,6 +100,7 @@ export default function SettingsDialog({
             {active === "shortcuts" && (
               <ShortcutsSection settings={settings} onChange={onChange} />
             )}
+            {active === "about" && <AboutSection updater={updater} />}
           </div>
         </div>
       </DialogContent>
