@@ -130,6 +130,16 @@ Then tell your agents how to use it: copy the [AGENTS template](docs/AGENTS-TEMP
 
 Found a bug, want a feature, or have feedback? [Open an issue](https://github.com/anbturki/docsreader/issues/new) - I'm actively building this and feedback shapes the roadmap.
 
+## What's new in v0.7.0
+
+- **Task board.** A Tasks lens with a To Do / In Progress / Done kanban, drag-to-advance that writes status through the same core agents use, and filters by title, priority, and label.
+- **Task headers.** Docs the MCP wrote as tasks render a status pill, priority, assignee, and an acceptance-criteria progress bar.
+- **Interactive checklists.** Toggle any task-list checkbox from the rendered view; the change writes back to the file and moves a task's progress with it.
+- **Refreshed UI.** An integrated overlay toolbar, a draggable window, and the design tokens applied across the settings dialog and the board.
+- **Claude Code plugin.** Board and sync skills, a live task statusline, and a task-sync hook.
+
+Full history on the [releases page](https://github.com/anbturki/docsreader/releases).
+
 ## Screenshots
 
 | | |
@@ -140,6 +150,7 @@ Found a bug, want a feature, or have feedback? [Open an issue](https://github.co
 | ![Context menu](docs/screenshots/context-menu.png) | ![Quick Open (Cmd+P)](docs/screenshots/quick-open.png) |
 | ![Images](docs/screenshots/images.png) | ![Recognized task header with acceptance-criteria progress](docs/screenshots/tasks-header.png) |
 | ![Tasks lens: a card in To Do](docs/screenshots/tasks-board.png) | ![Drag-to-advance: card moved to In Progress, status written back to the file](docs/screenshots/tasks-drag-after.png) |
+| ![A file changed on disk: reload, keep, or view the diff](docs/screenshots/external-change.png) | ![Side-by-side diff with word-level highlighting](docs/screenshots/diff.png) |
 
 ## Install
 
