@@ -19,6 +19,7 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 ## Browsing
 
 - **Workspaces:** keep multiple unrelated folders open and pivot between them
+- **Open with:** double-click a `.md`/`.markdown`/`.mdx` in Finder, or right-click > Open With DocsReader. A folder opens as a workspace; a file resolves to its workspace (or its parent folder) and opens in the active pane, whether the app was already running or launched by the open
 - **Lenses:** five browsing modes over the same library (Tree, Recent, Tags, Pinned, Tasks)
 - **Jump-to-file:** fuzzy finder across every workspace, opens with Cmd+P (binding configurable)
 - **Document outline:** auto-built TOC that follows the active heading as you scroll

@@ -21,6 +21,7 @@ export interface Panes {
   setSplitSize: (size: number) => void;
   focusPane: (idx: PaneIndex) => void;
   openInOtherPane: (path: string) => void;
+  openInActivePane: (path: string) => void;
 }
 
 interface UsePanesOptions {
@@ -118,6 +119,15 @@ export function usePanes(options: UsePanesOptions): Panes {
     [pane0, pane1]
   );
 
+  const openInActivePane = useCallback(
+    (path: string) => {
+      const current = layoutRef.current;
+      if (current.split === "off" || current.activePane === 0) pane0.openInActive(path);
+      else pane1.openInActive(path);
+    },
+    [pane0, pane1]
+  );
+
   const panes: [Tabs, Tabs] = [pane0, pane1];
   const activePane = layout.activePane === 0 ? pane0 : pane1;
   const hydrated = layoutHydrated && pane0.hydrated && pane1.hydrated;
@@ -131,5 +141,6 @@ export function usePanes(options: UsePanesOptions): Panes {
     setSplitSize,
     focusPane,
     openInOtherPane,
+    openInActivePane,
   };
 }
