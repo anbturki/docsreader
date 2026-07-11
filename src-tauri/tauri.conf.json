@@ -39,6 +39,26 @@
     "resources": [
       "resources/welcome/**/*"
     ],
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown"],
+        "name": "Markdown",
+        "description": "Markdown document",
+        "mimeType": "text/markdown",
+        "role": "Editor"
+      },
+      {
+        "ext": ["mdx"],
+        "name": "MDX",
+        "description": "MDX document",
+        "mimeType": "text/markdown",
+        "role": "Editor",
+        "exportedType": {
+          "identifier": "com.docsreader.app.mdx",
+          "conformsTo": ["public.plain-text"]
+        }
+      }
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

@@ -35,6 +35,7 @@ import { useViewSettings } from "@/hooks/useViewSettings";
 import { useSidebarState } from "@/hooks/useSidebarState";
 import { usePinned } from "@/hooks/usePinned";
 import { useUpdater } from "@/hooks/useUpdater";
+import { useOpenWith } from "@/hooks/useOpenWith";
 import { buildTree } from "@/lib/tree";
 import { collectDirKeys } from "@/components/explorer/FileTree";
 import { buildHideMatcher } from "@/lib/match";
@@ -67,6 +68,13 @@ function App() {
   const sidebar = useSidebarState(viewSettings.settings.defaultFolderState);
   const pinned = usePinned();
   const updater = useUpdater();
+  useOpenWith({
+    hydrated: library.hydrated && panes.hydrated,
+    roots: library.roots,
+    addRoot: library.addRoot,
+    selectRoot: library.selectRoot,
+    openFile: panes.openInActivePane,
+  });
   useTheme(viewSettings.settings.colorScheme, viewSettings.settings.accentColor);
   const deferredSettings = useDeferredValue(viewSettings.settings);
   const [search, setSearch] = useState("");
