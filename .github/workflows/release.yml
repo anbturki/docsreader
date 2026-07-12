@@ -57,8 +57,50 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "macos_included=$MAC_IN" >> "$GITHUB_OUTPUT"
 
-  publish-tauri:
+  # Create the GitHub release once, up front. The publish-tauri matrix jobs
+  # run tauri-action in parallel; each looks up the release by tag and, when
+  # absent, creates it. With no release yet, all three raced to create it -
+  # the first won and the losers failed with "already_exists", dropping their
+  # platform's assets (this is how v0.9.0 shipped with no macOS DMG). Ensuring
+  # the release exists first makes every matrix job take the "found existing,
+  # upload" path instead. Idempotent, so a re-dispatch against an existing tag
+  # is a no-op.
+  create-release:
     needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      TAG: ${{ needs.setup.outputs.tag }}
+    steps:
+      - name: Ensure release exists
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; nothing to do."
+            exit 0
+          fi
+          NOTES=$(printf '%s\n' \
+            'See assets below to download and install.' \
+            '' \
+            'Install via Homebrew:' \
+            '```' \
+            'brew install --cask anbturki/tap/docsreader' \
+            '```' \
+            '' \
+            'Install via curl:' \
+            '```' \
+            'curl -fsSL https://raw.githubusercontent.com/anbturki/docsreader/main/install.sh | bash' \
+            '```')
+          gh release create "$TAG" \
+            --repo "$REPO" \
+            --title "DocsReader $TAG" \
+            --notes "$NOTES"
+
+  publish-tauri:
+    needs: [setup, create-release]
     permissions:
       contents: write
     strategy:
