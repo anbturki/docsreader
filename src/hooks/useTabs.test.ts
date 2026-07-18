@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 import { useTabs } from "./useTabs";
 
 type WatchCallback = (event: { type: unknown }) => void;
@@ -134,5 +134,116 @@ describe("useTabs edit", () => {
     await act(() => result.current.saveEdit(id, BODY_EDITED));
     expect(result.current.activeTab?.draft).toBe(RAW);
     expect(result.current.activeTab?.draftError).toBe("disk full");
+  });
+});
+
+describe("useTabs load timeout", () => {
+  const LOAD_TIMEOUT_MS = 15000;
+  const STALE_RAW = "---\ntitle: Note\n---\n\n# stale from load A\n";
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function renderTabsWithFakeTimers() {
+    vi.useFakeTimers();
+    const hook = renderHook(() =>
+      useTabs({ autoReloadOnExternalChange: false, isManagedPath: () => false })
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(hook.result.current.hydrated).toBe(true);
+    return hook;
+  }
+
+  async function flushLoads() {
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+  }
+
+  it("turns a read that never settles into a retryable error", async () => {
+    vi.mocked(readTextFile).mockReturnValue(new Promise<string>(() => {}));
+    const { result } = await renderTabsWithFakeTimers();
+    act(() => result.current.openInNew("/ws/doc.md"));
+    expect(result.current.activeTab?.loading).toBe(true);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
+    });
+    expect(result.current.activeTab?.loading).toBe(false);
+    expect(result.current.activeTab?.error).toBeTruthy();
+    expect(result.current.activeTab?.content).toBe("");
+  });
+
+  it("openInActive retries a tab in error state", async () => {
+    vi.mocked(readTextFile).mockReturnValueOnce(new Promise<string>(() => {}));
+    const { result } = await renderTabsWithFakeTimers();
+    act(() => result.current.openInNew("/ws/doc.md"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
+    });
+    expect(result.current.activeTab?.error).toBeTruthy();
+    act(() => result.current.openInActive("/ws/doc.md"));
+    expect(result.current.activeTab?.loading).toBe(true);
+    await flushLoads();
+    expect(result.current.activeTab?.content).toContain("# hello");
+    expect(result.current.activeTab?.error).toBeUndefined();
+    expect(result.current.activeTab?.loading).toBe(false);
+  });
+
+  it("openInActive does not re-fire the load for a healthy tab", async () => {
+    const { result } = await renderTabsWithFakeTimers();
+    act(() => result.current.openInNew("/ws/doc.md"));
+    await flushLoads();
+    expect(result.current.activeTab?.loading).toBe(false);
+    const reads = vi.mocked(readTextFile).mock.calls.length;
+    act(() => result.current.openInActive("/ws/doc.md"));
+    await flushLoads();
+    expect(vi.mocked(readTextFile).mock.calls.length).toBe(reads);
+    expect(result.current.activeTab?.loading).toBe(false);
+  });
+
+  it("drops the late completion of a load superseded by a retry", async () => {
+    let resolveA!: (raw: string) => void;
+    vi.mocked(readTextFile).mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveA = resolve;
+      })
+    );
+    const { result } = await renderTabsWithFakeTimers();
+    act(() => result.current.openInNew("/ws/doc.md"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
+    });
+    expect(result.current.activeTab?.error).toBeTruthy();
+    vi.mocked(readTextFile).mockResolvedValue(CHANGED_ON_DISK);
+    act(() => result.current.openInActive("/ws/doc.md"));
+    await flushLoads();
+    expect(result.current.activeTab?.content).toContain("changed by agent");
+    resolveA(STALE_RAW);
+    await flushLoads();
+    expect(result.current.activeTab?.content).toContain("changed by agent");
+    expect(result.current.activeTab?.content).not.toContain("stale");
+    expect(result.current.activeTab?.error).toBeUndefined();
+  });
+
+  it("lets a late success of the same load replace the timeout error", async () => {
+    let resolveA!: (raw: string) => void;
+    vi.mocked(readTextFile).mockReturnValueOnce(
+      new Promise<string>((resolve) => {
+        resolveA = resolve;
+      })
+    );
+    const { result } = await renderTabsWithFakeTimers();
+    act(() => result.current.openInNew("/ws/doc.md"));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
+    });
+    expect(result.current.activeTab?.error).toBeTruthy();
+    resolveA(RAW);
+    await flushLoads();
+    expect(result.current.activeTab?.content).toContain("# hello");
+    expect(result.current.activeTab?.error).toBeUndefined();
   });
 });
