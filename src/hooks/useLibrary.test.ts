@@ -236,6 +236,38 @@ describe("useLibrary stale-while-revalidate rescans", () => {
   });
 });
 
+describe("useLibrary scan failure handling", () => {
+  beforeEach(() => {
+    registry = [];
+    storedRoots = [];
+    dismissed = [];
+    vi.clearAllMocks();
+  });
+
+  it("leaves the root unstuck when the scan rejects", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    storedRoots = ["/hung/folder"];
+    vi.mocked(scanDirectory).mockRejectedValue(
+      new Error("This folder stopped responding while being scanned.")
+    );
+    try {
+      const hook = await mount();
+      await waitFor(() => expect(scanDirectory).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(hook.result.current.scans["/hung/folder"]?.scanning).toBe(false)
+      );
+      expect(error).toHaveBeenCalled();
+    } finally {
+      error.mockRestore();
+      vi.mocked(scanDirectory).mockImplementation(async (root: string) => ({
+        root,
+        files: [],
+        truncated: false,
+      }));
+    }
+  });
+});
+
 describe("useLibrary watch resilience", () => {
   beforeEach(() => {
     registry = [];
