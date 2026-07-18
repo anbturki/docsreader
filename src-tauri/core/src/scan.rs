@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
@@ -51,6 +51,11 @@ pub struct ScanResult {
     pub root: String,
     pub files: Vec<MarkdownFile>,
     pub truncated: bool,
+    // Files the scan could not include: unreadable entries, permission-denied
+    // subtrees, symlink loops, and files over MAX_FILE_BYTES. Default keeps
+    // cached results from older versions deserializable.
+    #[serde(default)]
+    pub skipped: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub marker: Option<WorkspaceMarker>,
 }
@@ -125,6 +130,12 @@ fn is_skipped_dir(name: &str) -> bool {
     SKIP_DIRS.contains(&name)
 }
 
+/// True when a directory name collides with an entry the scanner prunes;
+/// docs placed under such a folder would never appear in the GUI.
+pub fn is_reserved_dir_name(name: &str) -> bool {
+    SKIP_DIRS.iter().any(|d| d.eq_ignore_ascii_case(name))
+}
+
 pub(crate) fn is_markdown(name: &str) -> bool {
     let lower = name.to_ascii_lowercase();
     lower.ends_with(".md") || lower.ends_with(".markdown") || lower.ends_with(".mdx")
@@ -149,9 +160,10 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
 
     let mut entries: Vec<DirEntry> = Vec::new();
     let mut truncated = false;
+    let skipped = AtomicUsize::new(0);
 
     let walker = WalkDir::new(root_path)
-        .follow_links(false)
+        .follow_links(true)
         .into_iter()
         .filter_entry(|e| {
             if e.depth() == 0 {
@@ -165,7 +177,16 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
             }
         });
 
-    for entry in walker.filter_map(|e| e.ok()) {
+    for entry in walker {
+        let entry = match entry {
+            Ok(e) => e,
+            // Permission-denied subtrees and symlink loops arrive as error
+            // entries; count them so the GUI can say files were left out.
+            Err(_) => {
+                skipped.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+        };
         if entry.file_type().is_dir() {
             dirs_visited.fetch_add(1, Ordering::Relaxed);
             maybe_emit_walk_progress(
@@ -192,6 +213,7 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
 
         if let Ok(meta) = entry.metadata() {
             if meta.len() > MAX_FILE_BYTES {
+                skipped.fetch_add(1, Ordering::Relaxed);
                 continue;
             }
         }
@@ -209,7 +231,10 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
     let mut files: Vec<MarkdownFile> = entries
         .par_iter()
         .filter_map(|entry| {
-            let metadata = entry.metadata().ok()?;
+            let Ok(metadata) = entry.metadata() else {
+                skipped.fetch_add(1, Ordering::Relaxed);
+                return None;
+            };
             let size = metadata.len();
             let modified = metadata
                 .modified()
@@ -217,7 +242,10 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs());
 
-            let content = read_partial(entry.path()).ok()?;
+            let Ok(content) = read_partial(entry.path()) else {
+                skipped.fetch_add(1, Ordering::Relaxed);
+                return None;
+            };
             let (title, tags) = parse_meta(&content);
 
             let rel_path = entry
@@ -274,6 +302,7 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
         root: root_path.to_string_lossy().to_string(),
         files,
         truncated,
+        skipped: skipped.load(Ordering::Relaxed),
         marker,
     })
 }
@@ -386,6 +415,55 @@ mod tests {
             .find(|f| f.rel_path == "target.md")
             .unwrap();
         assert!(target.links.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scan_includes_symlinked_markdown_files() {
+        let dir = test_dir("scan_symlink");
+        let outside = test_dir("scan_symlink_target");
+        std::fs::write(outside.join("real.md"), "# Linked Doc\n").unwrap();
+        std::os::unix::fs::symlink(outside.join("real.md"), dir.join("linked.md")).unwrap();
+
+        let result = run_scan(&NoopProgressSink, dir.to_string_lossy().to_string()).unwrap();
+        let linked = result
+            .files
+            .iter()
+            .find(|f| f.rel_path == "linked.md")
+            .expect("symlinked markdown appears in results");
+        assert_eq!(linked.title.as_deref(), Some("Linked Doc"));
+        assert_eq!(result.skipped, 0);
+        let _ = std::fs::remove_dir_all(&dir);
+        let _ = std::fs::remove_dir_all(&outside);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scan_counts_symlink_loop_as_skipped() {
+        let dir = test_dir("scan_loop");
+        std::fs::create_dir_all(dir.join("sub")).unwrap();
+        std::os::unix::fs::symlink(&dir, dir.join("sub/loop")).unwrap();
+        std::fs::write(dir.join("a.md"), "# A\n").unwrap();
+
+        let result = run_scan(&NoopProgressSink, dir.to_string_lossy().to_string()).unwrap();
+        assert_eq!(result.files.len(), 1);
+        assert_eq!(result.files[0].rel_path, "a.md");
+        assert_eq!(result.skipped, 1, "loop error entry is counted");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scan_counts_oversize_files_as_skipped() {
+        let dir = test_dir("scan_oversize");
+        std::fs::write(dir.join("ok.md"), "# Ok\n").unwrap();
+        std::fs::write(dir.join("big.md"), vec![b'x'; MAX_FILE_BYTES as usize + 1]).unwrap();
+
+        let result = run_scan(&NoopProgressSink, dir.to_string_lossy().to_string()).unwrap();
+        assert_eq!(result.files.len(), 1);
+        assert_eq!(result.files[0].rel_path, "ok.md");
+        assert_eq!(result.skipped, 1);
+        assert!(!result.truncated);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
