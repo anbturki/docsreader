@@ -59,6 +59,11 @@ export interface Tabs {
   setScrollTop: (path: string, value: number) => void;
 }
 
+interface WatcherSlot {
+  path: string;
+  unwatch: UnwatchFn;
+}
+
 let tabIdSeq = 0;
 const nextId = () => `t${++tabIdSeq}_${Date.now()}`;
 
@@ -442,11 +447,10 @@ export function useTabs(options: UseTabsOptions): Tabs {
     );
   }, [options.autoReloadOnExternalChange]);
 
-  const watchersRef = useRef(new Map<string, { path: string; unwatch: UnwatchFn }>());
+  const watchersRef = useRef(new Map<string, WatcherSlot>());
 
   useEffect(() => {
     const watchers = watchersRef.current;
-    const wantedIds = new Set(tabs.map((t) => t.id));
 
     for (const [id, entry] of watchers) {
       const tab = tabs.find((t) => t.id === id);
@@ -458,7 +462,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
 
     for (const tab of tabs) {
       if (watchers.has(tab.id)) continue;
-      const slot: { path: string; unwatch: UnwatchFn } = { path: tab.path, unwatch: () => {} };
+      const slot: WatcherSlot = { path: tab.path, unwatch: () => {} };
       watchers.set(tab.id, slot);
       void (async () => {
         try {
@@ -480,13 +484,17 @@ export function useTabs(options: UseTabsOptions): Tabs {
             },
             { recursive: false, delayMs: 400 }
           );
-          if (!wantedIds.has(tab.id) || !watchers.has(tab.id)) {
+          // A path swap retires this slot and installs a fresh one under the
+          // same tab id, so the id alone cannot tell a live attach from a
+          // superseded one. Slot identity can: anything but our own slot in
+          // the map means this watcher is orphaned and must detach now.
+          if (watchers.get(tab.id) !== slot) {
             void unwatch();
             return;
           }
           slot.unwatch = unwatch;
         } catch (err) {
-          watchers.delete(tab.id);
+          if (watchers.get(tab.id) === slot) watchers.delete(tab.id);
           console.error("watch failed", err);
         }
       })();
