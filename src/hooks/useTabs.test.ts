@@ -5,12 +5,26 @@ import { useTabs } from "./useTabs";
 type WatchCallback = (event: { type: unknown }) => void;
 const watchCallbacks: WatchCallback[] = [];
 
+interface WatchStart {
+  path: string;
+  cb: WatchCallback;
+  unwatch: ReturnType<typeof vi.fn>;
+}
+const watchStarts: WatchStart[] = [];
+// Path -> promise the mocked watch awaits before resolving, so a test can
+// hold one attach open while the tab underneath it swaps path.
+const watchGates = new Map<string, Promise<void>>();
+
 vi.mock("@tauri-apps/plugin-fs", () => ({
   readTextFile: vi.fn(),
   writeTextFile: vi.fn(),
-  watch: vi.fn(async (_path: string, cb: WatchCallback) => {
+  watch: vi.fn(async (path: string, cb: WatchCallback) => {
+    const unwatch = vi.fn();
+    watchStarts.push({ path, cb, unwatch });
+    const gate = watchGates.get(path);
+    if (gate) await gate;
     watchCallbacks.push(cb);
-    return () => {};
+    return unwatch;
   }),
 }));
 
@@ -52,6 +66,8 @@ function fireExternalModify() {
 
 beforeEach(() => {
   watchCallbacks.length = 0;
+  watchStarts.length = 0;
+  watchGates.clear();
   vi.mocked(readTextFile).mockResolvedValue(RAW);
   vi.mocked(writeTextFile).mockReset();
   vi.mocked(writeTextFile).mockResolvedValue();
@@ -134,6 +150,72 @@ describe("useTabs edit", () => {
     await act(() => result.current.saveEdit(id, BODY_EDITED));
     expect(result.current.activeTab?.draft).toBe(RAW);
     expect(result.current.activeTab?.draftError).toBe("disk full");
+  });
+});
+
+describe("useTabs watchers", () => {
+  const PATH_A = "/ws/a.md";
+  const PATH_B = "/ws/b.md";
+
+  function findStart(path: string) {
+    const start = watchStarts.find((w) => w.path === path);
+    expect(start).toBeDefined();
+    return start!;
+  }
+
+  // Opens PATH_A with its watch held open, swaps the tab to PATH_B while that
+  // attach is still in flight, then lets the PATH_A watch resolve late.
+  async function swapPathMidAttach() {
+    let openGateA!: () => void;
+    watchGates.set(
+      PATH_A,
+      new Promise<void>((resolve) => {
+        openGateA = resolve;
+      })
+    );
+    const hook = renderHook(() =>
+      useTabs({ autoReloadOnExternalChange: false, isManagedPath: () => false })
+    );
+    await waitFor(() => expect(hook.result.current.hydrated).toBe(true));
+
+    act(() => hook.result.current.openInNew(PATH_A));
+    await waitFor(() => expect(watchStarts.some((w) => w.path === PATH_A)).toBe(true));
+
+    act(() => hook.result.current.openInActive(PATH_B));
+    await waitFor(() => expect(watchStarts.some((w) => w.path === PATH_B)).toBe(true));
+
+    openGateA();
+    return hook;
+  }
+
+  it("detaches a watcher superseded by a path swap during attach", async () => {
+    await swapPathMidAttach();
+    await waitFor(() => expect(findStart(PATH_A).unwatch).toHaveBeenCalled());
+  });
+
+  it("keeps the new path's watcher attached and working after the swap", async () => {
+    const { result } = await swapPathMidAttach();
+    await waitFor(() => expect(findStart(PATH_A).unwatch).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.activeTab?.loading).toBe(false));
+
+    expect(findStart(PATH_B).unwatch).not.toHaveBeenCalled();
+    vi.mocked(readTextFile).mockResolvedValue(CHANGED_ON_DISK);
+    act(() => findStart(PATH_B).cb({ type: { modify: { kind: "data" } } }));
+    await waitFor(() =>
+      expect(result.current.activeTab?.pendingContent).toBe(CHANGED_ON_DISK)
+    );
+  });
+
+  it("attaches exactly one watcher for a tab whose path never changes", async () => {
+    const { result } = await openTab();
+    expect(watchStarts.filter((w) => w.path === "/ws/doc.md")).toHaveLength(1);
+    expect(watchStarts[0].unwatch).not.toHaveBeenCalled();
+
+    fireExternalModify();
+    await waitFor(() =>
+      expect(result.current.activeTab?.pendingContent).toBe(CHANGED_ON_DISK)
+    );
+    expect(watchStarts[0].unwatch).not.toHaveBeenCalled();
   });
 });
 

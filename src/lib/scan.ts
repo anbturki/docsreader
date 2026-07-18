@@ -41,6 +41,15 @@ export type ProgressCallback = (progress: ScanProgress) => void;
 const BOM = "﻿";
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
 
+// Longest silence tolerated between two scan-progress events before the scan
+// is treated as hung. The backend throttles progress to one event per 100ms
+// (PROGRESS_INTERVAL_MS in src-tauri/core/src/scan.rs), so a live scan is
+// hundreds of times more talkative than this window.
+const SCAN_IDLE_TIMEOUT_MS = 60_000;
+
+const SCAN_STALLED_MESSAGE =
+  "This folder stopped responding while being scanned. It may be on a disconnected drive or still downloading from cloud storage. Check the folder is available, then try again.";
+
 export function parseFrontmatter(source: string): {
   data: Record<string, unknown>;
   content: string;
@@ -75,16 +84,34 @@ export async function scanDirectory(
   root: string,
   onProgress?: ProgressCallback
 ): Promise<ScanResult> {
-  let unlisten: UnlistenFn | undefined;
-  if (onProgress) {
-    unlisten = await listen<ScanProgress>("scan-progress", (event) => {
-      const payload = event.payload;
-      if (payload.root === root) onProgress(payload);
-    });
-  }
+  let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  let markActivity: () => void = () => {};
+
+  const unlisten: UnlistenFn = await listen<ScanProgress>("scan-progress", (event) => {
+    const payload = event.payload;
+    if (payload.root !== root) return;
+    markActivity();
+    if (onProgress) onProgress(payload);
+  });
+
+  // A legitimate workspace can scan for minutes (the walker caps at 50k
+  // files), so the guard is an inactivity window rather than a total
+  // deadline: only silence distinguishes a hung scan from a slow one.
+  const stalled = new Promise<never>((_resolve, reject) => {
+    markActivity = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => reject(new Error(SCAN_STALLED_MESSAGE)), SCAN_IDLE_TIMEOUT_MS);
+    };
+    markActivity();
+  });
+
   try {
-    return await invoke<ScanResult>("scan_markdown", { path: root });
+    return await Promise.race([
+      invoke<ScanResult>("scan_markdown", { path: root }),
+      stalled,
+    ]);
   } finally {
-    if (unlisten) unlisten();
+    if (idleTimer) clearTimeout(idleTimer);
+    unlisten();
   }
 }
