@@ -23,6 +23,8 @@ export interface ScanResult {
   root: string;
   files: MarkdownFile[];
   truncated: boolean;
+  // Optional: cached results from older app versions predate this field.
+  skipped?: number;
   marker?: WorkspaceMarker;
 }
 

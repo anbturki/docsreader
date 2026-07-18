@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { watch, type UnwatchFn } from "@tauri-apps/plugin-fs";
+import {
+  watch,
+  type DebouncedWatchOptions,
+  type UnwatchFn,
+  type WatchEvent,
+} from "@tauri-apps/plugin-fs";
 import {
   scanDirectory,
   type ScanProgress,
@@ -53,6 +58,12 @@ const DEBOUNCE_MS = 600;
 const MIN_RESCAN_INTERVAL_MS = 2000;
 // Coalescing window the fs watcher applies before delivering events.
 const WATCH_DELAY_MS = 200;
+// Attaching a watch can fail transiently (e.g. the directory is created
+// moments after setup, as ~/.docsreader is on the first agent write), so
+// setup retries with capped exponential backoff before giving up.
+const WATCH_ATTACH_MAX_ATTEMPTS = 3;
+const WATCH_ATTACH_BASE_BACKOFF_MS = 500;
+const WATCH_ATTACH_MAX_BACKOFF_MS = 2000;
 
 // Mirror of the Rust scanner's SKIP_DIRS in src-tauri/core/src/scan.rs. Any
 // directory segment in this set, OR any segment that starts with a dot
@@ -117,6 +128,54 @@ function isManifestPath(eventPath: string, root: string): boolean {
   const norm = eventPath.replace(/\\/g, "/");
   const r = root.replace(/\\/g, "/");
   return MANIFEST_BASENAMES.some((name) => norm === `${r}/${name}`);
+}
+
+// Attaches an fs watch with bounded retries so a transient setup failure
+// does not silently leave the path unwatched. Returns a cancel function
+// that stops pending retries and detaches an attached watch.
+function watchWithRetry(
+  path: string,
+  onEvent: (event: WatchEvent) => void,
+  options: DebouncedWatchOptions,
+  label: string
+): () => void {
+  let cancelled = false;
+  let unwatch: UnwatchFn | undefined;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const attempt = async (attemptNumber: number) => {
+    try {
+      const unwatchFn = await watch(path, onEvent, options);
+      if (cancelled) {
+        void unwatchFn();
+        return;
+      }
+      unwatch = unwatchFn;
+    } catch (err) {
+      if (cancelled) return;
+      if (attemptNumber >= WATCH_ATTACH_MAX_ATTEMPTS) {
+        console.warn(
+          `${label} watch failed after ${WATCH_ATTACH_MAX_ATTEMPTS} attempts`,
+          path,
+          err
+        );
+        return;
+      }
+      const backoff = Math.min(
+        WATCH_ATTACH_BASE_BACKOFF_MS * 2 ** (attemptNumber - 1),
+        WATCH_ATTACH_MAX_BACKOFF_MS
+      );
+      retryTimer = setTimeout(() => void attempt(attemptNumber + 1), backoff);
+    }
+  };
+
+  void attempt(1);
+
+  return () => {
+    cancelled = true;
+    if (retryTimer) clearTimeout(retryTimer);
+    if (unwatch) void unwatch();
+  };
 }
 
 export function useLibrary(): Library {
@@ -242,12 +301,15 @@ export function useLibrary(): Library {
       if (stored.length > 0) {
         const initial = stored.includes(last ?? "") ? (last as string) : stored[0];
         setActiveRoot(initial);
+        // Stale-while-revalidate: show the cache immediately, then rescan
+        // to pick up files changed while the app was closed.
         await hydrateFromCache(initial);
+        void rescan(initial);
       }
       setHydrated(true);
       await reconcileRegistry();
     })();
-  }, [hydrateFromCache, reconcileRegistry]);
+  }, [hydrateFromCache, reconcileRegistry, rescan]);
 
   const addRoot = useCallback(
     async (path: string) => {
@@ -306,15 +368,22 @@ export function useLibrary(): Library {
     async (path: string | undefined) => {
       setActiveRoot(path);
       await saveLastSelected(path);
-      if (path && !scans[path]) await hydrateFromCache(path);
+      if (!path) return;
+      if (!scans[path]) await hydrateFromCache(path);
+      // Background workspaces have no watcher, so whatever is on screen may
+      // be stale; always revalidate on selection.
+      void rescan(path);
     },
-    [scans, hydrateFromCache]
+    [scans, hydrateFromCache, rescan]
   );
 
   // Workspace-level watcher: re-scan the active root when files or
-  // folders are created, removed, or renamed anywhere inside it.
-  // Modify-only events for individual files are handled per-tab in
-  // useTabs, so they're ignored here to avoid redundant scans.
+  // folders are created, removed, renamed, or modified anywhere inside
+  // it. Modify events matter because agents (MCP update_doc) rewrite
+  // files in place, which changes scan-time extraction (titles, tags,
+  // search text) without any create/remove. A window-focus rescan covers
+  // changes made while the window was in the background and events were
+  // missed.
   //
   // Two filters protect against runaway work:
   //   1. Events whose path lies inside a hidden or known-noisy
@@ -329,9 +398,7 @@ export function useLibrary(): Library {
   useEffect(() => {
     if (!activeRoot) return;
     let cancelled = false;
-    let unwatch: UnwatchFn | undefined;
     let debounceTimer: ReturnType<typeof setTimeout> | undefined;
-    let gitDebounceTimer: ReturnType<typeof setTimeout> | undefined;
     let lastRescanAt = 0;
 
     const scheduleRescan = () => {
@@ -346,101 +413,73 @@ export function useLibrary(): Library {
       }, wait);
     };
 
-    // Lighter than scheduleRescan: refreshes only the workspace's git
-    // status without re-walking the file tree. Used when a modify
-    // event lands on a file inside the workspace but not the manifest -
-    // the file set is unchanged but the git modified/clean state may
-    // have flipped.
-    const scheduleGitRefresh = () => {
-      if (cancelled) return;
-      if (gitDebounceTimer) clearTimeout(gitDebounceTimer);
-      gitDebounceTimer = setTimeout(() => {
-        if (cancelled) return;
-        void fetchGitStatus(activeRoot).then((gitStatus) => {
-          if (cancelled) return;
-          setScans((s) => {
-            const prev = s[activeRoot];
-            if (!prev) return s;
-            return { ...s, [activeRoot]: { ...prev, gitStatus } };
-          });
-        });
-      }, DEBOUNCE_MS);
+    const onWatchEvent = (event: WatchEvent) => {
+      const kind = describeEventKind(event.type);
+      const paths = Array.isArray(event.paths) ? event.paths : [];
+
+      // Manifest events bypass the dotfile-skip filter, which would
+      // otherwise drop events for the marker file because of its
+      // leading dot.
+      const manifestTouched = paths.some((p) => isManifestPath(p, activeRoot));
+      if (
+        manifestTouched &&
+        (kind === "create" ||
+          kind === "remove" ||
+          kind === "rename" ||
+          kind === "modify")
+      ) {
+        scheduleRescan();
+        return;
+      }
+
+      // notify reports FSEvents queue overflow via its rescan sentinel,
+      // which describeEventKind surfaces as "other"/"any" without useful
+      // paths. Events were dropped, so rescan unconditionally.
+      if (kind === "other" || kind === "any") {
+        scheduleRescan();
+        return;
+      }
+
+      if (
+        kind !== "create" &&
+        kind !== "remove" &&
+        kind !== "rename" &&
+        kind !== "modify"
+      ) {
+        return;
+      }
+      // event.paths can contain multiple paths for batched events.
+      // Only schedule a rescan if at least one path is not skipped.
+      const someRelevant =
+        paths.length === 0 ||
+        paths.some((p) => !isSkippedWatchPath(p, activeRoot));
+      if (someRelevant) scheduleRescan();
     };
 
-    void (async () => {
-      try {
-        const unwatchFn = await watch(
-          activeRoot,
-          (event) => {
-            const kind = describeEventKind(event.type);
-            const paths = Array.isArray(event.paths) ? event.paths : [];
+    const stopWatch = watchWithRetry(
+      activeRoot,
+      onWatchEvent,
+      { recursive: true, delayMs: WATCH_DELAY_MS },
+      "workspace"
+    );
 
-            // Manifest events bypass both the modify-skip and the
-            // dotfile-skip filters. The dotfile filter would otherwise
-            // drop create/remove/rename of the marker file because of its
-            // leading dot, and the modify-skip would drop in-place edits.
-            const manifestTouched = paths.some((p) =>
-              isManifestPath(p, activeRoot)
-            );
-            if (
-              manifestTouched &&
-              (kind === "create" ||
-                kind === "remove" ||
-                kind === "rename" ||
-                kind === "modify")
-            ) {
-              scheduleRescan();
-              return;
-            }
-
-            // Modify events on regular workspace files: skip the rescan
-            // (file set hasn't changed) but refresh git status so the
-            // file-tree decorations stay live.
-            if (kind === "modify") {
-              const someRelevant =
-                paths.length === 0 ||
-                paths.some((p) => !isSkippedWatchPath(p, activeRoot));
-              if (someRelevant) scheduleGitRefresh();
-              return;
-            }
-
-            if (kind !== "create" && kind !== "remove" && kind !== "rename") {
-              return;
-            }
-            // event.paths can contain multiple paths for batched events.
-            // Only schedule a rescan if at least one path is not skipped.
-            const someRelevant =
-              paths.length === 0 ||
-              paths.some((p) => !isSkippedWatchPath(p, activeRoot));
-            if (someRelevant) scheduleRescan();
-          },
-          { recursive: true, delayMs: WATCH_DELAY_MS }
-        );
-        if (cancelled) {
-          void unwatchFn();
-          return;
-        }
-        unwatch = unwatchFn;
-      } catch (err) {
-        console.error("workspace watch failed", err);
-      }
-    })();
-
+    window.addEventListener("focus", scheduleRescan);
     return () => {
       cancelled = true;
       if (debounceTimer) clearTimeout(debounceTimer);
-      if (gitDebounceTimer) clearTimeout(gitDebounceTimer);
-      if (unwatch) void unwatch();
+      window.removeEventListener("focus", scheduleRescan);
+      stopWatch();
     };
   }, [activeRoot]);
 
   // Registry watcher: when an agent creates a workspace while the app is
   // open, ~/.docsreader/workspaces.json changes and the new workspace
-  // appears without a restart. A window-focus pass is the fallback for the
-  // rare case the directory did not exist when the watch was set up.
+  // appears without a restart. The watch attaches with retries (the
+  // directory may not exist until the first agent write); the window-focus
+  // pass remains the fallback if it never attaches.
   useEffect(() => {
     let cancelled = false;
-    let unwatch: UnwatchFn | undefined;
+    let stopWatch: (() => void) | undefined;
     let timer: ReturnType<typeof setTimeout> | undefined;
 
     const scheduleReconcile = () => {
@@ -452,22 +491,20 @@ export function useLibrary(): Library {
     };
 
     void (async () => {
+      let dir: string;
       try {
-        const dir = await registryDir();
-        const unwatchFn = await watch(dir, scheduleReconcile, {
-          recursive: false,
-          delayMs: WATCH_DELAY_MS,
-        });
-        if (cancelled) {
-          void unwatchFn();
-          return;
-        }
-        unwatch = unwatchFn;
+        dir = await registryDir();
       } catch (err) {
-        // The registry dir may not exist until the first agent write; the
-        // focus fallback and next launch still pick new workspaces up.
-        console.debug("registry watch not active yet", err);
+        console.warn("registry dir lookup failed", err);
+        return;
       }
+      if (cancelled) return;
+      stopWatch = watchWithRetry(
+        dir,
+        scheduleReconcile,
+        { recursive: false, delayMs: WATCH_DELAY_MS },
+        "registry"
+      );
     })();
 
     window.addEventListener("focus", scheduleReconcile);
@@ -475,7 +512,7 @@ export function useLibrary(): Library {
       cancelled = true;
       if (timer) clearTimeout(timer);
       window.removeEventListener("focus", scheduleReconcile);
-      if (unwatch) void unwatch();
+      if (stopWatch) stopWatch();
     };
   }, [reconcileRegistry]);
 

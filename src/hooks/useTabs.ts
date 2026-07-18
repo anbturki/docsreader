@@ -6,6 +6,13 @@ import { describeEventKind } from "@/lib/events";
 import { basename } from "@/lib/path";
 import { loadTabsState, saveTabsState, TABS_KEY_PANE0 } from "@/lib/storage";
 
+// A read that blocks at the OS level (cloud placeholder still downloading,
+// dead network mount, FIFO) never settles, which would pin the tab on
+// "Loading..." forever. After this long the spinner becomes a retryable error.
+const LOAD_TIMEOUT_MS = 15000;
+const LOAD_TIMEOUT_ERROR =
+  "This file is taking too long to read. It may still be downloading from cloud storage or live on an unreachable disk. Click the file again to retry.";
+
 export interface Tab {
   id: string;
   path: string;
@@ -90,6 +97,9 @@ export function useTabs(options: UseTabsOptions): Tabs {
   // fired before the readTextFile await resolves, the older one's
   // result is dropped. Protects against out-of-order async completion.
   const modifySeqRef = useRef(new Map<string, number>());
+  // Same pattern for loads: a superseded load's completion (and its
+  // timeout) is dropped once a newer load for the tab has started.
+  const loadSeqRef = useRef(new Map<string, number>());
 
   const [tabs, setTabs] = useState<Tab[]>([]);
   const [activeId, setActiveId] = useState<string | undefined>();
@@ -104,13 +114,28 @@ export function useTabs(options: UseTabsOptions): Tabs {
 
   const loadTab = useCallback(
     async (id: string, path: string) => {
+      const seq = (loadSeqRef.current.get(id) ?? 0) + 1;
+      loadSeqRef.current.set(id, seq);
+      // The read keeps running past the timeout on purpose: if it settles
+      // later and no newer load has started (same seq), its result still
+      // lands and replaces the timeout error.
+      const timer = setTimeout(() => {
+        if (loadSeqRef.current.get(id) !== seq) return;
+        const current = tabsRef.current.find((t) => t.id === id);
+        if (!current || current.path !== path) return;
+        updateTab(id, { error: LOAD_TIMEOUT_ERROR, content: "", meta: {}, loading: false });
+      }, LOAD_TIMEOUT_MS);
       try {
         const raw = await readTextFile(path);
+        clearTimeout(timer);
+        if (loadSeqRef.current.get(id) !== seq) return;
         const { data, content } = parseFrontmatter(raw);
         const current = tabsRef.current.find((t) => t.id === id);
         if (!current || current.path !== path) return;
         updateTab(id, { meta: data, content, error: undefined, loading: false });
       } catch (err) {
+        clearTimeout(timer);
+        if (loadSeqRef.current.get(id) !== seq) return;
         const current = tabsRef.current.find((t) => t.id === id);
         if (!current || current.path !== path) return;
         updateTab(id, {
@@ -139,6 +164,12 @@ export function useTabs(options: UseTabsOptions): Tabs {
       const existing = tabsRef.current.find((t) => t.path === path);
       if (existing) {
         setActiveId(existing.id);
+        // An errored tab (including one that hit the load timeout) gets a
+        // fresh load attempt; healthy tabs are only re-activated.
+        if (existing.error !== undefined) {
+          updateTab(existing.id, { error: undefined, loading: true });
+          void loadTab(existing.id, existing.path);
+        }
         return;
       }
       const active = tabsRef.current.find((t) => t.id === activeId);
@@ -167,6 +198,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
   const close = useCallback(
     (id: string) => {
       modifySeqRef.current.delete(id);
+      loadSeqRef.current.delete(id);
       setTabs((prev) => {
         const idx = prev.findIndex((t) => t.id === id);
         if (idx < 0) return prev;

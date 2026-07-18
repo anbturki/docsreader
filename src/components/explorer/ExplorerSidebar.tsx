@@ -321,6 +321,7 @@ function ExplorerFooter({
   }
   const total = activeScan.result.files.length;
   const visible = total - hiddenCount;
+  const skipped = activeScan.result.skipped ?? 0;
   return (
     <span className="flex items-center gap-2 px-2">
       <span>
@@ -328,6 +329,11 @@ function ExplorerFooter({
         {activeScan.result.truncated && " (50k cap)"}
         {matchCount !== visible && ` · ${matchCount} match`}
       </span>
+      {skipped > 0 && (
+        <span title="Files that could not be read or were too large to include">
+          {skipped} skipped
+        </span>
+      )}
       {hiddenCount > 0 && (
         <button
           type="button"

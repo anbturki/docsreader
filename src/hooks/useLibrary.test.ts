@@ -1,6 +1,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
-import { vi, describe, it, expect, beforeEach } from "vitest";
+import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
+import { watch, type WatchEvent } from "@tauri-apps/plugin-fs";
+import { scanDirectory } from "@/lib/scan";
 import type { RegistryWorkspace } from "@/lib/workspaces";
 
 let registry: RegistryWorkspace[] = [];
@@ -143,5 +145,123 @@ describe("useLibrary registry sync", () => {
     await hook.result.current.removeRoot("/manual/only");
     await waitFor(() => expect(hook.result.current.roots).toEqual([]));
     expect(dismissed).not.toContain("/manual/only");
+  });
+});
+
+// Past DEBOUNCE_MS in useLibrary.ts, so a scheduled rescan fires.
+const PAST_DEBOUNCE_MS = 700;
+const REGISTRY_DIR = "/home/u/.docsreader";
+const WATCH_OK = async () => () => {};
+
+async function workspaceWatchCallback(root: string) {
+  await waitFor(() =>
+    expect(
+      vi.mocked(watch).mock.calls.some(([watched]) => watched === root)
+    ).toBe(true)
+  );
+  const call = vi.mocked(watch).mock.calls.find(([watched]) => watched === root);
+  if (!call) throw new Error(`no watch attached for ${root}`);
+  return call[1];
+}
+
+function fireWatchEvent(
+  callback: (event: WatchEvent) => void,
+  type: WatchEvent["type"],
+  paths: string[]
+) {
+  callback({ type, paths, attrs: {} });
+}
+
+describe("useLibrary stale-while-revalidate rescans", () => {
+  beforeEach(() => {
+    registry = [];
+    storedRoots = [];
+    dismissed = [];
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("rescans the initial root after startup hydration", async () => {
+    storedRoots = ["/manual/folder"];
+    await mount();
+    await waitFor(() =>
+      expect(scanDirectory).toHaveBeenCalledWith(
+        "/manual/folder",
+        expect.any(Function)
+      )
+    );
+  });
+
+  it("rescans a root when it is selected", async () => {
+    storedRoots = ["/first", "/second"];
+    const hook = await mount();
+    vi.mocked(scanDirectory).mockClear();
+    await hook.result.current.selectRoot("/second");
+    await waitFor(() =>
+      expect(scanDirectory).toHaveBeenCalledWith("/second", expect.any(Function))
+    );
+  });
+
+  it("schedules a rescan when a file is modified in place", async () => {
+    storedRoots = ["/manual/folder"];
+    await mount();
+    const callback = await workspaceWatchCallback("/manual/folder");
+    vi.mocked(scanDirectory).mockClear();
+    vi.useFakeTimers();
+    fireWatchEvent(callback, { modify: { kind: "data", mode: "content" } }, [
+      "/manual/folder/doc.md",
+    ]);
+    await vi.advanceTimersByTimeAsync(PAST_DEBOUNCE_MS);
+    expect(scanDirectory).toHaveBeenCalledWith(
+      "/manual/folder",
+      expect.any(Function)
+    );
+  });
+
+  it("schedules a rescan for an overflow sentinel event", async () => {
+    storedRoots = ["/manual/folder"];
+    await mount();
+    const callback = await workspaceWatchCallback("/manual/folder");
+    vi.mocked(scanDirectory).mockClear();
+    vi.useFakeTimers();
+    fireWatchEvent(callback, "other", []);
+    await vi.advanceTimersByTimeAsync(PAST_DEBOUNCE_MS);
+    expect(scanDirectory).toHaveBeenCalledWith(
+      "/manual/folder",
+      expect.any(Function)
+    );
+  });
+});
+
+describe("useLibrary watch resilience", () => {
+  beforeEach(() => {
+    registry = [];
+    storedRoots = [];
+    dismissed = [];
+    vi.clearAllMocks();
+  });
+
+  it("retries a failing watch and warns after the final attempt", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.mocked(watch).mockRejectedValue(new Error("forbidden path"));
+    try {
+      await mount();
+      await waitFor(() => expect(warn).toHaveBeenCalled(), { timeout: 4000 });
+      const registryAttempts = vi
+        .mocked(watch)
+        .mock.calls.filter(([watched]) => watched === REGISTRY_DIR);
+      expect(registryAttempts).toHaveLength(3);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining("registry watch failed"),
+        REGISTRY_DIR,
+        expect.any(Error)
+      );
+    } finally {
+      warn.mockRestore();
+      vi.mocked(watch).mockImplementation(WATCH_OK);
+    }
   });
 });

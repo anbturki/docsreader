@@ -162,6 +162,17 @@ fn validate_phase(phase: &str) -> Result<(), CoreError> {
                 ),
         );
     }
+    // A phase folder named like a pruned directory (build, dist, ...) would
+    // make its docs invisible to the GUI while writes still report success.
+    if crate::scan::is_reserved_dir_name(phase) {
+        return Err(CoreError::new(
+            ErrorCode::InvalidInput,
+            format!("phase {phase:?} is a reserved name"),
+        )
+        .with_recovery(format!(
+            "choose a different phase name, e.g. \"{phase}-phase\""
+        )));
+    }
     Ok(())
 }
 
@@ -560,6 +571,41 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(err.code, ErrorCode::InvalidInput);
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[tokio::test]
+    async fn rejects_reserved_phase_names() {
+        let root = test_dir("reserved_phase");
+        for phase in ["build", "dist", "target", "venv"] {
+            let err = write_doc_core(
+                &root,
+                &NewDoc {
+                    phase: Some(phase),
+                    ..NewDoc::new("Doc", "x", DocStatus::Research)
+                },
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(err.code, ErrorCode::InvalidInput, "phase {phase:?}");
+            assert!(
+                err.message.contains("reserved"),
+                "message says why: {}",
+                err.message
+            );
+            assert!(err.recovery.is_some(), "suggests picking another name");
+        }
+
+        let ok = write_doc_core(
+            &root,
+            &NewDoc {
+                phase: Some("discovery"),
+                ..NewDoc::new("Doc", "x", DocStatus::Research)
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(ok.rel_path, "research/discovery/doc.md");
         let _ = std::fs::remove_dir_all(&root);
     }
 
