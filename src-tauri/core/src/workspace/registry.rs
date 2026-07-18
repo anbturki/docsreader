@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use serde::{Deserialize, Serialize};
 
@@ -7,6 +8,9 @@ use crate::error::{CoreError, ErrorCode};
 
 pub const REGISTRY_DIR: &str = ".docsreader";
 pub const REGISTRY_FILE: &str = "workspaces.json";
+
+const LOCK_SUFFIX: &str = ".lock";
+const TEMP_SUFFIX: &str = ".tmp";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WorkspaceEntry {
@@ -40,6 +44,59 @@ pub fn load_registry(file: &Path) -> Result<Vec<WorkspaceEntry>, CoreError> {
     Ok(parsed.workspaces)
 }
 
+fn sibling_path(file: &Path, suffix: &str) -> PathBuf {
+    let mut name = file.file_name().unwrap_or_default().to_os_string();
+    name.push(suffix);
+    file.with_file_name(name)
+}
+
+/// Unique per writer so two concurrent saves cannot collide on the scratch file.
+fn temp_path(file: &Path) -> PathBuf {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
+    sibling_path(file, &format!(".{}.{seq}{TEMP_SUFFIX}", std::process::id()))
+}
+
+/// Rename instead of writing in place: a concurrent reader sees either the whole
+/// old file or the whole new one, never a truncated one.
+fn write_atomically(file: &Path, raw: &str) -> Result<(), CoreError> {
+    let temp = temp_path(file);
+    if let Err(e) = std::fs::write(&temp, raw) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(e.into());
+    }
+    if let Err(e) = std::fs::rename(&temp, file) {
+        let _ = std::fs::remove_file(&temp);
+        return Err(e.into());
+    }
+    Ok(())
+}
+
+/// Advisory exclusive lock on a sidecar file, released when the handle drops.
+/// The sidecar is never renamed, so every writer contends on the same inode.
+struct RegistryLock(std::fs::File);
+
+impl RegistryLock {
+    fn acquire(file: &Path) -> Result<Self, CoreError> {
+        if let Some(parent) = file.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let handle = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(sibling_path(file, LOCK_SUFFIX))?;
+        handle.lock()?;
+        Ok(Self(handle))
+    }
+}
+
+impl Drop for RegistryLock {
+    fn drop(&mut self) {
+        let _ = self.0.unlock();
+    }
+}
+
 pub fn save_registry(file: &Path, workspaces: &[WorkspaceEntry]) -> Result<(), CoreError> {
     if let Some(parent) = file.parent() {
         std::fs::create_dir_all(parent)?;
@@ -48,12 +105,14 @@ pub fn save_registry(file: &Path, workspaces: &[WorkspaceEntry]) -> Result<(), C
         workspaces: workspaces.to_vec(),
     })
     .map_err(|e| CoreError::new(ErrorCode::Io, format!("serialize registry: {e}")))?;
-    std::fs::write(file, raw)?;
-    Ok(())
+    write_atomically(file, &raw)
 }
 
 /// Replaces any entry with the same path, so re-registering updates slug/scope.
 pub fn upsert_workspace(file: &Path, entry: WorkspaceEntry) -> Result<(), CoreError> {
+    // Held across the whole load-modify-save: concurrent sidecars would otherwise
+    // each read the same registry and the last save would drop the other entries.
+    let _lock = RegistryLock::acquire(file)?;
     let mut workspaces = load_registry(file)?;
     workspaces.retain(|w| w.path != entry.path);
     workspaces.push(entry);
@@ -121,6 +180,58 @@ mod tests {
         let kept = existing_workspaces(entries);
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].path, present);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn concurrent_upserts_keep_every_entry() {
+        const WRITERS: usize = 8;
+        let dir = test_dir("reg_concurrent");
+        let file = dir.join(REGISTRY_FILE);
+        std::thread::scope(|scope| {
+            for i in 0..WRITERS {
+                let file = file.clone();
+                scope.spawn(move || {
+                    upsert_workspace(
+                        &file,
+                        entry(
+                            &format!("ws{i}"),
+                            &format!("/repo/ws{i}"),
+                            WorkspaceScope::Project,
+                        ),
+                    )
+                    .unwrap();
+                });
+            }
+        });
+
+        let mut slugs: Vec<String> = load_registry(&file)
+            .unwrap()
+            .into_iter()
+            .map(|w| w.slug)
+            .collect();
+        slugs.sort();
+        let expected: Vec<String> = (0..WRITERS).map(|i| format!("ws{i}")).collect();
+        assert_eq!(slugs, expected);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn save_leaves_no_temp_files() {
+        let dir = test_dir("reg_notemp");
+        let file = dir.join(REGISTRY_FILE);
+        save_registry(
+            &file,
+            &[entry("notes", "/home/u/notes", WorkspaceScope::User)],
+        )
+        .unwrap();
+
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .filter(|name| name.to_string_lossy().ends_with(TEMP_SUFFIX))
+            .collect();
+        assert!(leftovers.is_empty(), "leftover temp files: {leftovers:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
