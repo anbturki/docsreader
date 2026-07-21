@@ -10,7 +10,7 @@ interface Props {
 export function SearchInput({
   value,
   onChange,
-  placeholder = "Search files, titles, tags...",
+  placeholder = "Search names, tags, and contents...",
 }: Props) {
   return (
     <div className="relative">

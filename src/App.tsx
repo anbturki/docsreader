@@ -27,6 +27,8 @@ import { UpdateToast } from "@/components/document/UpdateToast";
 
 const SettingsDialog = lazy(() => import("@/components/settings/SettingsDialog"));
 import { useLibrary } from "@/hooks/useLibrary";
+import { useContentSearch } from "@/hooks/useContentSearch";
+import { mergeSearchEntries } from "@/lib/searchEntries";
 import { useConvertPrompt } from "@/hooks/useConvertPrompt";
 import { usePanes } from "@/hooks/usePanes";
 import type { SplitMode } from "@/lib/storage";
@@ -261,6 +263,11 @@ function App() {
     };
   }, [quickOpenMounted]);
   const filteredFiles = useFilteredFiles(allFiles, search);
+  const contentSearch = useContentSearch(library.activeRoot, search);
+  const searchEntries = useMemo(
+    () => mergeSearchEntries(filteredFiles, contentSearch.hits),
+    [filteredFiles, contentSearch.hits]
+  );
   const tree = useMemo(() => {
     if (!library.activeRoot) return undefined;
     return buildTree(library.activeRoot, filteredFiles);
@@ -572,6 +579,10 @@ function App() {
           onLensChange={handleLensChange}
           search={search}
           onSearchChange={setSearch}
+          searchEntries={searchEntries}
+          searchingContents={contentSearch.searching}
+          searchError={contentSearch.error}
+          searchTruncated={contentSearch.truncated}
           filteredFiles={filteredFiles}
           pinnedFiles={pinnedFiles}
           tree={tree}

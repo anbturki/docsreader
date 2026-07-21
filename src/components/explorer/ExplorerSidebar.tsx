@@ -18,7 +18,9 @@ import { PinnedList } from "./PinnedList";
 import { RecentList } from "./RecentList";
 import { ScanProgressView } from "./ScanProgressView";
 import { SearchInput } from "./SearchInput";
+import { SearchResults } from "./SearchResults";
 import { TagsList } from "./TagsList";
+import type { SearchEntry } from "@/lib/searchEntries";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { TasksBoard } from "@/components/tasks/TasksBoard";
 
@@ -40,6 +42,10 @@ interface Props {
   // search
   search: string;
   onSearchChange: (value: string) => void;
+  searchEntries: SearchEntry[];
+  searchingContents: boolean;
+  searchError: string | undefined;
+  searchTruncated: boolean;
 
   // files
   filteredFiles: MarkdownFile[];
@@ -82,6 +88,10 @@ export function ExplorerSidebar({
   onLensChange,
   search,
   onSearchChange,
+  searchEntries,
+  searchingContents,
+  searchError,
+  searchTruncated,
   filteredFiles,
   pinnedFiles,
   tree,
@@ -147,6 +157,19 @@ export function ExplorerSidebar({
             progress={activeScan.progress}
             startedAt={activeScan.startedAt}
           />
+        ) : search.trim() ? (
+          <SearchResults
+            entries={searchEntries}
+            searching={searchingContents}
+            error={searchError}
+            truncated={searchTruncated}
+            selectedPath={selectedPath}
+            onSelect={onSelectFile}
+            onOpenInNewTab={onOpenInNewTab}
+            onOpenInOtherPane={onOpenInOtherPane}
+            isPinned={isPinned}
+            onTogglePin={onTogglePin}
+          />
         ) : (
           <LensView
             lens={lens}
@@ -173,7 +196,7 @@ export function ExplorerSidebar({
       <SidebarFooter className="gap-2 text-xs text-muted-foreground">
         <ExplorerFooter
           activeScan={activeScan}
-          matchCount={filteredFiles.length}
+          matchCount={search.trim() ? searchEntries.length : filteredFiles.length}
           hiddenCount={hiddenCount}
           onOpenSettings={onOpenSettings}
         />
