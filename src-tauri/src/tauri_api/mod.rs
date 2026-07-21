@@ -1,11 +1,16 @@
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
 use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::agents::{self, AgentClient, ClientId};
 use docsreader_core::git::{git_show_head_core, git_status_core, GitStatus};
 use docsreader_core::scan::{run_scan, ScanProgress, ScanProgressSink, ScanResult};
+use docsreader_core::search::{
+    search_content as search_content_core, ContentQuery, ContentSearchResult, SearchAbort,
+};
 use docsreader_core::tasks::{list_tasks_core, set_task_status_core, TaskSummary};
 use docsreader_core::workspace::init::{convert_workspace_core, InitializedWorkspace};
 use docsreader_core::workspace::registry::{
@@ -31,6 +36,43 @@ pub async fn scan_markdown(app: AppHandle, path: String) -> Result<ScanResult, S
     tauri::async_runtime::spawn_blocking(move || run_scan(&sink, path_for_task))
         .await
         .map_err(|e| format!("scan task panicked: {}", e))?
+}
+
+/// Bumped by every search request. A command cannot be cancelled once it is
+/// running, so a superseded query notices the newer generation and stops
+/// reading files instead of competing with it for the disk.
+#[derive(Default)]
+pub struct SearchGeneration(Arc<AtomicU64>);
+
+struct NewerQueryWins {
+    generation: u64,
+    latest: Arc<AtomicU64>,
+}
+
+impl SearchAbort for NewerQueryWins {
+    fn is_aborted(&self) -> bool {
+        self.latest.load(Ordering::Relaxed) != self.generation
+    }
+}
+
+#[tauri::command]
+pub async fn search_content(
+    state: State<'_, SearchGeneration>,
+    path: String,
+    query: String,
+) -> Result<ContentSearchResult, String> {
+    let latest = state.0.clone();
+    let generation = latest.fetch_add(1, Ordering::SeqCst) + 1;
+    let abort = NewerQueryWins { generation, latest };
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(parsed) = ContentQuery::parse(&query, false) else {
+            return Ok(ContentSearchResult::empty());
+        };
+        search_content_core(Path::new(&path), &parsed, &abort).map_err(|e| e.message)
+    })
+    .await
+    .map_err(|e| format!("search task panicked: {e}"))?
 }
 
 #[tauri::command]

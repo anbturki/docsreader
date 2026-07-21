@@ -32,8 +32,10 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(OpenedPaths::default())
+        .manage(tauri_api::SearchGeneration::default())
         .invoke_handler(tauri::generate_handler![
             tauri_api::scan_markdown,
+            tauri_api::search_content,
             tauri_api::convert_workspace,
             tauri_api::detect_agent_clients,
             tauri_api::connect_agent_client,

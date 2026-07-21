@@ -8,6 +8,8 @@ pub mod path_guard;
 pub mod read;
 pub mod rename;
 pub mod scan;
+mod score;
+pub mod search;
 pub mod slug;
 pub mod tasks;
 pub mod update;

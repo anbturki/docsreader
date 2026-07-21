@@ -4,6 +4,7 @@ use serde::Serialize;
 
 use crate::error::{CoreError, ErrorCode};
 use crate::frontmatter::{parse_doc_meta, split_frontmatter};
+use crate::score::{combine_terms, FieldHits};
 use crate::write::DocStatus;
 
 /// ~25k tokens at ~4 chars/token; MCP responses stay under this.
@@ -180,11 +181,6 @@ pub fn list_docs_core(root: &Path, filters: &DocFilters<'_>) -> Result<Vec<DocSu
         .collect())
 }
 
-const SCORE_TITLE: u32 = 3;
-const SCORE_TAG: u32 = 2;
-const SCORE_SLUG: u32 = 2;
-const SCORE_CONTENT: u32 = 1;
-
 // Every whitespace-separated term must match somewhere (AND); each term's
 // score sums the fields it hits. A single-word query scores exactly as it did
 // before tokenization; a multi-word query like "coturn flags" now matches an
@@ -199,27 +195,12 @@ pub(crate) fn score_match(
     let title_lower = title.map(str::to_lowercase);
     let slug_lower = slug.to_lowercase();
     let tags_lower: Vec<String> = tags.iter().map(|t| t.to_lowercase()).collect();
-    let mut total = 0u32;
-    for term in query_lower.split_whitespace() {
-        let mut term_score = 0u32;
-        if title_lower.as_deref().is_some_and(|t| t.contains(term)) {
-            term_score += SCORE_TITLE;
-        }
-        if tags_lower.iter().any(|t| t == term) {
-            term_score += SCORE_TAG;
-        }
-        if slug_lower.contains(term) {
-            term_score += SCORE_SLUG;
-        }
-        if body_lower.contains(term) {
-            term_score += SCORE_CONTENT;
-        }
-        if term_score == 0 {
-            return 0;
-        }
-        total += term_score;
-    }
-    total
+    combine_terms(query_lower.split_whitespace().map(|term| FieldHits {
+        title: title_lower.as_deref().is_some_and(|t| t.contains(term)),
+        tag: tags_lower.iter().any(|t| t == term),
+        slug: slug_lower.contains(term),
+        content: body_lower.contains(term),
+    }))
 }
 
 fn content_snippet(content: &str, query_lower: &str) -> Option<String> {
