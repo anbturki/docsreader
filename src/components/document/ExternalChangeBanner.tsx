@@ -29,14 +29,14 @@ export function ExternalChangeBanner({
 
   return (
     <>
-      <div className="sticky top-0 z-10 border-b border-amber-200 bg-amber-50/95 px-4 py-2 text-sm dark:border-amber-900/60 dark:bg-amber-950/40">
+      <div className="sticky top-0 z-10 border-b border-[var(--status-warning-fg)]/30 bg-[var(--status-warning-bg)] px-4 py-2 text-sm">
         <div className="mx-auto flex max-w-3xl items-center gap-3">
-          <AlertTriangle className="size-4 shrink-0 text-amber-600 dark:text-amber-500" />
+          <AlertTriangle className="size-4 shrink-0 text-[var(--status-warning-fg)]" />
           <div className="flex-1 truncate">
-            <span className="font-medium text-amber-900 dark:text-amber-200">
+            <span className="font-medium text-[var(--status-warning-fg)]">
               File changed on disk
             </span>
-            <span className="ml-2 text-amber-800/70 dark:text-amber-200/70">
+            <span className="ml-2 text-[var(--status-warning-fg)]/70">
               {formatStats(stats)}
             </span>
           </div>

@@ -65,7 +65,7 @@ function TabItem({
       <span className="truncate">{tab.title}</span>
       {tab.pendingContent && (
         <span
-          className="size-1.5 shrink-0 rounded-full bg-amber-500"
+          className="size-1.5 shrink-0 rounded-full bg-[var(--status-warning-fg)]"
           aria-label="External change pending"
           title="This file changed on disk - click to review"
         />

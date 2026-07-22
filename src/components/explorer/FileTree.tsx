@@ -156,12 +156,12 @@ const GIT_BADGE_TOOLTIPS: Record<GitFileStatusKind, string> = {
 };
 
 const GIT_BADGE_CLASSES: Record<GitFileStatusKind, string> = {
-  modified: "text-amber-600 dark:text-amber-400",
-  added: "text-emerald-600 dark:text-emerald-400",
-  deleted: "text-rose-600 dark:text-rose-400",
-  renamed: "text-blue-600 dark:text-blue-400",
+  modified: "text-[var(--status-warning-fg)]",
+  added: "text-[var(--status-success-fg)]",
+  deleted: "text-[var(--status-error-fg)]",
+  renamed: "text-[var(--status-info-fg)]",
   untracked: "text-muted-foreground",
-  unmerged: "text-rose-700 dark:text-rose-300",
+  unmerged: "text-[var(--status-error-fg)]",
 };
 
 function GitBadge({ kind }: { kind: GitFileStatusKind }) {

@@ -90,7 +90,7 @@ function UpdateStatus({
 }) {
   if (phase === "up-to-date") {
     return (
-      <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-500">
+      <p className="flex items-center gap-1.5 text-xs text-[var(--status-success-fg)]">
         <CheckCircle2 className="size-3.5" />
         You're on the latest version.
       </p>
