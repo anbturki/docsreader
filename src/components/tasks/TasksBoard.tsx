@@ -4,6 +4,7 @@ import { useTasks } from "@/hooks/useTasks";
 import { parseAcProgress, type AcProgress } from "@/lib/taskDoc";
 import type { Task, TaskStatus } from "@/lib/tasks";
 import { TaskBoardView } from "./TaskBoardView";
+import { useCollapsedStatuses } from "./useCollapsedStatuses";
 
 interface Props {
   activeRoot: string | undefined;
@@ -25,6 +26,7 @@ export function TasksBoard({
   const { tasks, revision, loading, error, refresh, setStatus } = useTasks(activeRoot);
   const progress = useTaskProgress(tasks, revision);
   const { displayTasks, advancingIds, advanceError, advance } = useAdvance(tasks, setStatus);
+  const { collapsed, toggle } = useCollapsedStatuses(activeRoot);
 
   return (
     <TaskBoardView
@@ -40,6 +42,8 @@ export function TasksBoard({
       onOpenInOtherPane={onOpenInOtherPane}
       advancingIds={advancingIds}
       onAdvance={advance}
+      collapsedStatuses={collapsed}
+      onToggleStatus={toggle}
     />
   );
 }

@@ -1,5 +1,6 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
 import type { ScanResult } from "./scan";
+import { TASK_STATUSES, type TaskStatus } from "./tasks";
 
 const store = new LazyStore("docsreader.settings.json");
 
@@ -14,6 +15,7 @@ const SIDEBAR_STATE_KEY = "sidebarState";
 const PINNED_KEY = "pinnedByRoot";
 const CONVERT_DECLINED_KEY = "convertDeclined";
 const DISMISSED_REGISTRY_KEY = "dismissedRegistry";
+const COLLAPSED_TASK_STATUSES_KEY = "collapsedTaskStatusesByRoot";
 
 export const TABS_KEY_PANE0 = TABS_STATE_KEY;
 export const TABS_KEY_PANE1 = TABS_STATE_PANE1_KEY;
@@ -411,5 +413,25 @@ export async function loadPinned(): Promise<PinnedByRoot> {
 
 export async function savePinned(pinned: PinnedByRoot): Promise<void> {
   await store.set(PINNED_KEY, pinned);
+  await store.save();
+}
+
+export type CollapsedTaskStatusesByRoot = Record<string, TaskStatus[]>;
+
+export async function loadCollapsedTaskStatuses(): Promise<CollapsedTaskStatusesByRoot> {
+  const v = await store.get<Record<string, unknown>>(COLLAPSED_TASK_STATUSES_KEY);
+  if (!v || typeof v !== "object") return {};
+  const out: CollapsedTaskStatusesByRoot = {};
+  for (const [root, statuses] of Object.entries(v)) {
+    if (typeof root !== "string" || !Array.isArray(statuses)) continue;
+    out[root] = TASK_STATUSES.filter((s) => statuses.includes(s));
+  }
+  return out;
+}
+
+export async function saveCollapsedTaskStatuses(
+  collapsed: CollapsedTaskStatusesByRoot
+): Promise<void> {
+  await store.set(COLLAPSED_TASK_STATUSES_KEY, collapsed);
   await store.save();
 }

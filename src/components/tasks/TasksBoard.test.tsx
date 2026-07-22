@@ -6,6 +6,20 @@ import type { Task, TaskStatus } from "@/lib/tasks";
 
 const watchCallbacks: Array<(e: { type: unknown; paths: string[] }) => void> = [];
 
+const { storeGet, storeSet, storeSave } = vi.hoisted(() => ({
+  storeGet: vi.fn(),
+  storeSet: vi.fn(),
+  storeSave: vi.fn(),
+}));
+
+vi.mock("@tauri-apps/plugin-store", () => ({
+  LazyStore: class {
+    get = storeGet;
+    set = storeSet;
+    save = storeSave;
+  },
+}));
+
 vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-fs", () => ({
   watch: vi.fn(async (_p: string, cb: (e: { type: unknown; paths: string[] }) => void) => {
@@ -51,6 +65,65 @@ async function dragToDone(id: string) {
 beforeEach(() => {
   watchCallbacks.length = 0;
   vi.mocked(invoke).mockReset();
+  storeGet.mockReset();
+  storeSet.mockReset();
+  storeSave.mockReset();
+  storeGet.mockResolvedValue(undefined);
+});
+
+describe("collapsed statuses persist per workspace", () => {
+  function collapseToggle(status: TaskStatus): HTMLButtonElement {
+    const el = column(status).querySelector("button[aria-expanded]");
+    if (!(el instanceof HTMLButtonElement)) throw new Error(`missing toggle for ${status}`);
+    return el;
+  }
+
+  function listOnly() {
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === "list_tasks") return [task("task-1", "To Do"), task("task-2", "Done")];
+      throw new Error(`unexpected ${cmd}`);
+    });
+  }
+
+  function board(root: string) {
+    return (
+      <TasksBoard
+        activeRoot={root}
+        query=""
+        selectedPath={undefined}
+        onOpen={() => {}}
+        onOpenInNewTab={() => {}}
+      />
+    );
+  }
+
+  it("stores the collapsed status against the active workspace", async () => {
+    listOnly();
+    render(board(ROOT));
+    await waitFor(() => expect(within(column("Done")).getByText("Title task-2")).toBeTruthy());
+
+    fireEvent.click(collapseToggle("Done"));
+
+    expect(within(column("Done")).queryByText("Title task-2")).toBeNull();
+    await waitFor(() =>
+      expect(storeSet).toHaveBeenCalledWith("collapsedTaskStatusesByRoot", { [ROOT]: ["Done"] })
+    );
+    expect(storeSave).toHaveBeenCalled();
+  });
+
+  it("restores the stored collapse on a later mount, and only for that workspace", async () => {
+    listOnly();
+    storeGet.mockResolvedValue({ [ROOT]: ["Done"] });
+
+    const { unmount } = render(board(ROOT));
+    await waitFor(() => expect(collapseToggle("Done").getAttribute("aria-expanded")).toBe("false"));
+    expect(within(column("Done")).queryByText("Title task-2")).toBeNull();
+    unmount();
+
+    render(board("/other"));
+    await waitFor(() => expect(within(column("Done")).getByText("Title task-2")).toBeTruthy());
+    expect(collapseToggle("Done").getAttribute("aria-expanded")).toBe("true");
+  });
 });
 
 describe("Smoke C4: drag writes status + MCP reflects", () => {

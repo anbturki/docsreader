@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { render, screen, within, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 
@@ -26,8 +27,47 @@ const noop = () => {};
 
 function column(status: TaskStatus): HTMLElement {
   const el = document.querySelector(`[data-status="${status}"]`);
-  if (!el) throw new Error(`missing column ${status}`);
-  return el as HTMLElement;
+  if (!(el instanceof HTMLElement)) throw new Error(`missing column ${status}`);
+  return el;
+}
+
+function toggle(status: TaskStatus): HTMLButtonElement {
+  const el = column(status).querySelector("button[aria-expanded]");
+  if (!(el instanceof HTMLButtonElement)) throw new Error(`missing toggle for ${status}`);
+  return el;
+}
+
+interface BoardProps {
+  tasks: Task[];
+  progress: Map<string, AcProgress>;
+  query?: string;
+  onAdvance?: (id: string, status: TaskStatus) => void;
+}
+
+function CollapsibleBoard({ tasks, progress, query = "", onAdvance }: BoardProps) {
+  const [collapsed, setCollapsed] = useState<ReadonlySet<TaskStatus>>(new Set());
+  return (
+    <TaskBoardView
+      tasks={tasks}
+      query={query}
+      progress={progress}
+      loading={false}
+      error={undefined}
+      selectedPath={undefined}
+      onRefresh={noop}
+      onOpen={noop}
+      onOpenInNewTab={noop}
+      onAdvance={onAdvance}
+      collapsedStatuses={collapsed}
+      onToggleStatus={(status) =>
+        setCollapsed((prev) => {
+          const next = new Set(prev);
+          if (!next.delete(status)) next.add(status);
+          return next;
+        })
+      }
+    />
+  );
 }
 
 describe("Smoke C2: board groups real tasks correctly", () => {
@@ -39,20 +79,8 @@ describe("Smoke C2: board groups real tasks correctly", () => {
   ];
   const progress = new Map<string, AcProgress>([["/ws/tasks/task-2.md", { done: 1, total: 3 }]]);
 
-  function board({ query = "" }: { query?: string } = {}) {
-    return (
-      <TaskBoardView
-        tasks={tasks}
-        query={query}
-        progress={progress}
-        loading={false}
-        error={undefined}
-        selectedPath={undefined}
-        onRefresh={noop}
-        onOpen={noop}
-        onOpenInNewTab={noop}
-      />
-    );
+  function board(over: Omit<BoardProps, "tasks" | "progress"> = {}) {
+    return <CollapsibleBoard tasks={tasks} progress={progress} {...over} />;
   }
 
   function renderBoard() {
@@ -164,6 +192,59 @@ describe("Smoke C2: board groups real tasks correctly", () => {
   it("keeps the priority filter, which the shared query does not cover", () => {
     renderBoard();
     expect(screen.getByLabelText("Filter by priority")).toBeTruthy();
+  });
+
+  it("collapses a status to its header, keeping the count and hiding the cards", () => {
+    renderBoard();
+    expect(within(column("Done")).getByText("Title task-3")).toBeTruthy();
+
+    fireEvent.click(toggle("Done"));
+
+    expect(within(column("Done")).queryByText("Title task-3")).toBeNull();
+    const header = screen.getByRole("button", { name: "Done, 1 task" });
+    expect(header.getAttribute("aria-expanded")).toBe("false");
+    expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy();
+  });
+
+  it("announces the collapsed and expanded state on the toggle", () => {
+    renderBoard();
+    expect(toggle("Done").getAttribute("aria-expanded")).toBe("true");
+
+    fireEvent.click(toggle("Done"));
+    expect(toggle("Done").getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(toggle("Done"));
+    expect(toggle("Done").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("reveals a collapsed status that holds query matches, and leaves it collapsed otherwise", () => {
+    const { rerender } = renderBoard();
+    fireEvent.click(toggle("Done"));
+    expect(within(column("Done")).queryByText("Title task-3")).toBeNull();
+
+    rerender(board({ query: "task-3" }));
+    expect(within(column("Done")).getByText("Title task-3")).toBeTruthy();
+    expect(toggle("Done").getAttribute("aria-expanded")).toBe("true");
+
+    rerender(board({ query: "task-1" }));
+    expect(toggle("Done").getAttribute("aria-expanded")).toBe("false");
+
+    rerender(board({ query: "" }));
+    expect(within(column("Done")).queryByText("Title task-3")).toBeNull();
+  });
+
+  it("accepts a drop onto a collapsed status and keeps it collapsed", () => {
+    const onAdvance = vi.fn();
+    render(board({ onAdvance }));
+    fireEvent.click(toggle("Done"));
+
+    const card = screen.getByText("Title task-1").closest("button");
+    if (!card) throw new Error("card not found");
+    fireEvent.dragStart(card);
+    fireEvent.drop(column("Done"));
+
+    expect(onAdvance).toHaveBeenCalledWith("task-1", "Done");
+    expect(column("Done").getAttribute("data-collapsed")).toBe("true");
   });
 
   it("shows the empty state when there are no tasks", () => {
