@@ -7,8 +7,8 @@ use crate::error::{CoreError, ErrorCode};
 pub const DEFAULT_WORKSPACE_DIR: &str = "notes";
 pub const DEFAULT_USER_SLUG: &str = "notes";
 
-/// Whether the answer names a workspace that exists, or the user default
-/// handed back because the search found nothing.
+/// Whether the answer names the workspace covering the place the caller is
+/// working, or the user default handed back because the search found none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceOrigin {
     Found,
@@ -52,18 +52,32 @@ fn ambient_workspace(
     cwd: &Path,
     home: &Path,
 ) -> Result<ResolvedWorkspace, CoreError> {
-    for base in roots_hint.iter().map(PathBuf::as_path).chain(walk_up(cwd)) {
+    let bases: Vec<&Path> = roots_hint
+        .iter()
+        .map(PathBuf::as_path)
+        .chain(walk_up(cwd))
+        .collect();
+    for base in &bases {
         // ~/notes is the user default, not a project workspace; skip the home
         // directory so the walk-up never tags it Project. user_default below
         // classifies it as User, keeping scope consistent with the registry.
-        if base == home {
+        if same_folder(base, home) {
             continue;
         }
         if let Some(found) = project_workspace_at(base)? {
             return Ok(found);
         }
     }
-    user_default(home)
+    user_default(home, working_inside_user_workspace(&bases, home))
+}
+
+/// The walk-up looks for `base/notes`, so the user workspace never answers it
+/// for itself: a caller standing in ~/notes is recognised here instead. That
+/// is the one case where the user default is the workspace covering the
+/// caller's location rather than the answer left when nothing was found.
+fn working_inside_user_workspace(bases: &[&Path], home: &Path) -> bool {
+    let root = home.join(DEFAULT_WORKSPACE_DIR);
+    bases.iter().any(|base| same_folder(base, &root))
 }
 
 fn resolve_explicit(
@@ -120,25 +134,33 @@ fn unknown_slug(slug: &str, registry: &[WorkspaceEntry], ambient: &ResolvedWorks
     ))
 }
 
-/// Refusal for an un-slugged write whose resolution was a fallback: the user
-/// default handed back for a folder that is not a workspace yet. Writing would
-/// create a catch-all nobody chose, so the caller is sent to pick or create one.
+/// Refusal for an un-slugged write whose resolution was a fallback: nothing at
+/// the caller's location names a workspace, so the user default was all that
+/// was left. Writing would file the work in a shared folder nobody chose, so
+/// the caller is sent to pick an existing workspace or create one.
 pub fn no_write_target(available: &[String], fallback_root: &Path) -> CoreError {
+    let create_personal = format!(
+        ", or with no arguments to create your personal notes at {}",
+        fallback_root.display()
+    );
     let recovery = if available.is_empty() {
         format!(
-            "no workspace exists yet: call init_workspace with the project directory to create one for this project, or with no arguments to create your personal notes at {}, then retry with the slug it reports",
-            fallback_root.display()
+            "no workspace exists yet: call init_workspace with the project directory to create one for this project{create_personal}, then retry with the slug it reports"
         )
     } else {
+        let create_personal = if fallback_root.is_dir() {
+            String::new()
+        } else {
+            create_personal
+        };
         format!(
-            "retry with workspace set to one of [{}], or call init_workspace with the project directory to create one for this project; with no arguments it creates your personal notes at {}",
-            available.join(", "),
-            fallback_root.display()
+            "retry with workspace set to one of [{}] to use one of those, or call init_workspace with the project directory to create one for this project{create_personal}",
+            available.join(", ")
         )
     };
     CoreError::new(
         ErrorCode::WorkspaceNotFound,
-        "nothing here names a workspace to write to, and writing anyway would land this work in a shared folder that identifies no project",
+        "nothing at this location names a workspace to write to, and writing anyway would file this work in a shared folder that identifies no project",
     )
     .with_recovery(recovery)
 }
@@ -197,15 +219,16 @@ fn project_workspace_at(base: &Path) -> Result<Option<ResolvedWorkspace>, CoreEr
     }
 }
 
-fn user_default(home: &Path) -> Result<ResolvedWorkspace, CoreError> {
+fn user_default(home: &Path, working_inside: bool) -> Result<ResolvedWorkspace, CoreError> {
     let root = home.join(DEFAULT_WORKSPACE_DIR);
-    let (slug, origin) = match load_marker(&root)? {
-        Some(marker) => (marker.slug, WorkspaceOrigin::Found),
-        None => (DEFAULT_USER_SLUG.to_string(), WorkspaceOrigin::Fallback),
+    let marker = load_marker(&root)?;
+    let origin = match (&marker, working_inside) {
+        (Some(_), true) => WorkspaceOrigin::Found,
+        _ => WorkspaceOrigin::Fallback,
     };
     Ok(ResolvedWorkspace {
         root,
-        slug,
+        slug: marker.map_or_else(|| DEFAULT_USER_SLUG.to_string(), |m| m.slug),
         scope: WorkspaceScope::User,
         origin,
     })
@@ -290,6 +313,23 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn another_spelling_of_home_is_still_home_to_the_walk_up() {
+        let dir = test_dir("res_home_symlink");
+        let home = dir.join("home");
+        save_marker(&home.join("notes"), &marker("ali-notes")).unwrap();
+        let link = dir.join("home-link");
+        std::os::unix::fs::symlink(&home, &link).unwrap();
+        let cwd = link.join("projects/some-repo");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let resolved = resolve_workspace(None, &[], &cwd, &home, &[]).unwrap();
+        assert_eq!(resolved.scope, WorkspaceScope::User);
+        assert_eq!(resolved.origin, WorkspaceOrigin::Fallback);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn user_workspace_marker_slug_wins_over_default() {
         let dir = test_dir("res_userslug");
@@ -314,16 +354,73 @@ mod tests {
     }
 
     #[test]
-    fn existing_user_workspace_is_a_real_resolution() {
+    fn working_inside_the_user_workspace_is_a_real_resolution() {
+        let dir = test_dir("res_origin_inside_user");
+        let home = dir.join("home");
+        let root = home.join("notes");
+        save_marker(&root, &marker("ali-notes")).unwrap();
+        let cwd = root.join("areas/health");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        for cwd in [root.as_path(), cwd.as_path()] {
+            let resolved = resolve_workspace(None, &[], cwd, &home, &[]).unwrap();
+            assert_eq!(resolved.slug, "ali-notes");
+            assert_eq!(
+                resolved.origin,
+                WorkspaceOrigin::Found,
+                "a caller standing in the user workspace means it: {}",
+                cwd.display()
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_roots_hint_at_the_user_workspace_is_a_real_resolution() {
+        let dir = test_dir("res_origin_hint_user");
+        let home = dir.join("home");
+        let root = home.join("notes");
+        save_marker(&root, &marker("ali-notes")).unwrap();
+        let cwd = dir.join("elsewhere");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let resolved =
+            resolve_workspace(None, std::slice::from_ref(&root), &cwd, &home, &[]).unwrap();
+        assert_eq!(resolved.origin, WorkspaceOrigin::Found);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_existing_user_workspace_is_still_a_fallback_from_an_unrelated_folder() {
         let dir = test_dir("res_origin_user");
         let home = dir.join("home");
         save_marker(&home.join("notes"), &marker("ali-notes")).unwrap();
-        let cwd = home.join("projects/some-repo");
-        std::fs::create_dir_all(&cwd).unwrap();
+        let elsewhere = dir.join("unrelated/src");
+        std::fs::create_dir_all(&elsewhere).unwrap();
 
-        let resolved = resolve_workspace(None, &[], &cwd, &home, &[]).unwrap();
-        assert_eq!(resolved.slug, "ali-notes");
-        assert_eq!(resolved.origin, WorkspaceOrigin::Found);
+        for cwd in [home.as_path(), elsewhere.as_path()] {
+            let resolved = resolve_workspace(None, &[], cwd, &home, &[]).unwrap();
+            assert_eq!(resolved.slug, "ali-notes");
+            assert_eq!(
+                resolved.origin,
+                WorkspaceOrigin::Fallback,
+                "a set-up user workspace is not evidence the caller meant it: {}",
+                cwd.display()
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn standing_in_a_bare_user_notes_folder_is_still_a_fallback() {
+        let dir = test_dir("res_origin_bare_user");
+        let home = dir.join("home");
+        let root = home.join("notes");
+        std::fs::create_dir_all(&root).unwrap();
+
+        let resolved = resolve_workspace(None, &[], &root, &home, &[]).unwrap();
+        assert_eq!(resolved.slug, DEFAULT_USER_SLUG);
+        assert_eq!(resolved.origin, WorkspaceOrigin::Fallback);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

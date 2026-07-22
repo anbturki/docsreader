@@ -17,13 +17,17 @@ struct McpClient {
 
 impl McpClient {
     fn spawn(home: &Path, envs: &[(&str, &str)], capabilities: Value) -> Self {
+        Self::spawn_in(home, home, envs, capabilities)
+    }
+
+    fn spawn_in(cwd: &Path, home: &Path, envs: &[(&str, &str)], capabilities: Value) -> Self {
         let mut child = Command::new(env!("CARGO_BIN_EXE_docsreader-mcp"))
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             // The walk-up from cwd would otherwise reach the developer's own
             // workspaces, so an un-slugged call would leave the sandbox.
-            .current_dir(home)
+            .current_dir(cwd)
             .env("HOME", home)
             .envs(envs.iter().copied())
             .spawn()
@@ -584,7 +588,7 @@ fn workspace_tool_descriptions_tell_a_caller_to_list_first_and_name_the_project(
 }
 
 #[test]
-fn the_user_workspace_reports_the_slug_it_was_given_once_it_exists() {
+fn a_write_from_inside_the_user_workspace_needs_no_slug() {
     let home = temp_home();
     let mut c = McpClient::spawn(home.path(), &[], json!({}));
     init_project(&mut c, home.path(), "notes");
@@ -597,13 +601,19 @@ fn the_user_workspace_reports_the_slug_it_was_given_once_it_exists() {
         "the project workspace already holds that slug"
     );
 
+    // Working inside the user workspace, with a client that could be asked to
+    // pick: it must never be, or every personal note costs an interruption.
+    let inside = home.path().join("notes/areas");
+    std::fs::create_dir_all(&inside).unwrap();
+    let mut c = McpClient::spawn_in(&inside, home.path(), &[], json!({"elicitation": {}}));
+
     let (doc, is_err) = c.call(
         "write_doc",
         json!({"title": "First", "body": "# First", "status": "research"}),
     );
     assert!(
         !is_err,
-        "a real user workspace takes un-slugged writes: {doc}"
+        "a caller standing in the user workspace means it: {doc}"
     );
     assert_eq!(doc["workspace"]["slug"], json!(slug));
 
@@ -613,6 +623,54 @@ fn the_user_workspace_reports_the_slug_it_was_given_once_it_exists() {
         list["docs"].as_array().unwrap().len(),
         1,
         "the reported slug must name the workspace the doc was written into"
+    );
+}
+
+#[test]
+fn a_set_up_user_workspace_does_not_absorb_a_write_from_an_unrelated_folder() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({}));
+    let (created, is_err) = c.call("init_workspace", json!({}));
+    assert!(!is_err, "{created}");
+    let user_slug = created["slug"].as_str().unwrap().to_string();
+    let elsewhere = home.path().join("unrelated-project/src");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+
+    let mut c = McpClient::spawn_in(&elsewhere, home.path(), &[], json!({}));
+    let (payload, is_err) = c.call(
+        "write_doc",
+        json!({"title": "Plan", "body": "# Plan", "status": "research"}),
+    );
+    assert!(
+        is_err,
+        "an existing ~/notes is not a reason to file unrelated work there: {payload}"
+    );
+    assert_eq!(payload["error"]["code"], "workspace_not_found");
+    let recovery = payload["error"]["recovery"].as_str().unwrap();
+    assert!(
+        recovery.contains(&user_slug),
+        "the refusal must name the workspace a retry could use: {recovery}"
+    );
+    assert!(
+        !recovery.contains("personal notes"),
+        "the personal notes already exist, so offering to create them misleads: {recovery}"
+    );
+
+    let (list, is_err) = c.call("list_docs", json!({"workspace": user_slug.clone()}));
+    assert!(!is_err, "{list}");
+    assert_eq!(
+        list["docs"].as_array().unwrap().len(),
+        0,
+        "nothing may have landed in the user workspace"
+    );
+
+    let (doc, is_err) = c.call(
+        "write_doc",
+        json!({"title": "Plan", "body": "# Plan", "status": "research", "workspace": user_slug}),
+    );
+    assert!(
+        !is_err,
+        "naming the workspace stays the one-word way through: {doc}"
     );
 }
 

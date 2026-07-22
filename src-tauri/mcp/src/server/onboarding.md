@@ -45,9 +45,12 @@ first option that fits and proceed without asking:
 3. `~/notes` only for work that belongs to no project. Do not park a new
    project's docs or tasks there.
 
-A write with no `workspace` argument is refused when nothing here resolves to
-a workspace, rather than falling back to `~/notes`; the refusal lists the
-workspaces that do exist. Reads still fall back, so they never need setup.
+A write with no `workspace` argument is refused when nothing at the agent's
+location resolves to a workspace, rather than falling back to `~/notes`. An
+already set up `~/notes` does not change that: it takes un-slugged writes only
+from an agent working inside it, since from anywhere else it names no project.
+The refusal lists the workspaces that do exist, and `workspace` is always
+honoured, `notes` included. Reads still fall back, so they never need setup.
 
 The `name` is what humans pick from in the app, so it must identify the
 project or product: `"Acme Billing API"`, never `"Notes"` or `"Docs"`. Leave
