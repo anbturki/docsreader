@@ -85,6 +85,11 @@ jobs:
           NOTES=$(printf '%s\n' \
             'See assets below to download and install.' \
             '' \
+            '> [!IMPORTANT]' \
+            '> **macOS 11 Big Sur or later is required, with Safari 16.4 or later installed.** DocsReader draws its interface with the system WebView, so the installed Safari decides what it can display: on Big Sur and Monterey, install the latest Safari from Software Update first.' \
+            '>' \
+            '> On macOS 10.15 Catalina or earlier, DocsReader cannot run. If a Mac on Catalina offers you this update, do not install it - the new version will not open, and no earlier version works on Catalina either. Update macOS first.' \
+            '' \
             'Install via Homebrew:' \
             '```' \
             'brew install --cask anbturki/tap/docsreader' \
