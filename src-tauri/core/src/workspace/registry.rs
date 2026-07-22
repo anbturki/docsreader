@@ -123,13 +123,8 @@ pub fn upsert_workspace(file: &Path, entry: WorkspaceEntry) -> Result<(), CoreEr
 /// The workspaces the registry can actually serve right now: entries whose
 /// folder is still there, each carrying the slug that folder answers to.
 ///
-/// Drops entries deleted out from under the registry, so nothing advertises a
-/// workspace that fails on the next call. Prefers the folder's own marker over
-/// the recorded slug, so a marker edited by hand takes effect at once instead
-/// of drifting from the registry forever. Collapses entries that turn out to
-/// name one folder, which a registry written before paths were compared by
-/// identity can still hold. The stored registry is left as the user has it:
-/// reconciliation happens on the way out, never on disk.
+/// The stored registry is left as the user has it: reconciliation happens on
+/// the way out, never on disk.
 pub fn live_workspaces(entries: Vec<WorkspaceEntry>) -> Vec<WorkspaceEntry> {
     let mut live: Vec<WorkspaceEntry> = Vec::new();
     for entry in entries.into_iter().filter(|w| w.path.is_dir()) {

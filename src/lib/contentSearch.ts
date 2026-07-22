@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 
-/// Mirrors SearchScope in src-tauri/core/src/search.rs; keep the two in step.
+// Mirrors SearchScope in src-tauri/core/src/search.rs; keep the two in step.
 export const SEARCH_SCOPES = ["all", "names", "content", "tags"] as const;
 
 export type SearchScope = (typeof SEARCH_SCOPES)[number];
