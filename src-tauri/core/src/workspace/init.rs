@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::registry::{load_registry, upsert_workspace, WorkspaceEntry};
+use super::registry::{live_workspaces, load_registry, same_folder, upsert_workspace, WorkspaceEntry};
 use super::{load_marker, save_marker, WorkspaceMarker, WorkspaceScope, MARKER_FILE};
 use crate::error::{CoreError, ErrorCode};
 use crate::slug::slugify;
@@ -135,18 +135,22 @@ pub fn convert_workspace_core(
     materialize_workspace(root, slug, None, WorkspaceScope::Project, registry_file)
 }
 
-/// An entry only owns its slug while its folder is still there: resolution
-/// skips workspaces deleted out from under the registry, so a stale entry must
-/// not block the name.
+/// The workspace holding a slug, if another one does. `live_workspaces` has
+/// already dropped folders that are gone and taken each slug from the folder
+/// itself, so neither a deleted workspace nor a stale entry blocks the name.
 fn slug_owner(slug: &str, root: &Path, entries: &[WorkspaceEntry]) -> Option<PathBuf> {
     entries
         .iter()
-        .find(|e| e.slug == slug && e.path != root && e.path.is_dir())
+        .find(|e| e.slug == slug && !same_folder(&e.path, root))
         .map(|e| e.path.clone())
 }
 
+fn registered_workspaces(registry_file: &Path) -> Result<Vec<WorkspaceEntry>, CoreError> {
+    Ok(live_workspaces(load_registry(registry_file)?))
+}
+
 fn free_slug(base: String, root: &Path, registry_file: &Path) -> Result<String, CoreError> {
-    let entries = load_registry(registry_file)?;
+    let entries = registered_workspaces(registry_file)?;
     let taken = |slug: &str| slug_owner(slug, root, &entries).is_some();
     if !taken(&base) {
         return Ok(base);
@@ -161,7 +165,7 @@ fn free_slug(base: String, root: &Path, registry_file: &Path) -> Result<String, 
 /// collision is refused rather than suffixed: silently reassigning it would
 /// leave the caller holding a name that resolves somewhere else.
 fn reject_taken_slug(slug: &str, root: &Path, registry_file: &Path) -> Result<String, CoreError> {
-    let entries = load_registry(registry_file)?;
+    let entries = registered_workspaces(registry_file)?;
     match slug_owner(slug, root, &entries) {
         Some(owner) => Err(CoreError::new(
             ErrorCode::Conflict,

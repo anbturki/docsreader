@@ -14,7 +14,7 @@ use docsreader_core::search::{
 use docsreader_core::tasks::{list_tasks_core, set_task_status_core, TaskSummary};
 use docsreader_core::workspace::init::{convert_workspace_core, InitializedWorkspace};
 use docsreader_core::workspace::registry::{
-    default_registry_path, existing_workspaces, load_registry, WorkspaceEntry,
+    default_registry_path, live_workspaces, load_registry, WorkspaceEntry,
 };
 
 const PROGRESS_EVENT: &str = "scan-progress";
@@ -109,7 +109,7 @@ pub fn connect_agent_client(app: AppHandle, id: ClientId) -> Result<AgentClient,
 pub fn list_registry_workspaces(app: AppHandle) -> Result<Vec<WorkspaceEntry>, String> {
     let home = home_dir(&app)?;
     let entries = load_registry(&default_registry_path(&home)).map_err(|e| e.message)?;
-    Ok(existing_workspaces(entries))
+    Ok(live_workspaces(entries))
 }
 
 #[tauri::command]

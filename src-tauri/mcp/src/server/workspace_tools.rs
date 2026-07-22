@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use docsreader_core::error::{CoreError, ErrorCode};
 use docsreader_core::workspace::WorkspaceScope;
 use docsreader_core::workspace::init::{InitializedWorkspace, init_workspace_core};
-use docsreader_core::workspace::registry::{default_registry_path, load_registry};
+use docsreader_core::workspace::registry::{default_registry_path, live_workspaces, load_registry};
 use docsreader_core::workspace::resolve::DEFAULT_WORKSPACE_DIR;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
@@ -76,7 +76,7 @@ impl DocsServer {
 
 fn list_workspaces_impl() -> Result<serde_json::Value, CoreError> {
     let home = home_dir()?;
-    let entries = load_registry(&default_registry_path(&home))?;
+    let entries = live_workspaces(load_registry(&default_registry_path(&home))?);
     let default_root = home.join(DEFAULT_WORKSPACE_DIR);
     Ok(serde_json::json!({
         "workspaces": entries,

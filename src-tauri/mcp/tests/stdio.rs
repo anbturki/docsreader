@@ -441,3 +441,42 @@ fn elicitation_decline_falls_back_to_recovery_error() {
     assert!(is_err);
     assert_eq!(payload["error"]["code"], "workspace_not_found");
 }
+
+#[test]
+fn list_workspaces_hides_a_workspace_whose_folder_is_gone() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({}));
+    let kept = init_project(&mut c, home.path(), "kept");
+    let deleted = init_project(&mut c, home.path(), "deleted");
+    std::fs::remove_dir_all(&deleted).unwrap();
+
+    let (payload, is_err) = c.call("list_workspaces", json!({}));
+    assert!(!is_err, "{payload}");
+    let slugs: Vec<&str> = payload["workspaces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|w| w["slug"].as_str())
+        .collect();
+    assert_eq!(slugs, ["kept"], "deleted workspace still advertised");
+    assert!(Path::new(&kept).is_dir());
+}
+
+#[test]
+fn list_workspaces_reports_a_hand_edited_marker_slug() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({}));
+    let project = init_project(&mut c, home.path(), "before");
+    std::fs::write(
+        Path::new(&project).join("notes/.docsreader.yaml"),
+        "slug: after\n",
+    )
+    .unwrap();
+
+    let (payload, is_err) = c.call("list_workspaces", json!({}));
+    assert!(!is_err, "{payload}");
+    assert_eq!(payload["workspaces"][0]["slug"], "after");
+
+    let (docs, is_err) = c.call("list_docs", json!({"workspace": "after"}));
+    assert!(!is_err, "the advertised slug must resolve: {docs}");
+}
