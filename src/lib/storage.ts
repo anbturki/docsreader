@@ -24,7 +24,7 @@ export type FontSize = "sm" | "md" | "lg";
 export type ColorScheme = "light" | "dark" | "system";
 export type AccentColor = "violet" | "blue" | "green" | "orange" | "rose" | "slate";
 export type DefaultFolderState = "expanded" | "top-level" | "collapsed";
-export const SIDEBAR_LENSES = ["tree", "recent", "tags", "pinned", "tasks"] as const;
+export const SIDEBAR_LENSES = ["tree", "recent", "tags", "pinned", "tasks", "search"] as const;
 export type SidebarLens = (typeof SIDEBAR_LENSES)[number];
 export type DiffViewMode = "unified" | "split";
 

@@ -82,7 +82,7 @@ describe("useContentSearch", () => {
     await settle();
 
     expect(mockedSearch).toHaveBeenCalledTimes(1);
-    expect(mockedSearch).toHaveBeenCalledWith("/lib", "needle");
+    expect(mockedSearch).toHaveBeenCalledWith("/lib", "needle", "all");
   });
 
   it("does not let a slow earlier search overwrite newer results", async () => {
@@ -134,6 +134,15 @@ describe("useContentSearch", () => {
     await settle();
 
     expect(mockedSearch).not.toHaveBeenCalled();
+  });
+
+  it("passes the chosen scope through", async () => {
+    mockedSearch.mockResolvedValue(result([]));
+    renderHook(() => useContentSearch("/lib", "needle", true, "tags"));
+
+    await settle();
+
+    expect(mockedSearch).toHaveBeenCalledWith("/lib", "needle", "tags");
   });
 
   it("searches nothing while disabled", async () => {

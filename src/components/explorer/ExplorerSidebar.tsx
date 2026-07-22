@@ -21,6 +21,7 @@ import { SearchInput } from "./SearchInput";
 import { SearchResults } from "./SearchResults";
 import { TagsList } from "./TagsList";
 import type { SearchEntry } from "@/lib/searchEntries";
+import type { SearchScope } from "@/lib/contentSearch";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { TasksBoard } from "@/components/tasks/TasksBoard";
 
@@ -43,6 +44,8 @@ interface Props {
   search: string;
   onSearchChange: (value: string) => void;
   searchEntries: SearchEntry[];
+  searchScope: SearchScope;
+  onSearchScopeChange: (scope: SearchScope) => void;
   searchingContents: boolean;
   searchError: string | undefined;
   searchTruncated: boolean;
@@ -89,6 +92,8 @@ export function ExplorerSidebar({
   search,
   onSearchChange,
   searchEntries,
+  searchScope,
+  onSearchScopeChange,
   searchingContents,
   searchError,
   searchTruncated,
@@ -157,9 +162,12 @@ export function ExplorerSidebar({
             progress={activeScan.progress}
             startedAt={activeScan.startedAt}
           />
-        ) : search.trim() ? (
+        ) : lens === "search" ? (
           <SearchResults
+            query={search}
             entries={searchEntries}
+            scope={searchScope}
+            onScopeChange={onSearchScopeChange}
             searching={searchingContents}
             error={searchError}
             truncated={searchTruncated}
@@ -196,7 +204,7 @@ export function ExplorerSidebar({
       <SidebarFooter className="gap-2 text-xs text-muted-foreground">
         <ExplorerFooter
           activeScan={activeScan}
-          matchCount={search.trim() ? searchEntries.length : filteredFiles.length}
+          matchCount={lens === "search" ? searchEntries.length : filteredFiles.length}
           hiddenCount={hiddenCount}
           onOpenSettings={onOpenSettings}
         />

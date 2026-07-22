@@ -29,6 +29,7 @@ const SettingsDialog = lazy(() => import("@/components/settings/SettingsDialog")
 import { useLibrary } from "@/hooks/useLibrary";
 import { useContentSearch } from "@/hooks/useContentSearch";
 import { mergeSearchEntries } from "@/lib/searchEntries";
+import type { SearchScope } from "@/lib/contentSearch";
 import { useConvertPrompt } from "@/hooks/useConvertPrompt";
 import { usePanes } from "@/hooks/usePanes";
 import type { SplitMode } from "@/lib/storage";
@@ -263,7 +264,14 @@ function App() {
     };
   }, [quickOpenMounted]);
   const filteredFiles = useFilteredFiles(allFiles, search);
-  const contentSearch = useContentSearch(library.activeRoot, search);
+  const [searchScope, setSearchScope] = useState<SearchScope>("all");
+  const searchLensActive = viewSettings.settings.sidebarLens === "search";
+  const contentSearch = useContentSearch(
+    library.activeRoot,
+    search,
+    searchLensActive,
+    searchScope
+  );
   const searchEntries = useMemo(
     () => mergeSearchEntries(filteredFiles, contentSearch.hits),
     [filteredFiles, contentSearch.hits]
@@ -339,6 +347,26 @@ function App() {
     },
     [viewSettings]
   );
+
+  // Mirrors the split every editor uses: Cmd+F searches the open document,
+  // Shift+Cmd+F searches the whole workspace. Find-in-document owns Cmd+F in
+  // TabScrollPane, so the two never contend for the same chord.
+  const workspaceSearchShortcut = useMemo(() => parseShortcut("Mod+Shift+F"), []);
+  const setSidebarOpen = sidebar.setOpen;
+  useEffect(() => {
+    if (!workspaceSearchShortcut) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!matchShortcut(e, workspaceSearchShortcut)) return;
+      e.preventDefault();
+      setSidebarOpen(true);
+      handleLensChange("search");
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLInputElement>("[data-search-input]")?.focus();
+      });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [workspaceSearchShortcut, setSidebarOpen, handleLensChange]);
 
   const activeGitStatus = library.activeScan?.gitStatus;
   const gitStatusByPath = useMemo(() => {
@@ -580,6 +608,8 @@ function App() {
           search={search}
           onSearchChange={setSearch}
           searchEntries={searchEntries}
+          searchScope={searchScope}
+          onSearchScopeChange={setSearchScope}
           searchingContents={contentSearch.searching}
           searchError={contentSearch.error}
           searchTruncated={contentSearch.truncated}

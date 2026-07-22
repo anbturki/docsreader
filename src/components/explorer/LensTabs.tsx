@@ -7,6 +7,7 @@ const LENS_LABELS: Record<SidebarLens, string> = {
   tags: "Tags",
   pinned: "Pinned",
   tasks: "Tasks",
+  search: "Search",
 };
 
 interface Props {

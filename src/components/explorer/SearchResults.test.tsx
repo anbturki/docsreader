@@ -8,6 +8,7 @@ import type { SearchEntry } from "@/lib/searchEntries";
 vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: vi.fn() }));
 
 const handlers = {
+  onScopeChange: vi.fn(),
   onSelect: vi.fn(),
   onOpenInNewTab: vi.fn(),
   onTogglePin: vi.fn(),
@@ -39,7 +40,9 @@ function entry(overrides: Partial<SearchEntry> = {}): SearchEntry {
 function renderResults(props: Partial<React.ComponentProps<typeof SearchResults>> = {}) {
   return render(
     <SearchResults
+      query="coturn"
       entries={[entry()]}
+      scope="all"
       searching={false}
       error={undefined}
       truncated={false}
@@ -109,13 +112,7 @@ describe("SearchResults", () => {
   it("reports matched lines beyond the shown ones", () => {
     renderResults({ entries: [entry({ matchedLines: 4 })] });
 
-    expect(screen.getByText("3 more lines")).toBeInTheDocument();
-  });
-
-  it("uses the singular form for a single extra line", () => {
-    renderResults({ entries: [entry({ matchedLines: 2 })] });
-
-    expect(screen.getByText("1 more line")).toBeInTheDocument();
+    expect(screen.getByText("3 more")).toBeInTheDocument();
   });
 
   it("shows a name-only match with no snippet", () => {
@@ -129,6 +126,47 @@ describe("SearchResults", () => {
     renderResults({ entries: [], searching: false });
 
     expect(screen.getByText("No matches")).toBeInTheDocument();
+  });
+
+  it("prompts before anything is typed", () => {
+    renderResults({ entries: [], query: "" });
+
+    expect(screen.getByText("Search this workspace")).toBeInTheDocument();
+  });
+
+  it("groups a file with its match count", () => {
+    renderResults({ entries: [entry({ matchedLines: 4 })] });
+
+    expect(screen.getByText("4")).toBeInTheDocument();
+  });
+
+  it("collapses and re-expands a file's matches", async () => {
+    const user = userEvent.setup();
+    renderResults();
+    expect(screen.getByText("coturn")).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("Collapse matches"));
+    expect(screen.queryByText("coturn")).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("Expand matches"));
+    expect(screen.getByText("coturn")).toBeInTheDocument();
+  });
+
+  it("switches scope", async () => {
+    const user = userEvent.setup();
+    renderResults();
+
+    await user.click(screen.getByRole("tab", { name: "Tags" }));
+
+    expect(handlers.onScopeChange).toHaveBeenCalledWith("tags");
+  });
+
+  it("offers every scope", () => {
+    renderResults();
+
+    for (const label of ["All", "Names", "Contents", "Tags"]) {
+      expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
+    }
   });
 
   it("says it is still searching before results arrive", () => {
