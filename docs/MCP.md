@@ -35,7 +35,7 @@ Give each project its own workspace: labels group work inside a workspace, they 
 | Tool | What it does |
 | --- | --- |
 | `list_workspaces` | List all known workspaces: registered projects plus the default `~/notes`. Call before choosing where to write. |
-| `init_workspace` | Create and register a workspace (`~/notes`, or `<path>/notes` for a project). Fails only if `<path>/notes` already holds files. |
+| `init_workspace` | Create and register a workspace (`~/notes`, or `<path>/notes` for a project). Fails if `<path>/notes` already holds files, or if an explicit `slug` already belongs to another workspace. An omitted slug is derived from the folder name, suffixed when that name is taken, and returned as `slug`. |
 | `ping` | Health check; returns `pong`. |
 
 ### Docs

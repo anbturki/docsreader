@@ -141,9 +141,11 @@ pub(crate) fn ensure_workspace_exists(ws: &ResolvedWorkspace) -> Result<(), Core
         ));
     }
     let home = home_dir()?;
+    // No explicit slug: the derived default is the same name, and leaving it
+    // derived lets init suffix it if a project workspace already took it.
     init_workspace_core(
         &ws.root,
-        Some(&ws.slug),
+        None,
         None,
         WorkspaceScope::User,
         &default_registry_path(&home),

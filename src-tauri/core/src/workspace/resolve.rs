@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
-use super::registry::WorkspaceEntry;
-use super::{load_marker, WorkspaceScope};
+use super::registry::{WorkspaceEntry, REGISTRY_DIR, REGISTRY_FILE};
+use super::{load_marker, WorkspaceScope, MARKER_FILE};
 use crate::error::{CoreError, ErrorCode};
 
 pub const DEFAULT_WORKSPACE_DIR: &str = "notes";
@@ -59,25 +59,69 @@ fn resolve_explicit(
     registry: &[WorkspaceEntry],
     ambient: ResolvedWorkspace,
 ) -> Result<ResolvedWorkspace, CoreError> {
-    if let Some(entry) = registry.iter().find(|w| w.slug == slug && w.path.is_dir()) {
-        return Ok(ResolvedWorkspace {
+    let mut matches = workspaces_with_slug(slug, registry, &ambient);
+    match matches.len() {
+        0 => Err(unknown_slug(slug, registry, &ambient)),
+        1 => Ok(matches.remove(0)),
+        _ => Err(ambiguous_slug(slug, &matches)),
+    }
+}
+
+/// Every workspace the slug could mean: registered entries plus the ambient
+/// one, which may still be unregistered. Two folders sharing a slug is a
+/// real state on disk, so more than one answer is possible.
+fn workspaces_with_slug(
+    slug: &str,
+    registry: &[WorkspaceEntry],
+    ambient: &ResolvedWorkspace,
+) -> Vec<ResolvedWorkspace> {
+    let mut found: Vec<ResolvedWorkspace> = Vec::new();
+    let mut add = |candidate: ResolvedWorkspace| {
+        if candidate.slug == slug
+            && candidate.root.is_dir()
+            && !found.iter().any(|w| w.root == candidate.root)
+        {
+            found.push(candidate);
+        }
+    };
+    for entry in registry {
+        add(ResolvedWorkspace {
             root: entry.path.clone(),
             slug: entry.slug.clone(),
             scope: entry.scope,
         });
     }
-    if ambient.slug == slug && ambient.root.is_dir() {
-        return Ok(ambient);
-    }
-    let available = available_slugs(registry, Some(&ambient));
-    Err(CoreError::new(
+    add(ambient.clone());
+    found
+}
+
+fn unknown_slug(slug: &str, registry: &[WorkspaceEntry], ambient: &ResolvedWorkspace) -> CoreError {
+    let available = available_slugs(registry, Some(ambient));
+    CoreError::new(
         ErrorCode::WorkspaceNotFound,
         format!("no workspace with slug {slug:?}"),
     )
     .with_recovery(format!(
         "available workspaces: [{}]; call list_workspaces or init_workspace",
         available.join(", ")
-    )))
+    ))
+}
+
+fn ambiguous_slug(slug: &str, matches: &[ResolvedWorkspace]) -> CoreError {
+    let paths: Vec<String> = matches
+        .iter()
+        .map(|w| w.root.display().to_string())
+        .collect();
+    CoreError::new(
+        ErrorCode::Conflict,
+        format!(
+            "the slug {slug:?} belongs to more than one workspace: {}",
+            paths.join(", ")
+        ),
+    )
+    .with_recovery(format!(
+        "these folders share a slug, so there is no safe way to pick one and writing to the wrong one would be silent. Give one of them a different slug in its {MARKER_FILE} and in the matching entry of {REGISTRY_DIR}/{REGISTRY_FILE} in the home folder, then retry. Meanwhile use a slug only one workspace has",
+    ))
 }
 
 /// Slugs that would resolve right now: registered workspaces whose directory
@@ -86,14 +130,15 @@ pub fn available_slugs(
     registry: &[WorkspaceEntry],
     ambient: Option<&ResolvedWorkspace>,
 ) -> Vec<String> {
-    let mut available: Vec<String> = registry
+    let mut available: Vec<String> = Vec::new();
+    let candidates = registry
         .iter()
         .filter(|w| w.path.is_dir())
         .map(|w| w.slug.clone())
-        .collect();
-    if let Some(ambient) = ambient {
-        if ambient.root.is_dir() && !available.iter().any(|s| s == &ambient.slug) {
-            available.push(ambient.slug.clone());
+        .chain(ambient.filter(|a| a.root.is_dir()).map(|a| a.slug.clone()));
+    for slug in candidates {
+        if !available.contains(&slug) {
+            available.push(slug);
         }
     }
     available
@@ -258,6 +303,80 @@ mod tests {
         let err =
             resolve_workspace(Some("ghost"), &[], &project, &dir.join("home"), &[]).unwrap_err();
         assert!(err.recovery.as_deref().unwrap().contains("repo-notes"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pre_existing_duplicate_slug_fails_instead_of_picking_one() {
+        let dir = test_dir("res_dupe");
+        let first = dir.join("a/notes");
+        let second = dir.join("b/notes");
+        save_marker(&first, &marker("acme")).unwrap();
+        save_marker(&second, &marker("acme")).unwrap();
+        let registry = vec![
+            WorkspaceEntry {
+                slug: "acme".into(),
+                path: first.clone(),
+                scope: WorkspaceScope::Project,
+            },
+            WorkspaceEntry {
+                slug: "acme".into(),
+                path: second.clone(),
+                scope: WorkspaceScope::Project,
+            },
+        ];
+
+        let err = resolve_workspace(Some("acme"), &[], &dir, &dir, &registry).unwrap_err();
+        assert_eq!(err.code, ErrorCode::Conflict);
+        for path in [&first, &second] {
+            assert!(
+                err.message.contains(&path.display().to_string()),
+                "message names every colliding workspace: {}",
+                err.message
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn duplicate_slug_resolves_when_only_one_workspace_still_exists() {
+        let dir = test_dir("res_dupe_stale");
+        let live = dir.join("a/notes");
+        save_marker(&live, &marker("acme")).unwrap();
+        let registry = vec![
+            WorkspaceEntry {
+                slug: "acme".into(),
+                path: dir.join("deleted/notes"),
+                scope: WorkspaceScope::Project,
+            },
+            WorkspaceEntry {
+                slug: "acme".into(),
+                path: live.clone(),
+                scope: WorkspaceScope::Project,
+            },
+        ];
+
+        let resolved = resolve_workspace(Some("acme"), &[], &dir, &dir, &registry).unwrap();
+        assert_eq!(resolved.root, live);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn registered_slug_shared_with_a_different_ambient_workspace_is_ambiguous() {
+        let dir = test_dir("res_dupe_ambient");
+        let registered = dir.join("a/notes");
+        let project = dir.join("b");
+        save_marker(&registered, &marker("acme")).unwrap();
+        save_marker(&project.join("notes"), &marker("acme")).unwrap();
+        let registry = vec![WorkspaceEntry {
+            slug: "acme".into(),
+            path: registered,
+            scope: WorkspaceScope::Project,
+        }];
+
+        let err = resolve_workspace(Some("acme"), &[], &project, &dir.join("home"), &registry)
+            .unwrap_err();
+        assert_eq!(err.code, ErrorCode::Conflict);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -99,8 +99,8 @@ pub fn init_workspace_core(
 ) -> Result<InitializedWorkspace, CoreError> {
     ensure_target_is_fresh(root)?;
     let slug = match slug {
-        Some(s) => s.to_string(),
-        None => default_slug(root, scope),
+        Some(explicit) => reject_taken_slug(explicit, root, registry_file)?,
+        None => free_slug(default_slug(root, scope), root, registry_file)?,
     };
     materialize_workspace(root, slug, name, scope, registry_file)
 }
@@ -135,9 +135,19 @@ pub fn convert_workspace_core(
     materialize_workspace(root, slug, None, WorkspaceScope::Project, registry_file)
 }
 
+/// An entry only owns its slug while its folder is still there: resolution
+/// skips workspaces deleted out from under the registry, so a stale entry must
+/// not block the name.
+fn slug_owner(slug: &str, root: &Path, entries: &[WorkspaceEntry]) -> Option<PathBuf> {
+    entries
+        .iter()
+        .find(|e| e.slug == slug && e.path != root && e.path.is_dir())
+        .map(|e| e.path.clone())
+}
+
 fn free_slug(base: String, root: &Path, registry_file: &Path) -> Result<String, CoreError> {
     let entries = load_registry(registry_file)?;
-    let taken = |slug: &str| entries.iter().any(|e| e.slug == slug && e.path != root);
+    let taken = |slug: &str| slug_owner(slug, root, &entries).is_some();
     if !taken(&base) {
         return Ok(base);
     }
@@ -145,6 +155,26 @@ fn free_slug(base: String, root: &Path, registry_file: &Path) -> Result<String, 
         .map(|n| format!("{base}-{n}"))
         .find(|candidate| !taken(candidate))
         .expect("unbounded suffix search always finds a free slug"))
+}
+
+/// A caller-supplied slug is an identifier the caller will keep using, so a
+/// collision is refused rather than suffixed: silently reassigning it would
+/// leave the caller holding a name that resolves somewhere else.
+fn reject_taken_slug(slug: &str, root: &Path, registry_file: &Path) -> Result<String, CoreError> {
+    let entries = load_registry(registry_file)?;
+    match slug_owner(slug, root, &entries) {
+        Some(owner) => Err(CoreError::new(
+            ErrorCode::Conflict,
+            format!(
+                "the slug {slug:?} already belongs to the workspace at {}",
+                owner.display()
+            ),
+        )
+        .with_recovery(
+            "if that workspace is the one this project needs, keep using that slug and write there. Otherwise retry with a slug no workspace uses yet, or omit slug to have one derived from the folder name and reported back",
+        )),
+        None => Ok(slug.to_string()),
+    }
 }
 
 #[cfg(test)]
@@ -224,6 +254,96 @@ mod tests {
             convert_workspace_core(&second, &registry).unwrap().slug,
             "notes-2"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn explicit_slug_taken_by_another_workspace_is_refused() {
+        let dir = test_dir("init_dupe_explicit");
+        let registry = dir.join("registry.json");
+        let first = dir.join("a/notes");
+        let second = dir.join("b/notes");
+
+        init_workspace_core(
+            &first,
+            Some("acme"),
+            None,
+            WorkspaceScope::Project,
+            &registry,
+        )
+        .unwrap();
+        let err = init_workspace_core(
+            &second,
+            Some("acme"),
+            None,
+            WorkspaceScope::Project,
+            &registry,
+        )
+        .unwrap_err();
+
+        assert_eq!(err.code, ErrorCode::Conflict);
+        assert!(
+            err.message.contains(&first.display().to_string()),
+            "message names the workspace it collides with: {}",
+            err.message
+        );
+        assert!(!second.exists(), "the refused workspace is not created");
+        assert_eq!(
+            super::super::registry::load_registry(&registry)
+                .unwrap()
+                .len(),
+            1
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn default_slug_collision_across_parents_is_suffixed() {
+        let dir = test_dir("init_dupe_default");
+        let registry = dir.join("registry.json");
+        let first = dir.join("one/proj/notes");
+        let second = dir.join("two/proj/notes");
+
+        assert_eq!(
+            init_workspace_core(&first, None, None, WorkspaceScope::Project, &registry)
+                .unwrap()
+                .slug,
+            "proj"
+        );
+        assert_eq!(
+            init_workspace_core(&second, None, None, WorkspaceScope::Project, &registry)
+                .unwrap()
+                .slug,
+            "proj-2"
+        );
+        assert_eq!(
+            load_marker(&second).unwrap().unwrap().slug,
+            "proj-2",
+            "the marker records the assigned slug"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn every_initialized_workspace_resolves_to_its_own_root() {
+        use super::super::resolve::resolve_workspace;
+
+        let dir = test_dir("init_resolves_apart");
+        let registry_file = dir.join("registry.json");
+        let home = dir.join("home");
+        let first = dir.join("one/proj/notes");
+        let second = dir.join("two/proj/notes");
+        init_workspace_core(&first, None, None, WorkspaceScope::Project, &registry_file).unwrap();
+        init_workspace_core(&second, None, None, WorkspaceScope::Project, &registry_file).unwrap();
+        let entries = super::super::registry::load_registry(&registry_file).unwrap();
+
+        for (slug, expected) in [("proj", &first), ("proj-2", &second)] {
+            let resolved = resolve_workspace(Some(slug), &[], &dir, &home, &entries)
+                .unwrap_or_else(|e| {
+                    panic!("{slug} should resolve: {e}");
+                });
+            assert_eq!(&resolved.root, expected);
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
