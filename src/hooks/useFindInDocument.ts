@@ -28,6 +28,10 @@ export function useFindInDocument(
   const [query, setQuery] = useState("");
   const [matchCount, setMatchCount] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(-1);
+  // The ranges live in a ref, so nothing about them can drive an effect. This
+  // counter is the repaint signal: without it, editing a query that happens to
+  // keep the same match count would leave the previous ranges on screen.
+  const [revision, setRevision] = useState(0);
 
   const ranges = useRef<Range[]>([]);
   const painter = useRef<HighlightPainter | undefined>(undefined);
@@ -46,11 +50,13 @@ export function useFindInDocument(
       ranges.current = [];
       setMatchCount(0);
       setCurrentIndex(-1);
+      setRevision((r) => r + 1);
       return;
     }
     ranges.current = findRanges(scroller, query);
     setMatchCount(ranges.current.length);
     setCurrentIndex(ranges.current.length > 0 ? 0 : -1);
+    setRevision((r) => r + 1);
   }, [scroller, open, query]);
 
   useEffect(() => {
@@ -73,7 +79,7 @@ export function useFindInDocument(
   useEffect(() => {
     if (!painter.current) return;
     painter.current.paint(ranges.current, currentIndex);
-  }, [matchCount, currentIndex]);
+  }, [revision, currentIndex]);
 
   useEffect(() => {
     if (!scroller) return;

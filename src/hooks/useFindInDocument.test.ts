@@ -2,6 +2,22 @@ import { act, renderHook } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { useFindInDocument } from "./useFindInDocument";
+import { createHighlightPainter } from "@/lib/findHighlight";
+
+vi.mock("@/lib/findHighlight", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/findHighlight")>("@/lib/findHighlight");
+  return { ...actual, createHighlightPainter: vi.fn() };
+});
+
+const painted: string[][] = [];
+const painter = {
+  paint: vi.fn((ranges: Range[]) => {
+    painted.push(ranges.map((r) => r.toString()));
+  }),
+  clear: vi.fn(),
+  destroy: vi.fn(),
+};
 
 function makeScroller(html: string): HTMLElement {
   const scroller = document.createElement("div");
@@ -27,6 +43,9 @@ describe("useFindInDocument", () => {
 
   beforeEach(() => {
     stubRangeRects();
+    painted.length = 0;
+    painter.paint.mockClear();
+    vi.mocked(createHighlightPainter).mockReturnValue(painter);
     scroller = makeScroller("<p>alpha needle beta</p><p>another needle here</p>");
   });
 
@@ -146,6 +165,28 @@ describe("useFindInDocument", () => {
     act(() => result.current.setQuery("needle"));
 
     expect(result.current.matchCount).toBe(0);
+  });
+
+  it("repaints a lengthened query even when the match count is unchanged", () => {
+    const { result } = renderHook(() => useFindInDocument(scroller, true));
+    act(() => result.current.show());
+
+    act(() => result.current.setQuery("need"));
+    act(() => result.current.setQuery("needle"));
+
+    // Both queries match the same two places, so a repaint keyed on the count
+    // alone would leave the shorter ranges on screen.
+    expect(painted[painted.length - 1]).toEqual(["needle", "needle"]);
+  });
+
+  it("repaints when the query narrows to the same count", () => {
+    const { result } = renderHook(() => useFindInDocument(scroller, true));
+    act(() => result.current.show());
+
+    act(() => result.current.setQuery("needle"));
+    act(() => result.current.setQuery("needl"));
+
+    expect(painted[painted.length - 1]).toEqual(["needl", "needl"]);
   });
 
   it("recounts when the document content changes", async () => {
