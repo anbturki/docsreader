@@ -10,7 +10,7 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 - **Diagrams:** Mermaid renderer (lazy-loaded, follows theme)
 - **Box-drawing art:** svgbob converts ASCII diagrams to SVG (experimental)
 - **Code blocks:** 20 bundled language grammars via Shiki, twelve highlighter palettes (5 light, 7 dark)
-- **Appearance:** light, dark, or follow-system, with six accent hues
+- **Appearance:** light, dark, or follow-system, chosen from a small preview of each; and ten named accents shown as labelled chips - rose, orange, bronze, green, teal, blue, slate, violet, magenta, black. Each carries its own colour rather than a shared saturation, so muted and neutral choices are real: bronze is deliberately soft and black carries no colour at all. The six accents that shipped before are unchanged, so an existing choice looks the same
 - **Type controls:** font family, body size, and reading column width
 - **WYSIWYG edit:** a pencil on any open doc opens an in-place editor with a slash menu, block drag handles, a selection toolbar, and live tables - edit the doc as it reads, not raw markdown; agents stay the primary writers. Frontmatter is preserved untouched, an unchanged doc is never rewritten, and a save is refused if an agent changed the file on disk while you were editing
 
@@ -21,6 +21,7 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 - **Workspaces:** keep multiple unrelated folders open and pivot between them from the switcher at the left of the toolbar, which also adds and removes them
 - **Open with:** double-click a `.md`/`.markdown`/`.mdx` in Finder, or right-click > Open With DocsReader. A folder opens as a workspace; a file resolves to its workspace (or its parent folder) and opens in the active pane, whether the app was already running or launched by the open
 - **Lenses:** five browsing modes over the same library (Tree, Recent, Tags, Pinned, Tasks), picked from a vertical rail that gives each one an icon and its name. Collapsing the sidebar leaves the rail in place, so the lenses stay one click away
+- **One header row:** search, filters, the view switch, and a single refresh control share one row at the top of the sidebar, along with any count the lens publishes. Refresh rescans the workspace and reloads whatever the lens is showing, so there is never a second refresh button lower down
 - **Jump-to-file:** fuzzy finder across every workspace, opens with Cmd+P (binding configurable)
 - **Document outline:** auto-built TOC that follows the active heading as you scroll
 - **Backlinks:** the outline panel lists every doc that links to the one you are reading, grouped by folder
@@ -51,9 +52,10 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 
 - **Task header:** a doc the MCP wrote as a task (Backlog.md-shaped frontmatter) renders a header - status pill, priority, assignee, and an acceptance-criteria progress bar - instead of plain markdown
 - **Tasks board:** a lens stacking tasks under a To Do, In Progress, or Done group; cards show priority, assignee, and progress, and open the underlying file on click
+- **Board or list:** a switch in the sidebar header shows the same tasks as the grouped board or as one flat list in id order, each row carrying its status, priority, assignee, and progress. The choice is remembered across sessions. Grouping, folding, and drag-to-advance belong to the board; the list trades them for density
 - **Drag-to-advance:** drag a card to another group to change its status; the write goes through the same core the agents use, so a GUI move and an MCP `set_task_status` stay consistent
 - **Collapsible groups:** fold a status group away by its heading; the choice is remembered per workspace, and a folded group reopens on its own while a search or filter has matches in it
-- **Board filters:** the sidebar search matches task titles and ids, and the filter control beside it holds priority and label in a popover; filters compose
+- **Task filters:** the sidebar search matches task titles and ids, and the filter control beside it holds priority and label in a popover; filters compose, and the header row keeps a running count that reads `shown / total` while anything is narrowing the set. Both the search and the filters apply to whichever view is showing
 
 ![The Tasks board beside a task doc with its status pill and acceptance-criteria progress](screenshots/tasks-header.png)
 
