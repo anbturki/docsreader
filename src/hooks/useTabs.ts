@@ -67,6 +67,17 @@ interface WatcherSlot {
 let tabIdSeq = 0;
 const nextId = () => `t${++tabIdSeq}_${Date.now()}`;
 
+const MISSING_FILE_ERROR =
+  "This file is no longer on disk. It may have been moved, renamed, or deleted. Refresh the workspace to update the file list.";
+
+// The reader is shown whatever this returns, so a filesystem message like
+// "failed to open file at path ... (os error 2)" would reach them verbatim.
+export function describeReadFailure(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const missing = /os error 2\b|ENOENT|No such file or directory/i.test(message);
+  return missing ? MISSING_FILE_ERROR : message;
+}
+
 function emptyTab(path: string): Tab {
   return {
     id: nextId(),
@@ -157,7 +168,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
         clearTimeout(timer);
         if (loadSeqRef.current.get(id) !== seq) return;
         patchLoadedTab(id, path, {
-          error: err instanceof Error ? err.message : String(err),
+          error: describeReadFailure(err),
           content: "",
           meta: {},
           loading: false,
