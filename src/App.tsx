@@ -273,8 +273,8 @@ function App() {
     searchScope
   );
   const searchEntries = useMemo(
-    () => mergeSearchEntries(filteredFiles, contentSearch.hits),
-    [filteredFiles, contentSearch.hits]
+    () => mergeSearchEntries(filteredFiles, contentSearch.hits, searchScope),
+    [filteredFiles, contentSearch.hits, searchScope]
   );
   const tree = useMemo(() => {
     if (!library.activeRoot) return undefined;

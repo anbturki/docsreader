@@ -89,3 +89,35 @@ describe("mergeSearchEntries", () => {
     expect(mergeSearchEntries([], [])).toEqual([]);
   });
 });
+
+describe("mergeSearchEntries scope", () => {
+  it("ignores name matches when searching contents only", () => {
+    const entries = mergeSearchEntries([file("gateway-notes.md")], [], "content");
+
+    expect(entries).toEqual([]);
+  });
+
+  it("ignores name matches when searching tags only", () => {
+    const entries = mergeSearchEntries([file("gateway-notes.md")], [], "tags");
+
+    expect(entries).toEqual([]);
+  });
+
+  it("ignores name matches when searching names only, since the backend decides", () => {
+    const entries = mergeSearchEntries([file("gateway-notes.md")], [], "names");
+
+    expect(entries).toEqual([]);
+  });
+
+  it("still returns backend hits in a narrowed scope", () => {
+    const entries = mergeSearchEntries([file("a.md")], [hit("b.md", 3)], "content");
+
+    expect(entries.map((e) => e.relPath)).toEqual(["b.md"]);
+  });
+
+  it("keeps instant name matches when searching everything", () => {
+    const entries = mergeSearchEntries([file("a.md")], [], "all");
+
+    expect(entries.map((e) => e.relPath)).toEqual(["a.md"]);
+  });
+});

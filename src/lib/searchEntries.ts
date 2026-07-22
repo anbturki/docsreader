@@ -1,4 +1,4 @@
-import type { ContentHit, LineMatch } from "@/lib/contentSearch";
+import type { ContentHit, LineMatch, SearchScope } from "@/lib/contentSearch";
 import type { MarkdownFile } from "@/lib/scan";
 
 export interface SearchEntry {
@@ -16,15 +16,22 @@ export interface SearchEntry {
  * that arrive a moment later. Name matches render immediately at score 0 and
  * are re-ranked in place once the scored hits land, so the list fills in rather
  * than flashing empty.
+ *
+ * The instant matches are only used when searching everything. They come from a
+ * client-side filter over names, paths, titles and tags, which is a superset of
+ * any single narrower scope, so seeding them into a narrowed search would list
+ * files the scope is meant to exclude.
  */
 export function mergeSearchEntries(
   files: MarkdownFile[],
-  hits: ContentHit[]
+  hits: ContentHit[],
+  scope: SearchScope = "all"
 ): SearchEntry[] {
+  const seeded = scope === "all" ? files : [];
   const titles = new Map(files.map((file) => [file.path, file.title]));
   const entries = new Map<string, SearchEntry>();
 
-  for (const file of files) {
+  for (const file of seeded) {
     entries.set(file.path, {
       path: file.path,
       relPath: file.relPath,
