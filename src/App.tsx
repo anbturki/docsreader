@@ -7,7 +7,7 @@ import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
 import { BacklinksPanel } from "@/components/document/BacklinksPanel";
 import { OutlinePanel } from "@/components/document/OutlinePanel";
-import { matchShortcut, parseShortcut } from "@/lib/shortcuts";
+import { displayShortcut, matchShortcut, parseShortcut } from "@/lib/shortcuts";
 
 const QuickOpenDialog = lazy(() => import("@/components/quickopen/QuickOpenDialog"));
 import { Button } from "@/components/ui/button";
@@ -266,8 +266,12 @@ function App() {
   const filteredFiles = useFilteredFiles(allFiles, search);
   const [searchScope, setSearchScope] = useState<SearchScope>("all");
   const searchLensActive = viewSettings.settings.sidebarLens === "search";
+  const activeRoots = useMemo(
+    () => (library.activeRoot ? [library.activeRoot] : []),
+    [library.activeRoot]
+  );
   const contentSearch = useContentSearch(
-    library.activeRoot,
+    activeRoots,
     search,
     searchLensActive,
     searchScope
@@ -476,7 +480,7 @@ function App() {
           <Search className="size-3.5" />
           <span>Search</span>
           <kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[10px] leading-4">
-            {viewSettings.settings.quickOpenShortcut}
+            {displayShortcut(viewSettings.settings.quickOpenShortcut)}
           </kbd>
         </button>
         <div data-tauri-drag-region className="flex-1" />
@@ -749,6 +753,7 @@ function App() {
               open={quickOpen}
               onOpenChange={setQuickOpen}
               files={quickOpenFiles}
+            roots={library.roots}
               onSelect={(path) => tabs.openInActive(path)}
             />
           </Suspense>

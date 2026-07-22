@@ -17,6 +17,7 @@ function file(relPath: string, title?: string): MarkdownFile {
 
 function hit(relPath: string, score: number, lineCount = 1): ContentHit {
   return {
+    root: "/lib",
     path: `/lib/${relPath}`,
     relPath,
     score,

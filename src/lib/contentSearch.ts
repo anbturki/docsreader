@@ -25,6 +25,8 @@ export interface LineMatch {
 }
 
 export interface ContentHit {
+  /** The opened folder this hit came from. */
+  root: string;
   path: string;
   relPath: string;
   score: number;
@@ -48,13 +50,17 @@ export const EMPTY_CONTENT_SEARCH: ContentSearchResult = {
 };
 
 export async function searchContent(
-  root: string,
+  roots: string[],
   query: string,
   scope: SearchScope = "all"
 ): Promise<ContentSearchResult> {
-  if (!query.trim()) return EMPTY_CONTENT_SEARCH;
+  if (!query.trim() || roots.length === 0) return EMPTY_CONTENT_SEARCH;
   try {
-    return await invoke<ContentSearchResult>("search_content", { path: root, query, scope });
+    return await invoke<ContentSearchResult>("search_content", {
+      paths: roots,
+      query,
+      scope,
+    });
   } catch {
     // The backend detail is not useful to a reader; surfacing the folder being
     // unreadable is.

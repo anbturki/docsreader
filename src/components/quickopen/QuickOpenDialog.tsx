@@ -10,6 +10,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import type { MarkdownFile } from "@/lib/scan";
+import { useContentSearch } from "@/hooks/useContentSearch";
+import { SearchSnippet } from "@/components/explorer/SearchSnippet";
 
 export interface QuickOpenFile extends MarkdownFile {
   rootPath: string;
@@ -19,10 +21,17 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   files: QuickOpenFile[];
+  roots: string[];
   onSelect: (path: string, openInNew: boolean) => void;
 }
 
-export default function QuickOpenDialog({ open, onOpenChange, files, onSelect }: Props) {
+export default function QuickOpenDialog({
+  open,
+  onOpenChange,
+  files,
+  roots,
+  onSelect,
+}: Props) {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
 
@@ -35,6 +44,16 @@ export default function QuickOpenDialog({ open, onOpenChange, files, onSelect }:
     [files, deferredQuery]
   );
 
+  // Name ranking above stays synchronous so the list never lags a keystroke;
+  // matches from inside documents land a moment later in their own group.
+  const contentSearch = useContentSearch(roots, query, open);
+  const contentHits = useMemo(() => {
+    const alreadyListed = new Set(ranked.map((file) => file.path));
+    return contentSearch.hits.filter(
+      (hit) => hit.lines.length > 0 && !alreadyListed.has(hit.path)
+    );
+  }, [contentSearch.hits, ranked]);
+
   return (
     <CommandDialog
       open={open}
@@ -44,13 +63,13 @@ export default function QuickOpenDialog({ open, onOpenChange, files, onSelect }:
     >
       <Command shouldFilter={false}>
         <CommandInput
-          placeholder="Search files by name or path..."
+          placeholder="Search files and contents..."
           value={query}
           onValueChange={setQuery}
         />
         <CommandList>
           <CommandEmpty>No matching files.</CommandEmpty>
-          <CommandGroup>
+          <CommandGroup heading="Files">
             {ranked.map((file) => (
               <CommandItem
                 key={file.path}
@@ -68,6 +87,26 @@ export default function QuickOpenDialog({ open, onOpenChange, files, onSelect }:
               </CommandItem>
             ))}
           </CommandGroup>
+          {contentHits.length > 0 && (
+            <CommandGroup heading="In documents">
+              {contentHits.map((hit) => (
+                <CommandItem
+                  key={hit.path}
+                  value={`content:${hit.path}`}
+                  onSelect={() => {
+                    onSelect(hit.path, false);
+                    onOpenChange(false);
+                  }}
+                >
+                  <FileText className="text-muted-foreground" />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm">{hit.relPath}</span>
+                    <SearchSnippet match={hit.lines[0]} />
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
         </CommandList>
       </Command>
     </CommandDialog>

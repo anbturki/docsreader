@@ -9,8 +9,7 @@ use crate::agents::{self, AgentClient, ClientId};
 use docsreader_core::git::{git_show_head_core, git_status_core, GitStatus};
 use docsreader_core::scan::{run_scan, ScanProgress, ScanProgressSink, ScanResult};
 use docsreader_core::search::{
-    search_content as search_content_core, ContentQuery, ContentSearchResult, SearchAbort,
-    SearchScope,
+    search_roots, ContentQuery, ContentSearchResult, SearchAbort, SearchScope,
 };
 use docsreader_core::tasks::{list_tasks_core, set_task_status_core, TaskSummary};
 use docsreader_core::workspace::init::{convert_workspace_core, InitializedWorkspace};
@@ -59,7 +58,7 @@ impl SearchAbort for NewerQueryWins {
 #[tauri::command]
 pub async fn search_content(
     state: State<'_, SearchGeneration>,
-    path: String,
+    paths: Vec<String>,
     query: String,
     scope: Option<SearchScope>,
 ) -> Result<ContentSearchResult, String> {
@@ -71,7 +70,8 @@ pub async fn search_content(
         let Some(parsed) = ContentQuery::parse(&query, false, scope.unwrap_or_default()) else {
             return Ok(ContentSearchResult::empty());
         };
-        search_content_core(Path::new(&path), &parsed, &abort).map_err(|e| e.message)
+        let roots: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+        Ok(search_roots(&roots, &parsed, &abort))
     })
     .await
     .map_err(|e| format!("search task panicked: {e}"))?

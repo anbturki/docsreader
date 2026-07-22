@@ -21,19 +21,21 @@ const IDLE: ContentSearchState = {
 };
 
 export function useContentSearch(
-  root: string | undefined,
+  roots: readonly string[],
   query: string,
   enabled = true,
   scope: SearchScope = "all"
 ): ContentSearchState {
   const [state, setState] = useState<ContentSearchState>(IDLE);
+  // Callers rebuild the array each render, so identity cannot drive the effect.
+  const rootsKey = roots.join("\u0000");
   // Every request carries a sequence number. A slow earlier search that lands
   // after a newer one must not overwrite the newer results.
   const latestRequest = useRef(0);
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (!enabled || !root || !trimmed) {
+    if (!enabled || roots.length === 0 || !trimmed) {
       latestRequest.current += 1;
       setState(IDLE);
       return;
@@ -47,7 +49,7 @@ export function useContentSearch(
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const result = await searchContent(root, trimmed, scope);
+          const result = await searchContent([...roots], trimmed, scope);
           if (isStale() || result.aborted) return;
           setState({
             hits: result.hits,
@@ -68,7 +70,7 @@ export function useContentSearch(
     }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [root, query, enabled, scope]);
+  }, [rootsKey, query, enabled, scope]);
 
   return state;
 }

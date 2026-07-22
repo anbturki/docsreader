@@ -1,5 +1,5 @@
 use std::ops::Range;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
 use regex::{Regex, RegexBuilder};
@@ -42,6 +42,10 @@ pub struct LineMatch {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ContentHit {
+    /// The searched folder this hit came from. Quick Open spans several
+    /// workspaces at once and the same relative path can exist in more than
+    /// one, so the caller cannot infer it from the paths alone.
+    pub root: String,
     pub path: String,
     pub rel_path: String,
     pub score: u32,
@@ -164,17 +168,47 @@ pub fn search_content(
         })
         .collect();
 
-    hits.sort_by(|a, b| {
-        b.score
-            .cmp(&a.score)
-            .then_with(|| a.rel_path.cmp(&b.rel_path))
-    });
+    sort_hits(&mut hits);
 
     Ok(ContentSearchResult {
         hits,
         aborted: abort.is_aborted(),
         truncated: walk.truncated,
     })
+}
+
+/// Searches several folders as one request. Quick Open spans every open
+/// workspace, and running one request per folder would make them cancel each
+/// other, since a newer request marks every older one stale.
+pub fn search_roots(
+    roots: &[PathBuf],
+    query: &ContentQuery,
+    abort: &dyn SearchAbort,
+) -> ContentSearchResult {
+    let mut hits = Vec::new();
+    let mut truncated = false;
+    for root in roots {
+        // One unreadable folder must not sink a search across the others.
+        let Ok(result) = search_content(root, query, abort) else {
+            continue;
+        };
+        truncated = truncated || result.truncated;
+        hits.extend(result.hits);
+    }
+    sort_hits(&mut hits);
+    ContentSearchResult {
+        hits,
+        aborted: abort.is_aborted(),
+        truncated,
+    }
+}
+
+fn sort_hits(hits: &mut [ContentHit]) {
+    hits.sort_by(|a, b| {
+        b.score
+            .cmp(&a.score)
+            .then_with(|| a.rel_path.cmp(&b.rel_path))
+    });
 }
 
 struct DocFields<'a> {
@@ -217,6 +251,7 @@ fn search_file(root: &Path, path: &Path, query: &ContentQuery) -> Option<Content
     };
 
     Some(ContentHit {
+        root: root.to_string_lossy().to_string(),
         path: path.to_string_lossy().to_string(),
         rel_path,
         score,
@@ -640,6 +675,49 @@ mod tests {
     #[test]
     fn scope_defaults_to_searching_everything() {
         assert_eq!(SearchScope::default(), SearchScope::All);
+    }
+
+    #[test]
+    fn searches_several_folders_in_one_request() {
+        let one = test_dir("roots_one");
+        let two = test_dir("roots_two");
+        write(&one, "a.md", "the needle is here\n");
+        write(&two, "b.md", "another needle\n");
+
+        let parsed = ContentQuery::parse("needle", false, SearchScope::All).unwrap();
+        let result = search_roots(&[one.clone(), two.clone()], &parsed, &NeverAborts);
+
+        assert_eq!(result.hits.len(), 2);
+        let roots: Vec<&str> = result.hits.iter().map(|h| h.root.as_str()).collect();
+        assert!(roots.contains(&one.to_string_lossy().as_ref()));
+        assert!(roots.contains(&two.to_string_lossy().as_ref()));
+        let _ = std::fs::remove_dir_all(&one);
+        let _ = std::fs::remove_dir_all(&two);
+    }
+
+    #[test]
+    fn a_missing_folder_does_not_sink_the_others() {
+        let good = test_dir("roots_good");
+        let missing = test_dir("roots_missing");
+        write(&good, "a.md", "needle\n");
+        let _ = std::fs::remove_dir_all(&missing);
+
+        let parsed = ContentQuery::parse("needle", false, SearchScope::All).unwrap();
+        let result = search_roots(&[missing, good.clone()], &parsed, &NeverAborts);
+
+        assert_eq!(result.hits.len(), 1);
+        let _ = std::fs::remove_dir_all(&good);
+    }
+
+    #[test]
+    fn every_hit_reports_the_folder_it_came_from() {
+        let dir = test_dir("roots_reported");
+        write(&dir, "a.md", "needle\n");
+
+        let hits = search_scoped(&dir, "needle", SearchScope::All);
+
+        assert_eq!(hits[0].root, dir.to_string_lossy());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
