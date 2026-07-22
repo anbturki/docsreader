@@ -85,6 +85,8 @@ More views in [docs/FEATURES.md](docs/FEATURES.md).
 
 Manual downloads: `DocsReader_*_universal.dmg` (macOS Intel + Apple Silicon), `DocsReader_*_amd64.AppImage` or `.deb` (Linux), `DocsReader_*_x64-setup.exe` (Windows).
 
+**macOS requirement:** macOS 11 Big Sur or later, with Safari 16.4 or later installed. The app renders in the system WebView, so the installed Safari version decides which CSS features are available. macOS 13.3 Ventura and later ship Safari 16.4 or newer; on Big Sur and Monterey, install the latest Safari from Software Update first.
+
 ## More
 
 - **[What's new](https://github.com/anbturki/docsreader/releases)** - release history and notes

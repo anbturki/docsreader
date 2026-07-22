@@ -78,7 +78,7 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "10.15",
+      "minimumSystemVersion": "11.0",
       "entitlements": null,
       "exceptionDomain": null,
       "frameworks": []
