@@ -485,6 +485,105 @@ fn list_workspaces_reports_a_hand_edited_marker_slug() {
 }
 
 #[test]
+fn init_refuses_a_second_workspace_at_the_same_root_and_a_taken_slug() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({}));
+    let project = init_project(&mut c, home.path(), "acme-billing");
+    let elsewhere = home.path().join("unrelated");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+
+    let (payload, is_err) = c.call("init_workspace", json!({"path": project.as_str()}));
+    assert!(is_err, "re-init must not duplicate a workspace: {payload}");
+    assert_eq!(payload["error"]["code"], "conflict");
+    assert!(
+        payload["error"]["recovery"]
+            .as_str()
+            .unwrap()
+            .contains("this is the workspace to use"),
+        "recovery must send the caller back to the existing workspace: {payload}"
+    );
+
+    let (payload, is_err) = c.call(
+        "init_workspace",
+        json!({"path": elsewhere.to_str().unwrap(), "slug": "acme-billing"}),
+    );
+    assert!(is_err, "a taken slug must be refused: {payload}");
+    assert_eq!(payload["error"]["code"], "conflict");
+    assert!(
+        payload["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains(Path::new(&project).join("notes").to_str().unwrap()),
+        "the refusal names the workspace already holding the slug: {payload}"
+    );
+    assert!(
+        !elsewhere.join("notes").exists(),
+        "the refused workspace must not be created"
+    );
+
+    let (list, _) = c.call("list_workspaces", json!({}));
+    let slugs: Vec<&str> = list["workspaces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|w| w["slug"].as_str())
+        .collect();
+    assert_eq!(slugs, ["acme-billing"], "no duplicate registration");
+}
+
+#[test]
+fn workspace_tool_descriptions_tell_a_caller_to_list_first_and_name_the_project() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({}));
+    let listed = c.request("tools/list", json!({}), no_server_requests);
+    let description = |name: &str| -> String {
+        listed["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|t| t["name"] == json!(name))
+            .unwrap_or_else(|| panic!("{name} is advertised"))["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name} carries a description"))
+            .to_string()
+    };
+
+    let init = description("init_workspace");
+    assert!(
+        init.contains("Call list_workspaces first"),
+        "init_workspace must send the caller to the listing first: {init}"
+    );
+    assert!(
+        init.contains("never \"Notes\" or \"Docs\""),
+        "init_workspace must rule out a generic name: {init}"
+    );
+    assert!(
+        init.contains("already a workspace"),
+        "init_workspace must say an existing workspace is the one to use: {init}"
+    );
+
+    let list = description("list_workspaces");
+    assert!(
+        list.contains("before init_workspace"),
+        "list_workspaces must place itself ahead of creation: {list}"
+    );
+
+    let schema = listed["tools"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["name"] == json!("init_workspace"))
+        .unwrap()["inputSchema"]["properties"]["name"]["description"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    assert!(
+        schema.contains("project or product"),
+        "the name field must ask for a project-identifying name: {schema}"
+    );
+}
+
+#[test]
 fn the_created_default_workspace_reports_the_slug_it_was_given() {
     let home = temp_home();
     let mut c = McpClient::spawn(home.path(), &[], json!({}));
