@@ -136,6 +136,21 @@ describe("registry painter", () => {
     createHighlightPainter(scroller).paint([], -1);
     expect(registry.size).toBe(0);
   });
+
+  it("keeps nothing from the previous query when a longer one extends it", () => {
+    const painter = createHighlightPainter(scroller);
+    const short = [fakeRange([rect(0, 0)]), fakeRange([rect(9, 0)]), fakeRange([rect(18, 0)])];
+    painter.paint(short, 0);
+    // Fails loudly rather than vacuously if the overlay painter was selected.
+    expect([...registry.values()].flatMap((h) => h.ranges)).toHaveLength(short.length);
+
+    const long = [fakeRange([rect(27, 0)])];
+    painter.paint(long, 0);
+
+    const painted = [...registry.values()].flatMap((h) => h.ranges);
+    expect(painted).toHaveLength(1);
+    expect(painted[0]).toBe(long[0]);
+  });
 });
 
 describe("overlay painter", () => {
@@ -259,5 +274,18 @@ describe("overlay painter", () => {
   it("paints nothing for no matches", () => {
     createHighlightPainter(scroller).paint([], -1);
     expect(overlayMarks(scroller)).toHaveLength(0);
+  });
+
+  it("keeps nothing from the previous query when a longer one extends it", () => {
+    const painter = createHighlightPainter(scroller);
+    painter.paint([fakeRange([rect(0, 0)]), fakeRange([rect(9, 0)]), fakeRange([rect(18, 0)])], 0);
+    // Fails loudly rather than vacuously if the registry painter was selected.
+    expect(overlayMarks(scroller)).toHaveLength(3);
+
+    painter.paint([fakeRange([rect(140, 0)])], 0);
+
+    // top: 140 - origin 100 + scrollTop 20; the shorter query's rects sat above 0.
+    const tops = overlayMarks(scroller).map((mark) => (mark as HTMLElement).style.top);
+    expect(tops).toEqual(["60px"]);
   });
 });
