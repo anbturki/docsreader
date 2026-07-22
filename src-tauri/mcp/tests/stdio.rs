@@ -664,6 +664,14 @@ fn a_set_up_user_workspace_does_not_absorb_a_write_from_an_unrelated_folder() {
         "nothing may have landed in the user workspace"
     );
 
+    // The refusal is about writes only: a read from the same folder keeps
+    // answering from the user workspace, as it did before this policy.
+    for tool in ["list_docs", "search_memory", "list_tasks"] {
+        let (payload, is_err) = c.call(tool, json!({}));
+        assert!(!is_err, "{tool} must still resolve: {payload}");
+        assert_eq!(payload["workspace"]["slug"], json!(user_slug), "{tool}");
+    }
+
     let (doc, is_err) = c.call(
         "write_doc",
         json!({"title": "Plan", "body": "# Plan", "status": "research", "workspace": user_slug}),
@@ -671,6 +679,37 @@ fn a_set_up_user_workspace_does_not_absorb_a_write_from_an_unrelated_folder() {
     assert!(
         !is_err,
         "naming the workspace stays the one-word way through: {doc}"
+    );
+}
+
+#[test]
+fn an_un_slugged_write_from_inside_a_project_lands_in_that_projects_workspace() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({}));
+    let project = init_project(&mut c, home.path(), "acme-billing");
+    let (created, is_err) = c.call("init_workspace", json!({}));
+    assert!(!is_err, "{created}");
+    let nested = Path::new(&project).join("src/deeply/nested");
+    std::fs::create_dir_all(&nested).unwrap();
+
+    // A client that could be asked must not be: the project workspace above
+    // the caller is the answer, and asking would make every write a prompt.
+    let mut c = McpClient::spawn_in(&nested, home.path(), &[], json!({"elicitation": {}}));
+    let (doc, is_err) = c.call(
+        "write_doc",
+        json!({"title": "Billing Design", "body": "# Billing Design", "status": "research"}),
+    );
+    assert!(!is_err, "the project workspace covers the caller: {doc}");
+    assert_eq!(doc["workspace"]["slug"], "acme-billing");
+    assert_eq!(doc["workspace"]["scope"], "project");
+
+    let (list, _) = c.call("list_docs", json!({"workspace": "acme-billing"}));
+    assert_eq!(list["docs"].as_array().unwrap().len(), 1);
+    let (shared, _) = c.call("list_docs", json!({"workspace": "notes"}));
+    assert_eq!(
+        shared["docs"].as_array().unwrap().len(),
+        0,
+        "the shared workspace must stay out of it: {shared}"
     );
 }
 
