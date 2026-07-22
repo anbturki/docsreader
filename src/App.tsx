@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { message } from "@tauri-apps/plugin-dialog";
@@ -50,6 +51,12 @@ import type { MarkdownFile } from "@/lib/scan";
 import "@/styles/code-theme.css";
 
 const CHROME_ICON = "size-6 text-muted-foreground hover:text-foreground [&>svg]:size-4";
+
+// The fixed header sits outside SidebarProvider, so it cannot inherit the
+// variable the provider sets; both elements carry this same declaration.
+const SIDEBAR_WIDTH_STYLE: CSSProperties & Record<"--sidebar-width", string> = {
+  "--sidebar-width": "20rem",
+};
 
 function App() {
   const library = useLibrary();
@@ -454,8 +461,9 @@ function App() {
     <TooltipProvider delayDuration={200}>
       <header
         data-tauri-drag-region
+        style={SIDEBAR_WIDTH_STYLE}
         className={`fixed right-0 top-0 z-30 flex h-9 items-center gap-2 border-b bg-background pr-2 ${
-          sidebar.open ? "left-[16rem] pl-2" : "left-0 pl-[100px]"
+          sidebar.open ? "left-(--sidebar-width) pl-2" : "left-0 pl-[100px]"
         }`}
       >
         <button
@@ -592,7 +600,7 @@ function App() {
           )}
         </div>
       </header>
-      <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen}>
+      <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen} style={SIDEBAR_WIDTH_STYLE}>
         <ExplorerSidebar
           roots={library.roots}
           activeRoot={library.activeRoot}

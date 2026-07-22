@@ -13,7 +13,7 @@ import type { SidebarLens } from "@/lib/storage";
 import type { RootScan } from "@/hooks/useLibrary";
 import type { GitFileStatusKind } from "@/lib/git";
 import { FileTree } from "./FileTree";
-import { LensTabs } from "./LensTabs";
+import { LensRail } from "./LensRail";
 import { PinnedList } from "./PinnedList";
 import { RecentList } from "./RecentList";
 import { ScanProgressView } from "./ScanProgressView";
@@ -116,99 +116,100 @@ export function ExplorerSidebar({
   onShowGitDiff,
 }: Props) {
   return (
-    <Sidebar collapsible="offcanvas">
-      <SidebarHeader data-tauri-drag-region className="gap-0 p-0 pt-9">
-        {roots.length > 0 && (
-          <WorkspaceSwitcher
-            roots={roots}
-            activeRoot={activeRoot}
-            workspaceNamesByRoot={workspaceNamesByRoot}
-            onSelect={onSelectRoot}
-            onRemove={onRemoveRoot}
-            onAdd={onPickDirectory}
-          />
-        )}
-        {roots.length > 0 && (
-          <LensTabs active={lens} onChange={onLensChange} />
-        )}
+    <Sidebar collapsible="offcanvas" className="*:data-[sidebar=sidebar]:flex-row">
+      {roots.length > 0 && <LensRail active={lens} onChange={onLensChange} />}
 
-        {roots.length > 0 && (
-          <div className="px-2 pt-2 pb-2">
-            <SearchInput value={search} onChange={onSearchChange} />
-          </div>
-        )}
-      </SidebarHeader>
+      <Sidebar collapsible="none" className="min-w-0 flex-1">
+        <SidebarHeader data-tauri-drag-region className="gap-0 p-0 pt-9">
+          {roots.length > 0 && (
+            <WorkspaceSwitcher
+              roots={roots}
+              activeRoot={activeRoot}
+              workspaceNamesByRoot={workspaceNamesByRoot}
+              onSelect={onSelectRoot}
+              onRemove={onRemoveRoot}
+              onAdd={onPickDirectory}
+            />
+          )}
 
-      <SidebarContent className="overflow-x-hidden">
-        {roots.length === 0 ? (
-          <Empty className="my-auto">
-            <EmptyHeader>
-              <EmptyTitle>No workspaces yet</EmptyTitle>
-              <EmptyDescription>
-                Add a folder of markdown to start.
-              </EmptyDescription>
-            </EmptyHeader>
-            <div className="flex flex-col items-center gap-2">
-              <Button onClick={onPickDirectory}>Add folder</Button>
-              {onOpenWelcome && (
-                <Button variant="ghost" size="sm" onClick={onOpenWelcome}>
-                  Or open the welcome workspace
-                </Button>
-              )}
+          {roots.length > 0 && (
+            <div className="px-2 pt-2 pb-2">
+              <SearchInput value={search} onChange={onSearchChange} />
             </div>
-          </Empty>
-        ) : activeScan?.scanning && activeScan.result.files.length === 0 ? (
-          <ScanProgressView
-            progress={activeScan.progress}
-            startedAt={activeScan.startedAt}
-          />
-        ) : lens === "search" ? (
-          <SearchResults
-            query={search}
-            entries={searchEntries}
-            scope={searchScope}
-            onScopeChange={onSearchScopeChange}
-            searching={searchingContents}
-            error={searchError}
-            truncated={searchTruncated}
-            selectedPath={selectedPath}
-            onSelect={onSelectFile}
-            onOpenInNewTab={onOpenInNewTab}
-            onOpenInOtherPane={onOpenInOtherPane}
-            isPinned={isPinned}
-            onTogglePin={onTogglePin}
-          />
-        ) : (
-          <LensView
-            lens={lens}
-            activeRoot={activeRoot}
-            tree={tree}
-            rootKey={rootKey}
-            filteredFiles={filteredFiles}
-            pinnedFiles={pinnedFiles}
-            selectedPath={selectedPath}
-            isExpanded={isExpanded}
-            onToggleExpanded={onToggleExpanded}
-            isPinned={isPinned}
-            onTogglePin={onTogglePin}
-            onHide={onHide}
-            onSelect={onSelectFile}
-            onOpenInNewTab={onOpenInNewTab}
-            onOpenInOtherPane={onOpenInOtherPane}
-            gitStatusByPath={gitStatusByPath}
-            onShowGitDiff={onShowGitDiff}
-          />
-        )}
-      </SidebarContent>
+          )}
+        </SidebarHeader>
 
-      <SidebarFooter className="gap-2 text-xs text-muted-foreground">
-        <ExplorerFooter
-          activeScan={activeScan}
-          matchCount={lens === "search" ? searchEntries.length : filteredFiles.length}
-          hiddenCount={hiddenCount}
-          onOpenSettings={onOpenSettings}
-        />
-      </SidebarFooter>
+        <SidebarContent className="overflow-x-hidden">
+          {roots.length === 0 ? (
+            <Empty className="my-auto">
+              <EmptyHeader>
+                <EmptyTitle>No workspaces yet</EmptyTitle>
+                <EmptyDescription>
+                  Add a folder of markdown to start.
+                </EmptyDescription>
+              </EmptyHeader>
+              <div className="flex flex-col items-center gap-2">
+                <Button onClick={onPickDirectory}>Add folder</Button>
+                {onOpenWelcome && (
+                  <Button variant="ghost" size="sm" onClick={onOpenWelcome}>
+                    Or open the welcome workspace
+                  </Button>
+                )}
+              </div>
+            </Empty>
+          ) : activeScan?.scanning && activeScan.result.files.length === 0 ? (
+            <ScanProgressView
+              progress={activeScan.progress}
+              startedAt={activeScan.startedAt}
+            />
+          ) : lens === "search" ? (
+            <SearchResults
+              query={search}
+              entries={searchEntries}
+              scope={searchScope}
+              onScopeChange={onSearchScopeChange}
+              searching={searchingContents}
+              error={searchError}
+              truncated={searchTruncated}
+              selectedPath={selectedPath}
+              onSelect={onSelectFile}
+              onOpenInNewTab={onOpenInNewTab}
+              onOpenInOtherPane={onOpenInOtherPane}
+              isPinned={isPinned}
+              onTogglePin={onTogglePin}
+            />
+          ) : (
+            <LensView
+              lens={lens}
+              activeRoot={activeRoot}
+              tree={tree}
+              rootKey={rootKey}
+              filteredFiles={filteredFiles}
+              pinnedFiles={pinnedFiles}
+              selectedPath={selectedPath}
+              isExpanded={isExpanded}
+              onToggleExpanded={onToggleExpanded}
+              isPinned={isPinned}
+              onTogglePin={onTogglePin}
+              onHide={onHide}
+              onSelect={onSelectFile}
+              onOpenInNewTab={onOpenInNewTab}
+              onOpenInOtherPane={onOpenInOtherPane}
+              gitStatusByPath={gitStatusByPath}
+              onShowGitDiff={onShowGitDiff}
+            />
+          )}
+        </SidebarContent>
+
+        <SidebarFooter className="gap-2 text-xs text-muted-foreground">
+          <ExplorerFooter
+            activeScan={activeScan}
+            matchCount={lens === "search" ? searchEntries.length : filteredFiles.length}
+            hiddenCount={hiddenCount}
+            onOpenSettings={onOpenSettings}
+          />
+        </SidebarFooter>
+      </Sidebar>
 
       <SidebarRail />
     </Sidebar>
