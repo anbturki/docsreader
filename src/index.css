@@ -117,6 +117,7 @@
     --scheme-dark-screen: oklch(0.18 0 0);
     --scheme-dark-panel: oklch(0.3 0 0);
     --scheme-dark-line: oklch(0.38 0 0);
+    --overlay: oklch(0 0 0 / 25%);
 }
 
 .dark {
@@ -155,6 +156,7 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+    --overlay: oklch(0 0 0 / 55%);
 }
 
 /* Strata status palette, layered on the theme; the aliases re-resolve
@@ -221,6 +223,15 @@
   .accent-swatch {
     background: oklch(var(--primary-fixed-l) var(--primary-fixed-c) var(--primary-fixed-hue));
   }
+}
+
+/* The radix-nova style paints both overlays bg-black/10, which leaves the page
+   behind a dialog fully legible in dark. Retinted here rather than in the
+   primitives because components/ui/ stays CLI-owned; unlayered, so it outranks
+   Tailwind's utility layer without !important. */
+[data-slot="dialog-overlay"],
+[data-slot="sheet-overlay"] {
+    background-color: var(--overlay);
 }
 
 /* Reader task lists render checkbox-only (no redundant bullet) with an
