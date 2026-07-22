@@ -3,12 +3,16 @@ import type { CSSProperties } from "react";
 // Tauri reads the window-control position from src-tauri/tauri.conf.json at build
 // time, so JSON cannot reference this file and this file cannot import it. These
 // numbers mirror app.windows[0].trafficLightPosition; AppToolbar.test.tsx reads the
-// config back and fails if the two drift. `y` centres the controls in the bar height
-// below, so re-derive it whenever that height changes.
-export const MAC_WINDOW_CONTROLS = { x: 11, y: 18 } as const;
+// config back and fails if the two drift.
+//
+// `y` is not a top offset: the platform centres the 14px controls inside a band
+// of `button height + y`, so the top edge lands at y/2. Centring them in the bar
+// therefore wants y = bar height - button height, measured at 36px and 14px.
+export const MAC_WINDOW_CONTROLS = { x: 11, y: 22 } as const;
 
-// Close, minimise and zoom are 14px wide and 20px apart.
-const MAC_WINDOW_CONTROLS_SPAN = 54;
+// Close, minimise and zoom are 14px wide, pitched 23px apart: 11 to 71 measured
+// in a running window, so the group spans 60 rather than the 54 first assumed.
+const MAC_WINDOW_CONTROLS_SPAN = 60;
 const MAC_WINDOW_CONTROLS_CLEARANCE = 12;
 
 const windowControlsInset =
