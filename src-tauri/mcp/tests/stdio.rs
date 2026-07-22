@@ -21,6 +21,9 @@ impl McpClient {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
+            // The walk-up from cwd would otherwise reach the developer's own
+            // workspaces, so an un-slugged call would leave the sandbox.
+            .current_dir(home)
             .env("HOME", home)
             .envs(envs.iter().copied())
             .spawn()
@@ -479,4 +482,27 @@ fn list_workspaces_reports_a_hand_edited_marker_slug() {
 
     let (docs, is_err) = c.call("list_docs", json!({"workspace": "after"}));
     assert!(!is_err, "the advertised slug must resolve: {docs}");
+}
+
+#[test]
+fn the_created_default_workspace_reports_the_slug_it_was_given() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({}));
+    init_project(&mut c, home.path(), "notes");
+
+    let (doc, is_err) = c.call(
+        "write_doc",
+        json!({"title": "First", "body": "# First", "status": "research"}),
+    );
+    assert!(!is_err, "{doc}");
+    let slug = doc["workspace"]["slug"].as_str().unwrap().to_string();
+    assert_ne!(slug, "notes", "the project workspace already holds that slug");
+
+    let (list, is_err) = c.call("list_docs", json!({"workspace": slug}));
+    assert!(!is_err, "{list}");
+    assert_eq!(
+        list["docs"].as_array().unwrap().len(),
+        1,
+        "the reported slug must name the workspace the doc was written into"
+    );
 }

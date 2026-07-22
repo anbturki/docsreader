@@ -164,7 +164,17 @@ pub(crate) struct MarkdownWalk {
 
 /// The one traversal every library feature goes through, so the file tree and
 /// content search can never disagree about which files a folder contains.
-pub(crate) fn collect_markdown_entries(root: &Path, mut on_dir: impl FnMut(&Path)) -> MarkdownWalk {
+pub(crate) fn collect_markdown_entries(root: &Path, on_dir: impl FnMut(&Path)) -> MarkdownWalk {
+    collect_markdown_entries_until(root, on_dir, || false)
+}
+
+/// The walk dominates a search on a large tree, so a superseded query has to be
+/// able to leave it early rather than only between files.
+pub(crate) fn collect_markdown_entries_until(
+    root: &Path,
+    mut on_dir: impl FnMut(&Path),
+    should_stop: impl Fn() -> bool,
+) -> MarkdownWalk {
     let mut entries: Vec<DirEntry> = Vec::new();
     let mut truncated = false;
     let mut skipped = 0usize;
@@ -185,6 +195,9 @@ pub(crate) fn collect_markdown_entries(root: &Path, mut on_dir: impl FnMut(&Path
         });
 
     for entry in walker {
+        if should_stop() {
+            break;
+        }
         let entry = match entry {
             Ok(e) => e,
             // Permission-denied subtrees and symlink loops arrive as error

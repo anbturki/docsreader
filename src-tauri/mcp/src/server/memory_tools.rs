@@ -80,8 +80,8 @@ impl DocsServer {
     ) -> Result<Json<MemoryWriteResult>, CallToolResult> {
         let agent = client_name(&peer);
         let result = async {
-            let ws = resolve_or_pick(&peer, p.workspace.as_deref()).await?;
-            ensure_workspace_exists(&ws)?;
+            let mut ws = resolve_or_pick(&peer, p.workspace.as_deref()).await?;
+            ensure_workspace_exists(&mut ws)?;
             let entry = write_memory_core(
                 &ws.root,
                 &p.topic,

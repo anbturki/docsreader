@@ -122,8 +122,8 @@ impl DocsServer {
     ) -> Result<Json<TaskChangeResult>, CallToolResult> {
         let reporter = client_name(&peer);
         let result = async {
-            let ws = resolve_or_pick(&peer, p.workspace.as_deref()).await?;
-            ensure_workspace_exists(&ws)?;
+            let mut ws = resolve_or_pick(&peer, p.workspace.as_deref()).await?;
+            ensure_workspace_exists(&mut ws)?;
             let task = NewTask {
                 title: &p.title,
                 description: &p.description,

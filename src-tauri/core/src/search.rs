@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, ErrorCode};
 use crate::frontmatter::split_frontmatter;
-use crate::scan::{collect_markdown_entries, parse_meta, relative_path};
+use crate::scan::{collect_markdown_entries_until, parse_meta, relative_path};
 use crate::score::{combine_terms, FieldHits};
 
 /// How many matching lines are returned per file. A single huge document must
@@ -17,6 +17,10 @@ const MAX_LINES_PER_FILE: usize = 5;
 const SNIPPET_LEAD_CHARS: usize = 40;
 /// Total snippet width, in characters.
 const SNIPPET_WIDTH_CHARS: usize = 240;
+/// Ceiling on returned hits. A one-character query against a library at the
+/// file cap matches nearly everything, and serialising that costs far more than
+/// a reader can use.
+const MAX_HITS: usize = 500;
 
 /// A run of snippet text, already split so the caller never does index
 /// arithmetic. Rust byte offsets and JavaScript UTF-16 indices disagree the
@@ -61,6 +65,9 @@ pub struct ContentSearchResult {
     /// True when a newer query superseded this one, so the hits are partial.
     pub aborted: bool,
     pub truncated: bool,
+    /// Folders that could not be searched at all. An empty hit list means
+    /// nothing matched only when this is empty too.
+    pub failed_roots: Vec<String>,
 }
 
 impl ContentSearchResult {
@@ -69,6 +76,7 @@ impl ContentSearchResult {
             hits: Vec::new(),
             aborted: false,
             truncated: false,
+            failed_roots: Vec::new(),
         }
     }
 }
@@ -156,7 +164,7 @@ pub fn search_content(
         .with_recovery("reopen the folder to rescan it"));
     }
 
-    let walk = collect_markdown_entries(root, |_| {});
+    let walk = collect_markdown_entries_until(root, |_| {}, || abort.is_aborted());
     let mut hits: Vec<ContentHit> = walk
         .entries
         .par_iter()
@@ -169,11 +177,13 @@ pub fn search_content(
         .collect();
 
     sort_hits(&mut hits);
+    let truncated = cap_hits(&mut hits) || walk.truncated;
 
     Ok(ContentSearchResult {
         hits,
         aborted: abort.is_aborted(),
-        truncated: walk.truncated,
+        truncated,
+        failed_roots: Vec::new(),
     })
 }
 
@@ -187,19 +197,28 @@ pub fn search_roots(
 ) -> ContentSearchResult {
     let mut hits = Vec::new();
     let mut truncated = false;
+    let mut failed_roots = Vec::new();
     for root in roots {
-        // One unreadable folder must not sink a search across the others.
-        let Ok(result) = search_content(root, query, abort) else {
-            continue;
-        };
-        truncated = truncated || result.truncated;
-        hits.extend(result.hits);
+        if abort.is_aborted() {
+            break;
+        }
+        match search_content(root, query, abort) {
+            Ok(result) => {
+                truncated = truncated || result.truncated;
+                hits.extend(result.hits);
+            }
+            // One unreadable folder must not sink a search across the others,
+            // so it is reported alongside whatever the rest matched.
+            Err(_) => failed_roots.push(root.to_string_lossy().into_owned()),
+        }
     }
     sort_hits(&mut hits);
+    let truncated = cap_hits(&mut hits) || truncated;
     ContentSearchResult {
         hits,
         aborted: abort.is_aborted(),
         truncated,
+        failed_roots,
     }
 }
 
@@ -209,6 +228,16 @@ fn sort_hits(hits: &mut [ContentHit]) {
             .cmp(&a.score)
             .then_with(|| a.rel_path.cmp(&b.rel_path))
     });
+}
+
+/// Drops everything past the cap; the caller must already have sorted, so what
+/// survives is the best of the set rather than an arbitrary slice.
+fn cap_hits(hits: &mut Vec<ContentHit>) -> bool {
+    if hits.len() <= MAX_HITS {
+        return false;
+    }
+    hits.truncate(MAX_HITS);
+    true
 }
 
 struct DocFields<'a> {
@@ -703,10 +732,68 @@ mod tests {
         let _ = std::fs::remove_dir_all(&missing);
 
         let parsed = ContentQuery::parse("needle", false, SearchScope::All).unwrap();
-        let result = search_roots(&[missing, good.clone()], &parsed, &NeverAborts);
+        let result = search_roots(&[missing.clone(), good.clone()], &parsed, &NeverAborts);
 
         assert_eq!(result.hits.len(), 1);
+        assert_eq!(result.failed_roots, [missing.to_string_lossy().to_string()]);
         let _ = std::fs::remove_dir_all(&good);
+    }
+
+    #[test]
+    fn an_aborted_search_stops_before_walking_the_tree() {
+        let dir = test_dir("walk_abort");
+        write(&dir, "a.md", "needle\n");
+
+        let stopped = crate::scan::collect_markdown_entries_until(&dir, |_| {}, || true);
+        let full = crate::scan::collect_markdown_entries_until(&dir, |_| {}, || false);
+
+        assert!(stopped.entries.is_empty());
+        assert_eq!(full.entries.len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_aborted_search_does_not_probe_the_next_folder() {
+        let good = test_dir("roots_abort_good");
+        let missing = test_dir("roots_abort_missing");
+        write(&good, "a.md", "needle\n");
+        let _ = std::fs::remove_dir_all(&missing);
+
+        let parsed = ContentQuery::parse("needle", false, SearchScope::All).unwrap();
+        let result = search_roots(&[good.clone(), missing], &parsed, &AlwaysAborts);
+
+        assert!(
+            result.failed_roots.is_empty(),
+            "an abandoned search stops instead of reading the remaining folders"
+        );
+        let _ = std::fs::remove_dir_all(&good);
+    }
+
+    #[test]
+    fn caps_the_hit_set_and_reports_it_truncated() {
+        let dir = test_dir("search_hit_cap");
+        for i in 0..MAX_HITS + 5 {
+            write(&dir, &format!("f{i}.md"), "needle\n");
+        }
+
+        let parsed = ContentQuery::parse("needle", false, SearchScope::All).unwrap();
+        let result = search_roots(std::slice::from_ref(&dir), &parsed, &NeverAborts);
+
+        assert_eq!(result.hits.len(), MAX_HITS);
+        assert!(result.truncated);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_searchable_folder_is_not_reported_as_failed() {
+        let dir = test_dir("roots_ok");
+        write(&dir, "a.md", "needle\n");
+
+        let parsed = ContentQuery::parse("needle", false, SearchScope::All).unwrap();
+        let result = search_roots(std::slice::from_ref(&dir), &parsed, &NeverAborts);
+
+        assert!(result.failed_roots.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

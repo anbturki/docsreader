@@ -1,6 +1,7 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, PoisonError};
 
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -38,11 +39,24 @@ pub async fn scan_markdown(app: AppHandle, path: String) -> Result<ScanResult, S
         .map_err(|e| format!("scan task panicked: {}", e))?
 }
 
-/// Bumped by every search request. A command cannot be cancelled once it is
-/// running, so a superseded query notices the newer generation and stops
-/// reading files instead of competing with it for the disk.
+/// One counter per calling surface, bumped by every search request. A command
+/// cannot be cancelled once it is running, so a superseded query notices the
+/// newer generation and stops reading files instead of competing with it for
+/// the disk. The counters are kept apart because several search boxes can be
+/// open at once, and one typing must not abandon another's results.
 #[derive(Default)]
-pub struct SearchGeneration(Arc<AtomicU64>);
+pub struct SearchGeneration(Mutex<HashMap<String, Arc<AtomicU64>>>);
+
+impl SearchGeneration {
+    fn claim(&self, surface: &str) -> NewerQueryWins {
+        let latest = {
+            let mut counters = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            counters.entry(surface.to_string()).or_default().clone()
+        };
+        let generation = latest.fetch_add(1, Ordering::SeqCst) + 1;
+        NewerQueryWins { generation, latest }
+    }
+}
 
 struct NewerQueryWins {
     generation: u64,
@@ -61,10 +75,9 @@ pub async fn search_content(
     paths: Vec<String>,
     query: String,
     scope: Option<SearchScope>,
+    surface: Option<String>,
 ) -> Result<ContentSearchResult, String> {
-    let latest = state.0.clone();
-    let generation = latest.fetch_add(1, Ordering::SeqCst) + 1;
-    let abort = NewerQueryWins { generation, latest };
+    let abort = state.claim(&surface.unwrap_or_default());
 
     tauri::async_runtime::spawn_blocking(move || {
         let Some(parsed) = ContentQuery::parse(&query, false, scope.unwrap_or_default()) else {

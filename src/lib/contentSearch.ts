@@ -38,21 +38,30 @@ export interface ContentSearchResult {
   hits: ContentHit[];
   aborted: boolean;
   truncated: boolean;
+  /** Folders that could not be read at all, so nothing was searched in them. */
+  failedRoots: string[];
 }
 
-const SEARCH_FAILED_MESSAGE =
+export const SEARCH_FAILED_MESSAGE =
   "This folder could not be searched. It may have been moved, or it may be on a drive that is no longer available.";
 
 export const EMPTY_CONTENT_SEARCH: ContentSearchResult = {
   hits: [],
   aborted: false,
   truncated: false,
+  failedRoots: [],
 };
 
+/**
+ * `surface` scopes cancellation: the backend only supersedes an in-flight
+ * search from the same surface, so two open search boxes do not abandon each
+ * other's requests.
+ */
 export async function searchContent(
   roots: string[],
   query: string,
-  scope: SearchScope = "all"
+  scope: SearchScope,
+  surface: string
 ): Promise<ContentSearchResult> {
   if (!query.trim() || roots.length === 0) return EMPTY_CONTENT_SEARCH;
   try {
@@ -60,6 +69,7 @@ export async function searchContent(
       paths: roots,
       query,
       scope,
+      surface,
     });
   } catch {
     // The backend detail is not useful to a reader; surfacing the folder being

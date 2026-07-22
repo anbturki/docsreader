@@ -2,7 +2,12 @@ import { act, renderHook } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
 
 import { useContentSearch } from "./useContentSearch";
-import { searchContent, type ContentHit, type ContentSearchResult } from "@/lib/contentSearch";
+import {
+  searchContent,
+  SEARCH_FAILED_MESSAGE,
+  type ContentHit,
+  type ContentSearchResult,
+} from "@/lib/contentSearch";
 
 vi.mock("@/lib/contentSearch", async () => {
   const actual = await vi.importActual<typeof import("@/lib/contentSearch")>(
@@ -32,7 +37,7 @@ function hit(relPath: string): ContentHit {
 }
 
 function result(hits: ContentHit[], overrides: Partial<ContentSearchResult> = {}) {
-  return { hits, aborted: false, truncated: false, ...overrides };
+  return { hits, aborted: false, truncated: false, failedRoots: [], ...overrides };
 }
 
 function deferred<T>() {
@@ -83,7 +88,7 @@ describe("useContentSearch", () => {
     await settle();
 
     expect(mockedSearch).toHaveBeenCalledTimes(1);
-    expect(mockedSearch).toHaveBeenCalledWith(["/lib"], "needle", "all");
+    expect(mockedSearch).toHaveBeenCalledWith(["/lib"], "needle", "all", expect.any(String));
   });
 
   it("does not let a slow earlier search overwrite newer results", async () => {
@@ -119,6 +124,50 @@ describe("useContentSearch", () => {
     expect(state.current.hits).toHaveLength(0);
   });
 
+  it("stops showing progress when the backend abandoned the request", async () => {
+    mockedSearch.mockResolvedValue(result([hit("partial.md")], { aborted: true }));
+    const { result: state } = renderHook(() => useContentSearch(["/lib"], "needle"));
+
+    await settle();
+
+    expect(state.current.searching).toBe(false);
+  });
+
+  it("gives each mounted surface its own cancellation scope", async () => {
+    mockedSearch.mockResolvedValue(result([]));
+    renderHook(() => useContentSearch(["/lib"], "needle"));
+    renderHook(() => useContentSearch(["/lib"], "needle"));
+
+    await settle();
+
+    expect(mockedSearch).toHaveBeenCalledTimes(2);
+    const [first, second] = mockedSearch.mock.calls;
+    expect(first[3]).toBeTruthy();
+    expect(first[3]).not.toBe(second[3]);
+  });
+
+  it("reports a failure when no folder could be searched", async () => {
+    mockedSearch.mockResolvedValue(result([], { failedRoots: ["/lib"] }));
+    const { result: state } = renderHook(() => useContentSearch(["/lib"], "needle"));
+
+    await settle();
+
+    expect(state.current.error).toBe(SEARCH_FAILED_MESSAGE);
+    expect(state.current.searching).toBe(false);
+  });
+
+  it("keeps the matches it found when only one folder failed", async () => {
+    mockedSearch.mockResolvedValue(result([hit("a.md")], { failedRoots: ["/gone"] }));
+    const { result: state } = renderHook(() =>
+      useContentSearch(["/lib", "/gone"], "needle")
+    );
+
+    await settle();
+
+    expect(state.current.error).toBeUndefined();
+    expect(state.current.hits).toHaveLength(1);
+  });
+
   it("clears results and searches nothing for a blank query", async () => {
     const { result: state } = renderHook(() => useContentSearch(["/lib"], "   "));
 
@@ -143,7 +192,7 @@ describe("useContentSearch", () => {
 
     await settle();
 
-    expect(mockedSearch).toHaveBeenCalledWith(["/lib"], "needle", "tags");
+    expect(mockedSearch).toHaveBeenCalledWith(["/lib"], "needle", "tags", expect.any(String));
   });
 
   it("searches nothing while disabled", async () => {

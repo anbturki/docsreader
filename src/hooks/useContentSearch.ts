@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
-import { searchContent, type ContentHit, type SearchScope } from "@/lib/contentSearch";
+import {
+  searchContent,
+  SEARCH_FAILED_MESSAGE,
+  type ContentHit,
+  type ContentSearchResult,
+  type SearchScope,
+} from "@/lib/contentSearch";
 
 // Long enough that a typed word issues one search rather than one per letter,
 // short enough that results feel attached to the keystroke.
@@ -32,6 +38,9 @@ export function useContentSearch(
   // Every request carries a sequence number. A slow earlier search that lands
   // after a newer one must not overwrite the newer results.
   const latestRequest = useRef(0);
+  // Cancellation is scoped to this hook instance, so a second search box on
+  // screen does not abandon this one's in-flight request.
+  const surface = useId();
 
   useEffect(() => {
     const trimmed = query.trim();
@@ -43,18 +52,25 @@ export function useContentSearch(
 
     const request = ++latestRequest.current;
     const isStale = () => latestRequest.current !== request;
+    const rootCount = roots.length;
 
     setState((prev) => ({ ...prev, searching: true, error: undefined }));
 
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const result = await searchContent([...roots], trimmed, scope);
-          if (isStale() || result.aborted) return;
+          const result = await searchContent([...roots], trimmed, scope, surface);
+          if (isStale()) return;
+          // An abandoned request keeps whatever is on screen, but the progress
+          // indicator has to stop: no further result is coming for it.
+          if (result.aborted) {
+            setState((prev) => ({ ...prev, searching: false }));
+            return;
+          }
           setState({
             hits: result.hits,
             searching: false,
-            error: undefined,
+            error: everyRootFailed(result, rootCount) ? SEARCH_FAILED_MESSAGE : undefined,
             truncated: result.truncated,
           });
         } catch (e) {
@@ -70,7 +86,13 @@ export function useContentSearch(
     }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [rootsKey, query, enabled, scope]);
+  }, [rootsKey, query, enabled, scope, surface]);
 
   return state;
+}
+
+// A folder that failed alongside folders that matched stays quiet: hiding real
+// hits behind an error costs the reader more than the missing folder does.
+function everyRootFailed(result: ContentSearchResult, rootCount: number): boolean {
+  return result.failedRoots.length > 0 && result.failedRoots.length >= rootCount;
 }

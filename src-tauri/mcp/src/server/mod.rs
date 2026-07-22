@@ -127,7 +127,7 @@ pub(crate) fn known_slugs() -> Result<Vec<String>, CoreError> {
 
 /// The default user workspace is create-on-first-use: writing to it before
 /// init_workspace must succeed, so agents never hit a setup wall.
-pub(crate) fn ensure_workspace_exists(ws: &ResolvedWorkspace) -> Result<(), CoreError> {
+pub(crate) fn ensure_workspace_exists(ws: &mut ResolvedWorkspace) -> Result<(), CoreError> {
     if ws.root.is_dir() {
         return Ok(());
     }
@@ -142,14 +142,17 @@ pub(crate) fn ensure_workspace_exists(ws: &ResolvedWorkspace) -> Result<(), Core
     }
     let home = home_dir()?;
     // No explicit slug: the derived default is the same name, and leaving it
-    // derived lets init suffix it if a project workspace already took it.
-    init_workspace_core(
+    // derived lets init suffix it if a project workspace already took it. The
+    // assigned slug is adopted here so every identifier built afterwards names
+    // the workspace the write actually landed in.
+    let created = init_workspace_core(
         &ws.root,
         None,
         None,
         WorkspaceScope::User,
         &default_registry_path(&home),
     )?;
+    ws.slug = created.slug;
     Ok(())
 }
 

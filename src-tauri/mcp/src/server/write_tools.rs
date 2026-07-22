@@ -139,8 +139,8 @@ async fn located(
     peer: &Peer<RoleServer>,
     workspace: Option<&str>,
 ) -> Result<ResolvedWorkspace, CoreError> {
-    let ws = resolve_or_pick(peer, workspace).await?;
-    ensure_workspace_exists(&ws)?;
+    let mut ws = resolve_or_pick(peer, workspace).await?;
+    ensure_workspace_exists(&mut ws)?;
     Ok(ws)
 }
 
