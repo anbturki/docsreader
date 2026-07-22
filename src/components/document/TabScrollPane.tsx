@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { MarkdownFile } from "@/lib/scan";
 import type { ViewSettings } from "@/lib/storage";
@@ -68,6 +68,13 @@ export function TabScrollPane({
   const findShortcut = useMemo(
     () => parseShortcut(viewSettings.findInDocumentShortcut),
     [viewSettings.findInDocumentShortcut]
+  );
+  // The markdown body memoises on its component map, which is rebuilt whenever
+  // this handler changes identity. An inline arrow here re-parsed every open
+  // document on every tab switch.
+  const toggleTask = useCallback(
+    (index: number) => void onToggleTask(tab.id, index),
+    [onToggleTask, tab.id]
   );
   const findable = active && paneFocused && tab.draft === undefined;
   const find = useFindInDocument(findable ? scrollEl : null, findable);
@@ -183,7 +190,7 @@ export function TabScrollPane({
         onBeginEdit={() => void onBeginEdit(tab.id)}
         onCancelEdit={() => onCancelEdit(tab.id)}
         onSaveEdit={(markdown) => onSaveEdit(tab.id, markdown)}
-        onToggleTask={(index) => void onToggleTask(tab.id, index)}
+        onToggleTask={toggleTask}
       />
     </div>
   );

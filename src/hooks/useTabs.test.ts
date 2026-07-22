@@ -348,3 +348,24 @@ describe("describeReadFailure", () => {
     expect(shown).toBe("permission denied (os error 13)");
   });
 });
+
+describe("switching tabs", () => {
+  // The markdown body memoises on the component map it is handed, and that map
+  // is rebuilt whenever this callback changes identity. Keyed on the active tab
+  // it changed on every switch, so every open document re-parsed each time.
+  it("keeps openInActive stable when the active tab changes", async () => {
+    const readTextFile = vi.mocked((await import("@tauri-apps/plugin-fs")).readTextFile);
+    readTextFile.mockResolvedValue(RAW);
+
+    const hook = await openTab();
+    act(() => hook.result.current.openInNew("/ws/second.md"));
+    await waitFor(() => expect(hook.result.current.tabs).toHaveLength(2));
+
+    const before = hook.result.current.openInActive;
+    const first = hook.result.current.tabs[0];
+    act(() => hook.result.current.activate(first.id));
+    await waitFor(() => expect(hook.result.current.activeId).toBe(first.id));
+
+    expect(hook.result.current.openInActive).toBe(before);
+  });
+});

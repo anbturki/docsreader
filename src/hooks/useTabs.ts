@@ -201,7 +201,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
         }
         return;
       }
-      const active = tabsRef.current.find((t) => t.id === activeId);
+      const active = tabsRef.current.find((t) => t.id === activeIdRef.current);
       if (!active) {
         openInNew(path);
         return;
@@ -219,7 +219,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
       });
       void loadTab(active.id, path);
     },
-    [activeId, openInNew, updateTab, loadTab]
+    [openInNew, updateTab, loadTab]
   );
 
   const activate = useCallback((id: string) => setActiveId(id), []);
@@ -535,6 +535,9 @@ export function useTabs(options: UseTabsOptions): Tabs {
 
   const hydratedRef = useRef(false);
   hydratedRef.current = hydrated;
+  // Read through the ref, not the value: a callback depending on the active tab
+  // changes identity on every switch, and the markdown body memoises on that
+  // identity, so every open document would re-parse each time.
   const activeIdRef = useRef<string | undefined>(undefined);
   activeIdRef.current = activeId;
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
