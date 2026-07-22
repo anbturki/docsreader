@@ -317,7 +317,11 @@ mod tests {
         let broken = dir.join("broken");
         std::fs::create_dir_all(&bare).unwrap();
         std::fs::create_dir_all(&broken).unwrap();
-        std::fs::write(broken.join(super::super::MARKER_FILE), "slug: \"Not A Slug\"").unwrap();
+        std::fs::write(
+            broken.join(super::super::MARKER_FILE),
+            "slug: \"Not A Slug\"",
+        )
+        .unwrap();
 
         let live = live_workspaces(vec![
             entry("bare", bare.to_str().unwrap(), WorkspaceScope::Project),

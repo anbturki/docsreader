@@ -496,7 +496,10 @@ fn the_created_default_workspace_reports_the_slug_it_was_given() {
     );
     assert!(!is_err, "{doc}");
     let slug = doc["workspace"]["slug"].as_str().unwrap().to_string();
-    assert_ne!(slug, "notes", "the project workspace already holds that slug");
+    assert_ne!(
+        slug, "notes",
+        "the project workspace already holds that slug"
+    );
 
     let (list, is_err) = c.call("list_docs", json!({"workspace": slug}));
     assert!(!is_err, "{list}");

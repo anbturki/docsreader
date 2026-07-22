@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
-use super::registry::{live_workspaces, load_registry, same_folder, upsert_workspace, WorkspaceEntry};
+use super::registry::{
+    live_workspaces, load_registry, same_folder, upsert_workspace, WorkspaceEntry,
+};
 use super::{load_marker, save_marker, WorkspaceMarker, WorkspaceScope, MARKER_FILE};
 use crate::error::{CoreError, ErrorCode};
 use crate::slug::slugify;
