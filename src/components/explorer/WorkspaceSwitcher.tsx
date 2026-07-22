@@ -1,15 +1,21 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
+import { Check, ChevronsUpDown, FolderPlus, Trash2 } from "lucide-react";
 import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
-
-const SCROLL_STEP_PX = 120;
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuPortal,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
 
 interface Props {
   roots: string[];
@@ -20,6 +26,45 @@ interface Props {
   onAdd: () => void;
 }
 
+interface WorkspaceLabel {
+  root: string;
+  name: string;
+  location: string;
+  initial: string;
+  title: string;
+}
+
+function describeWorkspace(root: string, name: string | undefined): WorkspaceLabel {
+  const segments = root.split("/").filter(Boolean);
+  const label = name || segments[segments.length - 1] || root;
+  const firstCodePoint = label.codePointAt(0);
+  return {
+    root,
+    name: label,
+    location: segments.slice(-2).join("/") || root,
+    initial: firstCodePoint
+      ? String.fromCodePoint(firstCodePoint).toUpperCase()
+      : "?",
+    title: name ? `${name}\n${root}` : root,
+  };
+}
+
+function WorkspaceIdentity({ workspace }: { workspace: WorkspaceLabel }) {
+  return (
+    <>
+      <div className="flex aspect-square size-6 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">
+        {workspace.initial}
+      </div>
+      <div className="grid min-w-0 flex-1 text-left leading-tight">
+        <span className="truncate text-sm font-medium">{workspace.name}</span>
+        <span className="truncate text-xs text-muted-foreground">
+          {workspace.location}
+        </span>
+      </div>
+    </>
+  );
+}
+
 export function WorkspaceSwitcher({
   roots,
   activeRoot,
@@ -28,116 +73,78 @@ export function WorkspaceSwitcher({
   onRemove,
   onAdd,
 }: Props) {
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const activeButtonRef = useRef<HTMLButtonElement>(null);
-  const [canLeft, setCanLeft] = useState(false);
-  const [canRight, setCanRight] = useState(false);
-
-  useEffect(() => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const update = () => {
-      setCanLeft(el.scrollLeft > 1);
-      setCanRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
-    };
-    update();
-    el.addEventListener("scroll", update, { passive: true });
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => {
-      el.removeEventListener("scroll", update);
-      ro.disconnect();
-    };
-  }, [roots.length]);
-
-  useLayoutEffect(() => {
-    const btn = activeButtonRef.current;
-    if (!btn) return;
-    btn.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
-  }, [activeRoot]);
-
-  const scrollBy = (dir: "left" | "right") => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    el.scrollBy({
-      left: dir === "left" ? -SCROLL_STEP_PX : SCROLL_STEP_PX,
-      behavior: "smooth",
-    });
-  };
-
   if (roots.length === 0) return null;
 
+  const workspaces = roots.map((root) =>
+    describeWorkspace(root, workspaceNamesByRoot[root])
+  );
+  const active =
+    workspaces.find((workspace) => workspace.root === activeRoot) ?? workspaces[0];
+
   return (
-    <div className="flex items-center gap-0.5 px-2 pb-1 pt-2">
-      <Button
-        size="icon"
-        variant="ghost"
-        className="size-6 shrink-0 text-muted-foreground disabled:opacity-30"
-        onClick={() => scrollBy("left")}
-        disabled={!canLeft}
-        aria-label="Scroll workspaces left"
-        tabIndex={canLeft ? 0 : -1}
-      >
-        <ChevronLeft />
-      </Button>
-      <div
-        ref={scrollerRef}
-        className="no-scrollbar flex flex-1 items-center gap-3 overflow-x-auto scroll-smooth"
-      >
-        {roots.map((root) => {
-          const folderLabel = root.split("/").filter(Boolean).pop() || root;
-          const name = workspaceNamesByRoot[root];
-          const label = name ?? folderLabel;
-          const tooltip = name ? `${name}\n${root}` : root;
-          const active = root === activeRoot;
-          return (
-            <ContextMenu key={root}>
-              <ContextMenuTrigger asChild>
-                <button
-                  ref={active ? activeButtonRef : undefined}
-                  onClick={() => onSelect(root)}
-                  title={tooltip}
-                  className={cn(
-                    "shrink-0 max-w-[10rem] truncate py-1 text-[13px]",
-                    active
-                      ? "font-semibold text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {label}
-                </button>
-              </ContextMenuTrigger>
-              <ContextMenuContent>
-                <ContextMenuItem onClick={() => onRemove(root)}>
-                  <X />
-                  Remove workspace
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          );
-        })}
-      </div>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="size-6 shrink-0 text-muted-foreground disabled:opacity-30"
-        onClick={() => scrollBy("right")}
-        disabled={!canRight}
-        aria-label="Scroll workspaces right"
-        tabIndex={canRight ? 0 : -1}
-      >
-        <ChevronRight />
-      </Button>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="size-6 shrink-0 text-muted-foreground"
-        onClick={onAdd}
-        title="Add workspace"
-        aria-label="Add workspace"
-      >
-        <Plus />
-      </Button>
-    </div>
+    <SidebarMenu className="px-2 pt-2 pb-1">
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <SidebarMenuButton
+              size="lg"
+              title={active.title}
+              className="h-auto gap-2 py-1.5 data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
+            >
+              <span className="sr-only">Switch workspace</span>
+              <WorkspaceIdentity workspace={active} />
+              <ChevronsUpDown className="ml-auto text-muted-foreground" />
+            </SidebarMenuButton>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="bottom"
+            align="start"
+            sideOffset={4}
+            className="min-w-64"
+          >
+            <DropdownMenuLabel>Workspaces</DropdownMenuLabel>
+            {workspaces.map((workspace) => (
+              <DropdownMenuItem
+                key={workspace.root}
+                title={workspace.title}
+                className="gap-2 p-1.5"
+                onSelect={() => onSelect(workspace.root)}
+              >
+                <WorkspaceIdentity workspace={workspace} />
+                {workspace.root === activeRoot && (
+                  <Check className="ml-auto shrink-0" />
+                )}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="gap-2 p-1.5" onSelect={onAdd}>
+              <FolderPlus className="text-muted-foreground" />
+              Add workspace
+            </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="gap-2 p-1.5">
+                <Trash2 className="text-muted-foreground" />
+                Remove workspace
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent className="min-w-56">
+                  {workspaces.map((workspace) => (
+                    <DropdownMenuItem
+                      key={workspace.root}
+                      title={workspace.title}
+                      variant="destructive"
+                      className="gap-2 p-1.5"
+                      onSelect={() => onRemove(workspace.root)}
+                    >
+                      <WorkspaceIdentity workspace={workspace} />
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
   );
 }
