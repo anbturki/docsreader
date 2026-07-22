@@ -92,6 +92,7 @@ describe("collapsed statuses persist per workspace", () => {
       <TasksBoard
         activeRoot={root}
         query=""
+        refreshSignal={0}
         selectedPath={undefined}
         onOpen={() => {}}
         onOpenInNewTab={() => {}}
@@ -143,7 +144,7 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
 
     render(
       <TaskFilterProvider>
-        <TasksBoard activeRoot={ROOT} query="" selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+        <TasksBoard activeRoot={ROOT} query="" refreshSignal={0} selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
       </TaskFilterProvider>
     );
     await waitFor(() => expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy());
@@ -169,7 +170,7 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
 
     render(
       <TaskFilterProvider>
-        <TasksBoard activeRoot={ROOT} query="" selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+        <TasksBoard activeRoot={ROOT} query="" refreshSignal={0} selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
       </TaskFilterProvider>
     );
     await waitFor(() => expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy());

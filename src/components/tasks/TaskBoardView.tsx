@@ -1,8 +1,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { TASK_STATUSES, type Task, type TaskStatus } from "@/lib/tasks";
@@ -25,7 +24,6 @@ interface Props {
   loading: boolean;
   error: string | undefined;
   selectedPath: string | undefined;
-  onRefresh: () => void;
   onOpen: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
   onOpenInOtherPane?: (path: string) => void;
@@ -52,7 +50,6 @@ export function TaskBoardView({
   loading,
   error,
   selectedPath,
-  onRefresh,
   onOpen,
   onOpenInNewTab,
   onOpenInOtherPane,
@@ -83,22 +80,11 @@ export function TaskBoardView({
 
   return (
     <div className="flex flex-col gap-3 px-2 py-2" data-slot="tasks-board">
-      <div className="flex items-center justify-between px-1">
-        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          {filtered.length}
-          {searching && ` / ${tasks.length}`} task
-          {tasks.length === 1 ? "" : "s"}
-        </span>
-        <Button
-          size="icon"
-          variant="ghost"
-          className="size-6 text-muted-foreground"
-          onClick={onRefresh}
-          title="Refresh tasks"
-        >
-          <RefreshCw className="size-3.5" />
-        </Button>
-      </div>
+      <span className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {filtered.length}
+        {searching && ` / ${tasks.length}`} task
+        {tasks.length === 1 ? "" : "s"}
+      </span>
 
       {error && <p className="px-1 text-xs text-destructive">{error}</p>}
 

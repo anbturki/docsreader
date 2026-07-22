@@ -9,6 +9,7 @@ import { useCollapsedStatuses } from "./useCollapsedStatuses";
 interface Props {
   activeRoot: string | undefined;
   query: string;
+  refreshSignal: number;
   selectedPath: string | undefined;
   onOpen: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
@@ -18,12 +19,13 @@ interface Props {
 export function TasksBoard({
   activeRoot,
   query,
+  refreshSignal,
   selectedPath,
   onOpen,
   onOpenInNewTab,
   onOpenInOtherPane,
 }: Props) {
-  const { tasks, revision, loading, error, refresh, setStatus } = useTasks(activeRoot);
+  const { tasks, revision, loading, error, setStatus } = useTasks(activeRoot, refreshSignal);
   const progress = useTaskProgress(tasks, revision);
   const { displayTasks, advancingIds, advanceError, advance } = useAdvance(tasks, setStatus);
   const { collapsed, toggle } = useCollapsedStatuses(activeRoot);
@@ -36,7 +38,6 @@ export function TasksBoard({
       loading={loading}
       error={advanceError ?? error}
       selectedPath={selectedPath}
-      onRefresh={() => void refresh()}
       onOpen={onOpen}
       onOpenInNewTab={onOpenInNewTab}
       onOpenInOtherPane={onOpenInOtherPane}

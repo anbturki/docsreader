@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import {
@@ -118,6 +120,16 @@ function SidebarPanels({
   const collapsed = state === "collapsed";
   const showingResults = search.query.trim() !== "" && lens !== "tasks";
 
+  // One refresh control serves the whole sidebar, but each lens draws from a
+  // different source: the file lenses from the workspace scan, the task board
+  // from its own list. The header rescans and signals the board; a lens that
+  // needs no reload simply ignores the signal.
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const refreshLens = () => {
+    onRefresh();
+    setRefreshSignal((n) => n + 1);
+  };
+
   const selectLens = (next: SidebarLens) => {
     onLensChange(next);
     setOpen(true);
@@ -156,7 +168,7 @@ function SidebarPanels({
               lens={lens}
               search={search}
               scanning={!!activeScan?.scanning}
-              onRefresh={onRefresh}
+              onRefresh={refreshLens}
             />
           )}
 
@@ -203,6 +215,7 @@ function SidebarPanels({
                 lens={lens}
                 activeRoot={activeRoot}
                 taskQuery={search.query}
+                refreshSignal={refreshSignal}
                 tree={tree}
                 rootKey={rootKey}
                 filteredFiles={filteredFiles}
@@ -244,6 +257,7 @@ interface LensViewProps {
   lens: SidebarLens;
   activeRoot: string | undefined;
   taskQuery: string;
+  refreshSignal: number;
   tree: TreeNode | undefined;
   rootKey: string;
   filteredFiles: MarkdownFile[];
@@ -265,6 +279,7 @@ function LensView({
   lens,
   activeRoot,
   taskQuery,
+  refreshSignal,
   tree,
   rootKey,
   filteredFiles,
@@ -325,6 +340,7 @@ function LensView({
       <TasksBoard
         activeRoot={activeRoot}
         query={taskQuery}
+        refreshSignal={refreshSignal}
         selectedPath={selectedPath}
         onOpen={onSelect}
         onOpenInNewTab={onOpenInNewTab}
