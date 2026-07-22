@@ -59,7 +59,10 @@ export function TabScrollPane({
     [tab.pendingContent]
   );
   const ref = useRef<HTMLDivElement>(null);
-  const restoredRef = useRef(false);
+  // Holds the document the pane has already placed. Keyed by path rather than
+  // flagged, because a flag has to be cleared by an effect, and an effect
+  // clearing it always runs after the layout effect that set it.
+  const restoredFor = useRef<string | undefined>(undefined);
   const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
 
   useEffect(() => setScrollEl(ref.current), []);
@@ -91,17 +94,13 @@ export function TabScrollPane({
     return () => window.removeEventListener("keydown", onKey);
   }, [findable, findShortcut, showFind]);
 
-  useEffect(() => {
-    restoredRef.current = false;
-  }, [tab.ref]);
-
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (restoredRef.current) return;
+    if (restoredFor.current === tab.ref) return;
     if (tab.loading || tab.error) return;
     if (initialScrollTop === 0) {
-      restoredRef.current = true;
+      restoredFor.current = tab.ref;
       return;
     }
 
@@ -113,32 +112,32 @@ export function TabScrollPane({
     };
 
     if (tryRestore()) {
-      restoredRef.current = true;
+      restoredFor.current = tab.ref;
       return;
     }
 
     const inner = el.firstElementChild;
     if (!inner) return;
     const observer = new ResizeObserver(() => {
-      if (restoredRef.current) {
+      if (restoredFor.current === tab.ref) {
         observer.disconnect();
         return;
       }
       if (tryRestore()) {
-        restoredRef.current = true;
+        restoredFor.current = tab.ref;
         observer.disconnect();
       }
     });
     observer.observe(inner);
     const safety = window.setTimeout(() => {
-      restoredRef.current = true;
+      restoredFor.current = tab.ref;
       observer.disconnect();
     }, 4000);
     return () => {
       observer.disconnect();
       clearTimeout(safety);
     };
-  }, [tab.loading, tab.error, tab.content, initialScrollTop]);
+  }, [tab.ref, tab.loading, tab.error, tab.content, initialScrollTop]);
 
   useEffect(() => {
     if (!onActiveRefChange) return;
@@ -154,7 +153,7 @@ export function TabScrollPane({
       className={cn("absolute inset-0 overflow-y-auto", !active && "invisible")}
       aria-hidden={!active}
       onScroll={(e) => {
-        if (!restoredRef.current) return;
+        if (restoredFor.current !== tab.ref) return;
         onScrollChange(tab.ref, e.currentTarget.scrollTop);
       }}
     >
