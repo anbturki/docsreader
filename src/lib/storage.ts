@@ -100,8 +100,10 @@ export interface AccentSpec {
 
 // The only place an accent colour is written down. A hue alone cannot describe
 // an achromatic or a muted accent, so each one carries its own lightness and
-// chroma; the six that shipped before keep the 0.55/0.22 pair they were drawn
-// with, because a stored selection must not change colour under anyone.
+// chroma; the saturated accents keep the 0.55/0.22 pair they were drawn with,
+// because a stored selection must not change colour under anyone. Slate is the
+// one exception: at full chroma on a blue hue it rendered as a second Blue, so
+// it was rebuilt as the near-neutral its name promises.
 export const ACCENT_SPEC: Record<AccentColor, AccentSpec> = {
   rose: { lightness: 0.55, chroma: 0.22, hue: 0 },
   orange: { lightness: 0.55, chroma: 0.22, hue: 40 },
@@ -109,7 +111,7 @@ export const ACCENT_SPEC: Record<AccentColor, AccentSpec> = {
   green: { lightness: 0.55, chroma: 0.22, hue: 145 },
   teal: { lightness: 0.51, chroma: 0.22, hue: 195 },
   blue: { lightness: 0.55, chroma: 0.22, hue: 240 },
-  slate: { lightness: 0.55, chroma: 0.22, hue: 250 },
+  slate: { lightness: 0.52, chroma: 0.04, hue: 257 },
   violet: { lightness: 0.55, chroma: 0.22, hue: 280 },
   magenta: { lightness: 0.55, chroma: 0.22, hue: 330 },
   black: { lightness: 0.28, chroma: 0, hue: 0 },

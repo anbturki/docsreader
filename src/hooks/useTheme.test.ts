@@ -1,6 +1,6 @@
 import { renderHook } from "@testing-library/react";
 import { describe, it, expect, afterEach } from "vitest";
-import { ACCENT_COLORS, ACCENT_SPEC } from "@/lib/storage";
+import { ACCENT_COLORS, ACCENT_SPEC, type AccentSpec } from "@/lib/storage";
 import { ACCENT_PROPERTIES, accentProperties, useTheme } from "./useTheme";
 
 afterEach(() => {
@@ -48,8 +48,8 @@ describe("useTheme", () => {
     }
   });
 
-  it("leaves the accents that shipped before untouched", () => {
-    for (const accent of ["violet", "blue", "green", "orange", "rose", "slate"] as const) {
+  it("leaves the saturated accents that shipped before untouched", () => {
+    for (const accent of ["violet", "blue", "green", "orange", "rose"] as const) {
       expect(ACCENT_SPEC[accent].lightness).toBe(0.55);
       expect(ACCENT_SPEC[accent].chroma).toBe(0.22);
     }
@@ -58,6 +58,33 @@ describe("useTheme", () => {
     expect(ACCENT_SPEC.green.hue).toBe(145);
     expect(ACCENT_SPEC.orange.hue).toBe(40);
     expect(ACCENT_SPEC.rose.hue).toBe(0);
-    expect(ACCENT_SPEC.slate.hue).toBe(250);
+  });
+
+  it("keeps slate a near-neutral rather than a second blue", () => {
+    expect(ACCENT_SPEC.slate.chroma).toBeLessThanOrEqual(ACCENT_SPEC.bronze.chroma);
+    expect(ACCENT_SPEC.blue.chroma - ACCENT_SPEC.slate.chroma).toBeGreaterThanOrEqual(0.1);
+  });
+
+  it("gives no two accents the same colour", () => {
+    for (const a of ACCENT_COLORS) {
+      for (const b of ACCENT_COLORS) {
+        if (a === b) continue;
+        expect(distinguishable(ACCENT_SPEC[a], ACCENT_SPEC[b])).toBe(true);
+      }
+    }
   });
 });
+
+function hueGap(a: number, b: number): number {
+  const gap = Math.abs(a - b) % 360;
+  return gap > 180 ? 360 - gap : gap;
+}
+
+// Two accents read apart when any one part separates them: a different
+// lightness, a different saturation, or - only once both carry enough chroma
+// for a hue to be visible at all - a different hue.
+function distinguishable(a: AccentSpec, b: AccentSpec): boolean {
+  if (Math.abs(a.lightness - b.lightness) >= 0.1) return true;
+  if (Math.abs(a.chroma - b.chroma) >= 0.05) return true;
+  return Math.min(a.chroma, b.chroma) >= 0.03 && hueGap(a.hue, b.hue) >= 25;
+}

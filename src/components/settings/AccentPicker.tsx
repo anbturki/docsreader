@@ -37,9 +37,12 @@ export function AccentPicker({ value, onChange }: Props) {
     >
       {ACCENT_COLORS.map((accent) => (
         <ToggleGroupItem key={accent} value={accent} className={cn(PICKER_CARD, "h-auto px-1 py-2")}>
+          {/* The default hairline border is a tint of the card, so a chip close
+              to the card colour (Black in dark) reads as an empty slot. A rim
+              that flips with the scheme keeps every chip a visible swatch. */}
           <span
             aria-hidden
-            className="accent-swatch flex size-6 items-center justify-center rounded-full border"
+            className="accent-swatch flex size-6 items-center justify-center rounded-full border border-muted-foreground"
             style={accentProperties(accent)}
           >
             {accent === value && (

@@ -41,6 +41,18 @@ describe("AppearanceSection", () => {
     expect(drawn).toEqual(ACCENT_COLORS.map((accent) => ACCENT_SPEC[accent]));
   });
 
+  it("rims every chip in a colour that flips with the scheme, so none reads as an empty slot", () => {
+    const { container } = renderSection();
+    const swatches = [...container.querySelectorAll<HTMLElement>(".accent-swatch")];
+
+    expect(swatches).toHaveLength(ACCENT_COLORS.length);
+    for (const swatch of swatches) {
+      expect(swatch.className).toContain("border-muted-foreground");
+      // The default rim is a tint of the card, invisible under a dark chip.
+      expect(swatch.className).not.toMatch(/(^| )border-border($| )/);
+    }
+  });
+
   it("offers every accent and every scheme as a named, checkable choice", () => {
     renderSection();
     const accents = screen.getByRole("radiogroup", { name: "Accent color" });
