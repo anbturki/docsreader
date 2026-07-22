@@ -1,3 +1,4 @@
+import katex from "katex";
 import { findRanges } from "./findMatches";
 
 function mount(html: string): HTMLElement {
@@ -127,6 +128,27 @@ describe("findRanges", () => {
 
     expect(ranges).toHaveLength(1);
     expect(ranges[0].startContainer.parentElement?.tagName).toBe("P");
+  });
+
+  it("skips both halves of a real KaTeX formula, mirror and visible layer alike", () => {
+    const root = mount(
+      katex.renderToString("\\frac{\\alpha}{2}", { throwOnError: false }) +
+        "<p>alpha in prose</p>",
+    );
+
+    // KaTeX sets aria-hidden on .katex-html itself (katex 0.16.45,
+    // dist/katex.mjs:5645-5646), so the visible layer is excluded too.
+    expect(root.querySelector(".katex-html")?.getAttribute("aria-hidden")).toBe("true");
+    // CSS positions the numerator above the denominator, so document order
+    // reverses what is read, and a strut contributes a zero-width space:
+    // matching this text would highlight nonsense.
+    expect(root.querySelector(".katex-html")?.textContent).toBe("2α​");
+
+    const ranges = findRanges(root, "alpha");
+
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0].startContainer.parentElement?.tagName).toBe("P");
+    expect(findRanges(root, "α")).toEqual([]);
   });
 
   it("returns nothing when the root itself is excluded", () => {

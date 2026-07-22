@@ -6,7 +6,7 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 
 - **Rendering:** GitHub-flavored Markdown via remark-gfm (tables, task lists, footnotes, autolinks, strikethrough)
 - **Interactive checklists:** click any task-list checkbox in a rendered doc to toggle it - the change writes straight back to the markdown file, and a task's acceptance-criteria progress moves with it, no switching to edit mode
-- **Math expressions:** LaTeX rendered inline and in blocks via KaTeX
+- **Math expressions:** LaTeX rendered inline and in blocks via KaTeX. Formulas are searchable by their LaTeX source (workspace search reads the markdown), not by their rendered glyphs
 - **Diagrams:** Mermaid renderer (lazy-loaded, follows theme)
 - **Box-drawing art:** svgbob converts ASCII diagrams to SVG (experimental)
 - **Code blocks:** 20 bundled language grammars via Shiki, twelve highlighter palettes (5 light, 7 dark)
@@ -28,8 +28,9 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 - **Split view:** read two docs side-by-side or stacked; each pane keeps its own tabs, scroll, and external-change banner. Toggle from the header, drag the splitter to resize, or use Cmd+\ (horizontal), Cmd+Shift+\ (vertical), Cmd+1 / Cmd+2 to focus a pane. "Open in other pane" lives in the file context menu.
 - **Search:** three ways in, each rebindable in Settings
   - **Jump to a file** (⌘P): every open workspace at once. Ranks file names first, then lists matches found inside documents with the line that matched
-  - **Search the workspace** (⇧⌘F): a Search tab in the sidebar. Results are grouped by document with a match count each, and expand to show every matching line in context
+  - **Search the workspace** (⇧⌘F): a magnifier in the sidebar header reveals the search box and its filters. Results are grouped by document with a match count each, and expand to show every matching line in context. The query applies to whichever lens is showing, including Tasks
   - **Find in the open document** (⌘F): highlights every match, with next/previous and a running count
+- **Source or page:** workspace search and ⌘P read the markdown, so LaTeX is found there. ⌘F reads the rendered page, so it skips rendered math, whose glyphs are positioned by CSS rather than in reading order
 - **Narrow a search:** any search can be limited to file names, document contents, or tags
 - **Sticky favorites:** pin individual files to the top of any workspace
 - **Clutter rules:** glob patterns silently exclude files and folders from the explorer

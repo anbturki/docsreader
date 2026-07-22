@@ -21,9 +21,10 @@ interface MatchSpan {
 
 const EXCLUDED_TAGS = ["SCRIPT", "STYLE"] as const;
 
-// rehype-katex renders every formula twice: a visually hidden MathML mirror
-// (span.katex-mathml, carrying the raw TeX in <annotation>) and the visible
-// .katex-html. Walking the mirror yields phantom matches with zero-size rects.
+// KaTeX marks its own visible layer aria-hidden, so both halves of a formula
+// are skipped and math is deliberately unfindable here: the visible text is
+// ordered by CSS, not by document order, and \frac{\alpha}{2} flattens to
+// "2α". Math is found by its LaTeX source in workspace search.
 const MATHML_MIRROR_CLASS = "katex-mathml";
 
 function isExcludedElement(element: Element): boolean {
