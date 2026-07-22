@@ -18,21 +18,21 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 
 ## Browsing
 
-- **Workspaces:** keep multiple unrelated folders open and pivot between them
+- **Workspaces:** keep multiple unrelated folders open and pivot between them from the switcher at the left of the toolbar, which also adds and removes them
 - **Open with:** double-click a `.md`/`.markdown`/`.mdx` in Finder, or right-click > Open With DocsReader. A folder opens as a workspace; a file resolves to its workspace (or its parent folder) and opens in the active pane, whether the app was already running or launched by the open
-- **Lenses:** five browsing modes over the same library (Tree, Recent, Tags, Pinned, Tasks)
+- **Lenses:** five browsing modes over the same library (Tree, Recent, Tags, Pinned, Tasks), picked from a vertical rail that gives each one an icon and its name. Collapsing the sidebar leaves the rail in place, so the lenses stay one click away
 - **Jump-to-file:** fuzzy finder across every workspace, opens with Cmd+P (binding configurable)
 - **Document outline:** auto-built TOC that follows the active heading as you scroll
-- **Backlinks:** the sidebar lists every doc that links to the one you are reading, grouped by folder
+- **Backlinks:** the outline panel lists every doc that links to the one you are reading, grouped by folder
 - **Tabs:** many docs open at once; scroll position remembered per tab
-- **Split view:** read two docs side-by-side or stacked; each pane keeps its own tabs, scroll, and external-change banner. Toggle from the header, drag the splitter to resize, or use Cmd+\ (horizontal), Cmd+Shift+\ (vertical), Cmd+1 / Cmd+2 to focus a pane. "Open in other pane" lives in the file context menu.
+- **Split view:** read two docs side-by-side or stacked; each pane keeps its own tabs, scroll, and external-change banner. Toggle from the toolbar, drag the splitter to resize, or use Cmd+\ (horizontal), Cmd+Shift+\ (vertical), Cmd+1 / Cmd+2 to focus a pane. "Open in other pane" lives in the file context menu.
 - **Search:** three ways in, each rebindable in Settings
   - **Jump to a file** (⌘P): every open workspace at once. Ranks file names first, then lists matches found inside documents with the line that matched
   - **Search the workspace** (⇧⌘F): a magnifier in the sidebar header reveals the search box and its filters. Results are grouped by document with a match count each, and expand to show every matching line in context. The query applies to whichever lens is showing, including Tasks
   - **Find in the open document** (⌘F): highlights every match, with next/previous and a running count
 - **Source or page:** workspace search and ⌘P read the markdown, so LaTeX is found there. ⌘F reads the rendered page, so it skips rendered math, whose glyphs are positioned by CSS rather than in reading order
-- **Narrow a search:** any search can be limited to file names, document contents, or tags
-- **Sticky favorites:** pin individual files to the top of any workspace
+- **Narrow a search:** ⌘P and the workspace search can be limited to Files, Contents, or Tags; on the Tasks lens the query matches task titles and ids instead
+- **Sticky favorites:** pin individual files from the tree or any list; each workspace keeps its own set, gathered in the Pinned lens
 - **Clutter rules:** glob patterns silently exclude files and folders from the explorer
 
 ![Split view: two docs side by side, each with its own tab bar](screenshots/split-dark.png)
@@ -50,9 +50,10 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 ## Tasks
 
 - **Task header:** a doc the MCP wrote as a task (Backlog.md-shaped frontmatter) renders a header - status pill, priority, assignee, and an acceptance-criteria progress bar - instead of plain markdown
-- **Tasks board:** a kanban lens grouping tasks into To Do / In Progress / Done columns; cards show priority, assignee, and progress, and open the underlying file on click
-- **Drag-to-advance:** drag a card to another column to change its status; the write goes through the same core the agents use, so a GUI move and an MCP `set_task_status` stay consistent
-- **Board filters:** narrow by free-text title, priority, or label; filters compose
+- **Tasks board:** a lens stacking tasks under a To Do, In Progress, or Done group; cards show priority, assignee, and progress, and open the underlying file on click
+- **Drag-to-advance:** drag a card to another group to change its status; the write goes through the same core the agents use, so a GUI move and an MCP `set_task_status` stay consistent
+- **Collapsible groups:** fold a status group away by its heading; the choice is remembered per workspace, and a folded group reopens on its own while a search or filter has matches in it
+- **Board filters:** the sidebar search matches task titles and ids, and the filter control beside it holds priority and label in a popover; filters compose
 
 ![The Tasks board beside a task doc with its status pill and acceptance-criteria progress](screenshots/tasks-header.png)
 
