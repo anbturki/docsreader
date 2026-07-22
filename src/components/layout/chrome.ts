@@ -16,10 +16,16 @@ const windowControlsInset =
 
 export const CHROME_STYLE: CSSProperties &
   Record<
-    "--sidebar-width" | "--toolbar-height" | "--window-controls-inset",
+    | "--sidebar-width"
+    | "--sidebar-width-icon"
+    | "--toolbar-height"
+    | "--window-controls-inset",
     string
   > = {
   "--sidebar-width": "20rem",
+  // Collapsed width: the lens rail stacks a label under each icon, so the
+  // shadcn default of 3rem would clip them.
+  "--sidebar-width-icon": "4rem",
   "--toolbar-height": "2.25rem",
   "--window-controls-inset": `${windowControlsInset}px`,
 };

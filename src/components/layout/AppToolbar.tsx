@@ -3,7 +3,6 @@ import {
   ListCollapse,
   ListTree,
   Moon,
-  PanelLeft,
   RefreshCw,
   Rows2,
   Search,
@@ -29,9 +28,6 @@ interface Props {
   onSelectRoot: (path: string) => void;
   onRemoveRoot: (path: string) => void;
   onPickDirectory: () => void;
-
-  sidebarOpen: boolean;
-  onSidebarOpenChange: (open: boolean) => void;
 
   breadcrumbPath: string | undefined;
   onBreadcrumbSegmentClick: (segment: string) => void;
@@ -65,8 +61,6 @@ export function AppToolbar({
   onSelectRoot,
   onRemoveRoot,
   onPickDirectory,
-  sidebarOpen,
-  onSidebarOpenChange,
   breadcrumbPath,
   onBreadcrumbSegmentClick,
   quickOpenShortcut,
@@ -105,15 +99,6 @@ export function AppToolbar({
           />
         </div>
       )}
-      <button
-        type="button"
-        onClick={() => onSidebarOpenChange(!sidebarOpen)}
-        title="Toggle sidebar"
-        aria-label="Toggle sidebar"
-        className={CHROME_ICON}
-      >
-        <PanelLeft />
-      </button>
       {breadcrumbPath && (
         <PathBreadcrumb
           relPath={breadcrumbPath}

@@ -38,7 +38,6 @@ const handlers = {
   onSelectRoot: vi.fn(),
   onRemoveRoot: vi.fn(),
   onPickDirectory: vi.fn(),
-  onSidebarOpenChange: vi.fn(),
   onBreadcrumbSegmentClick: vi.fn(),
   onOpenQuickOpen: vi.fn(),
   onRefresh: vi.fn(),
@@ -56,7 +55,7 @@ function renderToolbar(overrides: { sidebarOpen?: boolean; roots?: string[] } = 
   const { sidebarOpen = true, roots = ROOTS } = overrides;
   return render(
     <TooltipProvider>
-      <SidebarProvider open={sidebarOpen} onOpenChange={handlers.onSidebarOpenChange}>
+      <SidebarProvider open={sidebarOpen}>
         <AppToolbar
           roots={roots}
           activeRoot={roots[0]}
@@ -64,8 +63,6 @@ function renderToolbar(overrides: { sidebarOpen?: boolean; roots?: string[] } = 
           onSelectRoot={handlers.onSelectRoot}
           onRemoveRoot={handlers.onRemoveRoot}
           onPickDirectory={handlers.onPickDirectory}
-          sidebarOpen={sidebarOpen}
-          onSidebarOpenChange={handlers.onSidebarOpenChange}
           breadcrumbPath="notes/today.md"
           onBreadcrumbSegmentClick={handlers.onBreadcrumbSegmentClick}
           quickOpenShortcut="Mod+P"
@@ -113,7 +110,6 @@ beforeEach(() => {
 });
 
 const CONTROL_LABELS = [
-  "Toggle sidebar",
   "Refresh workspace",
   "Collapse all",
   "Toggle outline",
@@ -191,12 +187,13 @@ describe("AppToolbar", () => {
     );
   });
 
-  it("toggles the sidebar without depending on its current state", async () => {
-    const user = userEvent.setup();
-    renderToolbar({ sidebarOpen: true });
-    await user.click(screen.getByRole("button", { name: "Toggle sidebar" }));
-    expect(handlers.onSidebarOpenChange).toHaveBeenCalledWith(false);
-  });
+  it.each([true, false])(
+    "leaves the sidebar toggle to the sidebar itself (open=%s)",
+    (open) => {
+      renderToolbar({ sidebarOpen: open });
+      expect(screen.queryByRole("button", { name: /sidebar/i })).toBeNull();
+    }
+  );
 
   it("opens quick search", async () => {
     const user = userEvent.setup();

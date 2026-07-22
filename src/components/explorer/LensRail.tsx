@@ -6,9 +6,12 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 import { SIDEBAR_LENSES, type SidebarLens } from "@/lib/storage";
 import { LENS_META } from "./lenses";
+import { RAIL_ITEM } from "./railItem";
+import { SidebarToggle } from "./SidebarToggle";
 
 interface Props {
   active: SidebarLens;
@@ -19,10 +22,22 @@ export function LensRail({ active, onChange }: Props) {
   return (
     <Sidebar
       collapsible="none"
-      className="w-fit min-w-(--sidebar-width-icon) shrink-0 border-r border-sidebar-border"
+      // Overlap the container's own right border, which the collapsed panel
+      // would otherwise show as a second line beside this one.
+      className="w-[calc(var(--sidebar-width-icon)+1px)]! shrink-0 border-r border-sidebar-border"
     >
       <SidebarContent>
-        <SidebarGroup className="p-1">
+        <SidebarGroup className="gap-1 p-1">
+          {/* Present in both states: appearing only when collapsed shifted every
+              lens item down the rail. */}
+          <SidebarGroupContent className="flex flex-col gap-1">
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarToggle className={RAIL_ITEM} />
+              </SidebarMenuItem>
+            </SidebarMenu>
+            <SidebarSeparator className="mx-1" />
+          </SidebarGroupContent>
           <SidebarGroupContent>
             <SidebarMenu
               role="tablist"
@@ -40,7 +55,7 @@ export function LensRail({ active, onChange }: Props) {
                       aria-selected={isActive}
                       isActive={isActive}
                       onClick={() => onChange(lens)}
-                      className="h-auto flex-col gap-0.5 px-1 py-1.5 text-center text-xs whitespace-nowrap"
+                      className={RAIL_ITEM}
                     >
                       <Icon />
                       <span>{label}</span>

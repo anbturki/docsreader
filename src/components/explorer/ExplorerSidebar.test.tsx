@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeAll } from "vitest";
@@ -100,6 +101,8 @@ interface HarnessProps {
   roots?: string[];
   filteredFiles?: MarkdownFile[];
   searchEntries?: SearchEntry[];
+  defaultOpen?: boolean;
+  onLensChange?: (lens: SidebarLens) => void;
 }
 
 function Harness({
@@ -107,11 +110,14 @@ function Harness({
   roots = ["/ws/voice"],
   filteredFiles = [],
   searchEntries = [],
+  defaultOpen = true,
+  onLensChange = () => {},
 }: HarnessProps) {
   const search = useSidebarSearch({ shortcut: SHORTCUT });
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <TooltipProvider>
-      <SidebarProvider>
+      <SidebarProvider open={open} onOpenChange={setOpen}>
         <ExplorerSidebar
           roots={roots}
           activeRoot={roots[0]}
@@ -119,7 +125,7 @@ function Harness({
           onPickDirectory={() => {}}
           onOpenWelcome={undefined}
           lens={lens}
-          onLensChange={() => {}}
+          onLensChange={onLensChange}
           search={search}
           searchEntries={searchEntries}
           searchingContents={false}
@@ -265,5 +271,64 @@ describe("one search for the whole sidebar", () => {
     await user.click(screen.getByRole("button", { name: "Search" }));
 
     expect(screen.queryByRole("button", { name: "Filter results" })).toBeNull();
+  });
+});
+
+describe("collapsing to the lens rail", () => {
+  const LENS_LABELS = ["Tree", "Recent", "Tags", "Pinned", "Tasks"];
+
+  it("keeps every lens reachable with the content column gone", () => {
+    render(<Harness defaultOpen={false} />);
+
+    for (const label of LENS_LABELS) {
+      expect(screen.getByRole("tab", { name: label })).toBeTruthy();
+    }
+    expect(screen.queryByRole("button", { name: "Search" })).toBeNull();
+  });
+
+  it("brings the content column back when a lens is chosen", async () => {
+    const user = userEvent.setup();
+    const onLensChange = vi.fn();
+    render(<Harness defaultOpen={false} onLensChange={onLensChange} />);
+
+    await user.click(screen.getByRole("tab", { name: "Recent" }));
+
+    expect(onLensChange).toHaveBeenCalledWith("recent");
+    expect(screen.getByRole("button", { name: "Search" })).toBeInTheDocument();
+  });
+
+  // It stays in the rail through both states: moving it made the lens items
+  // jump, since the rail gained a row only while collapsed.
+  it("keeps the toggle in the rail through a collapse and back", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<Harness />);
+
+    const rail = () => container.querySelector('[data-slot="sidebar"]');
+    const collapse = screen.getByRole("button", { name: "Collapse sidebar" });
+    expect(rail()?.contains(collapse)).toBe(true);
+    expect(collapse.closest('[data-slot="sidebar-header"]')).toBeNull();
+
+    await user.click(collapse);
+
+    const expand = screen.getByRole("button", { name: "Expand sidebar" });
+    expect(rail()?.contains(expand)).toBe(true);
+    expect(screen.getAllByRole("tab")).toHaveLength(LENS_LABELS.length);
+
+    await user.click(expand);
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+  });
+
+  it("still answers the sidebar keyboard shortcut", () => {
+    render(<Harness />);
+    expect(screen.getByRole("button", { name: "Collapse sidebar" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "b", ctrlKey: true });
+
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
+  });
+
+  it("still offers a way out when there is no workspace to show a rail", () => {
+    render(<Harness roots={[]} defaultOpen={false} />);
+    expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
   });
 });

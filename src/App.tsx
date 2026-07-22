@@ -441,8 +441,6 @@ function App() {
           onSelectRoot={(path) => void library.selectRoot(path)}
           onRemoveRoot={(path) => void library.removeRoot(path)}
           onPickDirectory={() => void library.pickDirectory()}
-          sidebarOpen={sidebar.open}
-          onSidebarOpenChange={sidebar.setOpen}
           breadcrumbPath={headerRelPath || undefined}
           onBreadcrumbSegmentClick={search.reveal}
           quickOpenShortcut={viewSettings.settings.quickOpenShortcut}

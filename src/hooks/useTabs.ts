@@ -117,6 +117,20 @@ export function useTabs(options: UseTabsOptions): Tabs {
     setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }, []);
 
+  // A load starts in the same tick as the setState that creates or repoints
+  // the tab, so a read that settles before React commits would find a stale
+  // tabsRef and drop its own result, pinning the tab on "Loading" with its
+  // timeout already cleared. Matching inside the updater always sees the
+  // committed row.
+  const patchLoadedTab = useCallback(
+    (id: string, path: string, patch: Partial<Tab>) => {
+      setTabs((prev) =>
+        prev.map((t) => (t.id === id && t.path === path ? { ...t, ...patch } : t))
+      );
+    },
+    []
+  );
+
   const loadTab = useCallback(
     async (id: string, path: string) => {
       const seq = (loadSeqRef.current.get(id) ?? 0) + 1;
@@ -126,24 +140,23 @@ export function useTabs(options: UseTabsOptions): Tabs {
       // lands and replaces the timeout error.
       const timer = setTimeout(() => {
         if (loadSeqRef.current.get(id) !== seq) return;
-        const current = tabsRef.current.find((t) => t.id === id);
-        if (!current || current.path !== path) return;
-        updateTab(id, { error: LOAD_TIMEOUT_ERROR, content: "", meta: {}, loading: false });
+        patchLoadedTab(id, path, {
+          error: LOAD_TIMEOUT_ERROR,
+          content: "",
+          meta: {},
+          loading: false,
+        });
       }, LOAD_TIMEOUT_MS);
       try {
         const raw = await readTextFile(path);
         clearTimeout(timer);
         if (loadSeqRef.current.get(id) !== seq) return;
         const { data, content } = parseFrontmatter(raw);
-        const current = tabsRef.current.find((t) => t.id === id);
-        if (!current || current.path !== path) return;
-        updateTab(id, { meta: data, content, error: undefined, loading: false });
+        patchLoadedTab(id, path, { meta: data, content, error: undefined, loading: false });
       } catch (err) {
         clearTimeout(timer);
         if (loadSeqRef.current.get(id) !== seq) return;
-        const current = tabsRef.current.find((t) => t.id === id);
-        if (!current || current.path !== path) return;
-        updateTab(id, {
+        patchLoadedTab(id, path, {
           error: err instanceof Error ? err.message : String(err),
           content: "",
           meta: {},
@@ -151,7 +164,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
         });
       }
     },
-    [updateTab]
+    [patchLoadedTab]
   );
 
   const openInNew = useCallback(

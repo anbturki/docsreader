@@ -4,7 +4,7 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import type { MarkdownFile } from "@/lib/scan";
 import type { TreeNode } from "@/lib/tree";
@@ -17,7 +17,9 @@ import { LensRail } from "./LensRail";
 import { PinnedList } from "./PinnedList";
 import { RecentList } from "./RecentList";
 import { ScanProgressView } from "./ScanProgressView";
+import { RAIL_ITEM } from "./railItem";
 import { SearchResults } from "./SearchResults";
+import { SidebarToggle } from "./SidebarToggle";
 import { TagsList } from "./TagsList";
 import type { SearchEntry } from "@/lib/searchEntries";
 import type { SidebarSearch } from "@/hooks/useSidebarSearch";
@@ -101,91 +103,106 @@ export function ExplorerSidebar({
   gitStatusByPath,
   onShowGitDiff,
 }: Props) {
+  const { state, setOpen } = useSidebar();
+  const collapsed = state === "collapsed";
   const showingResults = search.query.trim() !== "" && lens !== "tasks";
+
+  const selectLens = (next: SidebarLens) => {
+    onLensChange(next);
+    setOpen(true);
+  };
 
   return (
     <Sidebar
-      collapsible="offcanvas"
-      className="top-(--toolbar-height) h-auto *:data-[sidebar=sidebar]:flex-row"
+      collapsible="icon"
+      className="top-(--toolbar-height) h-auto overflow-hidden *:data-[sidebar=sidebar]:flex-row"
     >
-      {roots.length > 0 && <LensRail active={lens} onChange={onLensChange} />}
+      {roots.length > 0 ? (
+        <LensRail active={lens} onChange={selectLens} />
+      ) : (
+        collapsed && (
+          <div className="w-(--sidebar-width-icon) p-1">
+            <SidebarToggle className={RAIL_ITEM} />
+          </div>
+        )
+      )}
 
-      <Sidebar collapsible="none" className="min-w-0 flex-1">
-        {roots.length > 0 && <ExplorerHeader lens={lens} search={search} />}
+      {!collapsed && (
+        <Sidebar collapsible="none" className="min-w-0 flex-1">
+          {roots.length > 0 && <ExplorerHeader lens={lens} search={search} />}
 
-        <SidebarContent className="overflow-x-hidden">
-          {roots.length === 0 ? (
-            <Empty className="my-auto">
-              <EmptyHeader>
-                <EmptyTitle>No workspaces yet</EmptyTitle>
-                <EmptyDescription>
-                  Add a folder of markdown to start.
-                </EmptyDescription>
-              </EmptyHeader>
-              <div className="flex flex-col items-center gap-2">
-                <Button onClick={onPickDirectory}>Add folder</Button>
-                {onOpenWelcome && (
-                  <Button variant="ghost" size="sm" onClick={onOpenWelcome}>
-                    Or open the welcome workspace
-                  </Button>
-                )}
-              </div>
-            </Empty>
-          ) : activeScan?.scanning && activeScan.result.files.length === 0 ? (
-            <ScanProgressView
-              progress={activeScan.progress}
-              startedAt={activeScan.startedAt}
+          <SidebarContent className="overflow-x-hidden">
+            {roots.length === 0 ? (
+              <Empty className="my-auto">
+                <EmptyHeader>
+                  <EmptyTitle>No workspaces yet</EmptyTitle>
+                  <EmptyDescription>
+                    Add a folder of markdown to start.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <div className="flex flex-col items-center gap-2">
+                  <Button onClick={onPickDirectory}>Add folder</Button>
+                  {onOpenWelcome && (
+                    <Button variant="ghost" size="sm" onClick={onOpenWelcome}>
+                      Or open the welcome workspace
+                    </Button>
+                  )}
+                </div>
+              </Empty>
+            ) : activeScan?.scanning && activeScan.result.files.length === 0 ? (
+              <ScanProgressView
+                progress={activeScan.progress}
+                startedAt={activeScan.startedAt}
+              />
+            ) : showingResults ? (
+              <SearchResults
+                query={search.query}
+                entries={searchEntries}
+                scope={search.scope}
+                searching={searchingContents}
+                error={searchError}
+                truncated={searchTruncated}
+                selectedPath={selectedPath}
+                onSelect={onSelectFile}
+                onOpenInNewTab={onOpenInNewTab}
+                onOpenInOtherPane={onOpenInOtherPane}
+                isPinned={isPinned}
+                onTogglePin={onTogglePin}
+              />
+            ) : (
+              <LensView
+                lens={lens}
+                activeRoot={activeRoot}
+                taskQuery={search.query}
+                tree={tree}
+                rootKey={rootKey}
+                filteredFiles={filteredFiles}
+                pinnedFiles={pinnedFiles}
+                selectedPath={selectedPath}
+                isExpanded={isExpanded}
+                onToggleExpanded={onToggleExpanded}
+                isPinned={isPinned}
+                onTogglePin={onTogglePin}
+                onHide={onHide}
+                onSelect={onSelectFile}
+                onOpenInNewTab={onOpenInNewTab}
+                onOpenInOtherPane={onOpenInOtherPane}
+                gitStatusByPath={gitStatusByPath}
+                onShowGitDiff={onShowGitDiff}
+              />
+            )}
+          </SidebarContent>
+
+          <SidebarFooter className="gap-2 text-xs text-muted-foreground">
+            <ExplorerFooter
+              activeScan={activeScan}
+              matchCount={showingResults ? searchEntries.length : filteredFiles.length}
+              hiddenCount={hiddenCount}
+              onOpenSettings={onOpenSettings}
             />
-          ) : showingResults ? (
-            <SearchResults
-              query={search.query}
-              entries={searchEntries}
-              scope={search.scope}
-              searching={searchingContents}
-              error={searchError}
-              truncated={searchTruncated}
-              selectedPath={selectedPath}
-              onSelect={onSelectFile}
-              onOpenInNewTab={onOpenInNewTab}
-              onOpenInOtherPane={onOpenInOtherPane}
-              isPinned={isPinned}
-              onTogglePin={onTogglePin}
-            />
-          ) : (
-            <LensView
-              lens={lens}
-              activeRoot={activeRoot}
-              taskQuery={search.query}
-              tree={tree}
-              rootKey={rootKey}
-              filteredFiles={filteredFiles}
-              pinnedFiles={pinnedFiles}
-              selectedPath={selectedPath}
-              isExpanded={isExpanded}
-              onToggleExpanded={onToggleExpanded}
-              isPinned={isPinned}
-              onTogglePin={onTogglePin}
-              onHide={onHide}
-              onSelect={onSelectFile}
-              onOpenInNewTab={onOpenInNewTab}
-              onOpenInOtherPane={onOpenInOtherPane}
-              gitStatusByPath={gitStatusByPath}
-              onShowGitDiff={onShowGitDiff}
-            />
-          )}
-        </SidebarContent>
-
-        <SidebarFooter className="gap-2 text-xs text-muted-foreground">
-          <ExplorerFooter
-            activeScan={activeScan}
-            matchCount={showingResults ? searchEntries.length : filteredFiles.length}
-            hiddenCount={hiddenCount}
-            onOpenSettings={onOpenSettings}
-          />
-        </SidebarFooter>
-      </Sidebar>
-
-      <SidebarRail />
+          </SidebarFooter>
+        </Sidebar>
+      )}
     </Sidebar>
   );
 }
