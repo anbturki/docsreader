@@ -25,6 +25,9 @@ export default defineConfig(async () => ({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // Agent worktrees are checked out inside the repo, and each carries a full
+    // copy of src/, so without this the suite collects every test twice.
+    exclude: ["**/node_modules/**", "**/dist/**", "**/.claude/worktrees/**"],
   },
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
