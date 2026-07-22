@@ -1,37 +1,12 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useId, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { TASK_STATUSES, type Task, type TaskStatus } from "@/lib/tasks";
 import type { AcProgress } from "@/lib/taskDoc";
-import {
-  availableLabels,
-  filterTasks,
-  isFilterActive,
-  type TaskFilter,
-} from "@/lib/taskFilter";
 import { STATUS_STYLES } from "@/lib/taskStyles";
-import { useTaskFilter } from "@/components/explorer/TaskFilterContext";
+import type { TaskViewProps } from "./taskViews";
 import { TaskCard } from "./TaskCard";
-
-interface Props {
-  tasks: Task[];
-  /** The shared sidebar query, matched against task titles and ids. */
-  query?: string;
-  progress: Map<string, AcProgress>;
-  loading: boolean;
-  error: string | undefined;
-  selectedPath: string | undefined;
-  onOpen: (path: string) => void;
-  onOpenInNewTab: (path: string) => void;
-  onOpenInOtherPane?: (path: string) => void;
-  advancingIds?: ReadonlySet<string>;
-  onAdvance?: (id: string, status: TaskStatus) => void;
-  collapsedStatuses?: ReadonlySet<TaskStatus>;
-  onToggleStatus?: (status: TaskStatus) => void;
-}
 
 const NO_COLLAPSED: ReadonlySet<TaskStatus> = new Set<TaskStatus>();
 
@@ -45,10 +20,8 @@ function groupByStatus(tasks: Task[]): Map<TaskStatus, Task[]> {
 
 export function TaskBoardView({
   tasks,
-  query = "",
+  searching,
   progress,
-  loading,
-  error,
   selectedPath,
   onOpen,
   onOpenInNewTab,
@@ -57,23 +30,9 @@ export function TaskBoardView({
   onAdvance,
   collapsedStatuses = NO_COLLAPSED,
   onToggleStatus,
-}: Props) {
+}: TaskViewProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const { filter, setLabels, setCount } = useTaskFilter();
-
-  const labels = useMemo(() => availableLabels(tasks), [tasks]);
-  useEffect(() => setLabels(labels), [labels, setLabels]);
-  const activeFilter = useMemo<TaskFilter>(() => ({ ...filter, text: query }), [filter, query]);
-  const filtered = useMemo(() => filterTasks(tasks, activeFilter), [tasks, activeFilter]);
-  const columns = groupByStatus(filtered);
-  const searching = isFilterActive(activeFilter);
-
-  const shown = filtered.length;
-  const total = tasks.length;
-  useEffect(() => {
-    setCount({ shown, total });
-    return () => setCount(undefined);
-  }, [shown, total, setCount]);
+  const columns = groupByStatus(tasks);
 
   const handleDrop = (status: TaskStatus) => {
     if (draggingId && onAdvance) onAdvance(draggingId, status);
@@ -87,46 +46,29 @@ export function TaskBoardView({
 
   return (
     <div className="flex flex-col gap-3 px-2 py-2" data-slot="tasks-board">
-      {error && <p className="px-1 text-xs text-destructive">{error}</p>}
-
-      {loading && tasks.length === 0 ? (
-        <BoardSkeleton />
-      ) : filtered.length === 0 ? (
-        <Empty className="py-8">
-          <EmptyHeader>
-            <EmptyTitle>{searching ? "No matching tasks" : "No tasks"}</EmptyTitle>
-            <EmptyDescription>
-              {searching
-                ? "Adjust the search or filters in the sidebar header."
-                : "Agents create tasks in tasks/ via MCP."}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : (
-        TASK_STATUSES.map((status) => {
-          const columnTasks = columns.get(status) ?? [];
-          return (
-            <TaskColumn
-              key={status}
-              status={status}
-              tasks={columnTasks}
-              collapsed={isCollapsed(status, columnTasks.length)}
-              onToggle={() => onToggleStatus?.(status)}
-              progress={progress}
-              selectedPath={selectedPath}
-              onOpen={onOpen}
-              onOpenInNewTab={onOpenInNewTab}
-              onOpenInOtherPane={onOpenInOtherPane}
-              advancingIds={advancingIds}
-              draggable={!!onAdvance}
-              isDropTarget={draggingId !== null}
-              onDragStartTask={setDraggingId}
-              onDragEndTask={() => setDraggingId(null)}
-              onDropTask={handleDrop}
-            />
-          );
-        })
-      )}
+      {TASK_STATUSES.map((status) => {
+        const columnTasks = columns.get(status) ?? [];
+        return (
+          <TaskColumn
+            key={status}
+            status={status}
+            tasks={columnTasks}
+            collapsed={isCollapsed(status, columnTasks.length)}
+            onToggle={() => onToggleStatus?.(status)}
+            progress={progress}
+            selectedPath={selectedPath}
+            onOpen={onOpen}
+            onOpenInNewTab={onOpenInNewTab}
+            onOpenInOtherPane={onOpenInOtherPane}
+            advancingIds={advancingIds}
+            draggable={!!onAdvance}
+            isDropTarget={draggingId !== null}
+            onDragStartTask={setDraggingId}
+            onDragEndTask={() => setDraggingId(null)}
+            onDropTask={handleDrop}
+          />
+        );
+      })}
     </div>
   );
 }
@@ -224,15 +166,5 @@ function TaskColumn({
         </ul>
       )}
     </section>
-  );
-}
-
-function BoardSkeleton() {
-  return (
-    <div className="flex flex-col gap-2 px-1">
-      {[0, 1, 2].map((i) => (
-        <Skeleton key={i} className="h-12 w-full" />
-      ))}
-    </div>
   );
 }

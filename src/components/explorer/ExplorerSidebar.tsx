@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sidebar";
 import type { MarkdownFile } from "@/lib/scan";
 import type { TreeNode } from "@/lib/tree";
-import type { SidebarLens } from "@/lib/storage";
+import type { LensViewId, SidebarLens } from "@/lib/storage";
 import type { RootScan } from "@/hooks/useLibrary";
 import type { GitFileStatusKind } from "@/lib/git";
 import { ExplorerHeader } from "./ExplorerHeader";
@@ -40,6 +40,8 @@ interface Props {
   // lens
   lens: SidebarLens;
   onLensChange: (lens: SidebarLens) => void;
+  lensView: LensViewId | undefined;
+  onLensViewChange: (view: LensViewId) => void;
 
   // search
   search: SidebarSearch;
@@ -78,7 +80,7 @@ interface Props {
 
 export function ExplorerSidebar(props: Props) {
   return (
-    <TaskFilterProvider>
+    <TaskFilterProvider view={props.lensView} onViewChange={props.onLensViewChange}>
       <SidebarPanels {...props} />
     </TaskFilterProvider>
   );

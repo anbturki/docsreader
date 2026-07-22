@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readTextFile } from "@tauri-apps/plugin-fs";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { useTasks } from "@/hooks/useTasks";
 import { parseAcProgress, type AcProgress } from "@/lib/taskDoc";
 import type { Task, TaskStatus } from "@/lib/tasks";
-import { TaskBoardView } from "./TaskBoardView";
+import {
+  availableLabels,
+  filterTasks,
+  isFilterActive,
+  type TaskFilter,
+} from "@/lib/taskFilter";
+import { useTaskFilter } from "@/components/explorer/TaskFilterContext";
+import { TASK_VIEWS } from "./taskViews";
 import { useCollapsedStatuses } from "./useCollapsedStatuses";
 
 interface Props {
@@ -29,23 +38,75 @@ export function TasksBoard({
   const progress = useTaskProgress(tasks, revision);
   const { displayTasks, advancingIds, advanceError, advance } = useAdvance(tasks, setStatus);
   const { collapsed, toggle } = useCollapsedStatuses(activeRoot);
+  const { view } = useTaskFilter();
+  const { filtered, searching } = usePublishedFilter(displayTasks, query);
+
+  const shownError = advanceError ?? error;
+  const View = TASK_VIEWS[view].component;
 
   return (
-    <TaskBoardView
-      tasks={displayTasks}
-      query={query}
-      progress={progress}
-      loading={loading}
-      error={advanceError ?? error}
-      selectedPath={selectedPath}
-      onOpen={onOpen}
-      onOpenInNewTab={onOpenInNewTab}
-      onOpenInOtherPane={onOpenInOtherPane}
-      advancingIds={advancingIds}
-      onAdvance={advance}
-      collapsedStatuses={collapsed}
-      onToggleStatus={toggle}
-    />
+    <div className="flex flex-col" data-slot="tasks-lens">
+      {shownError && <p className="px-3 py-2 text-xs text-destructive">{shownError}</p>}
+      {loading && displayTasks.length === 0 ? (
+        <TasksSkeleton />
+      ) : filtered.length === 0 ? (
+        <Empty className="py-8">
+          <EmptyHeader>
+            <EmptyTitle>{searching ? "No matching tasks" : "No tasks"}</EmptyTitle>
+            <EmptyDescription>
+              {searching
+                ? "Adjust the search or filters in the sidebar header."
+                : "Agents create tasks in tasks/ via MCP."}
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <View
+          tasks={filtered}
+          searching={searching}
+          progress={progress}
+          selectedPath={selectedPath}
+          onOpen={onOpen}
+          onOpenInNewTab={onOpenInNewTab}
+          onOpenInOtherPane={onOpenInOtherPane}
+          advancingIds={advancingIds}
+          onAdvance={advance}
+          collapsedStatuses={collapsed}
+          onToggleStatus={toggle}
+        />
+      )}
+    </div>
+  );
+}
+
+// The lens owns the narrowing so every view shows the same set, and so the
+// header's label choices and count stay published whichever view is active.
+function usePublishedFilter(tasks: Task[], query: string) {
+  const { filter, setLabels, setCount } = useTaskFilter();
+
+  const labels = useMemo(() => availableLabels(tasks), [tasks]);
+  useEffect(() => setLabels(labels), [labels, setLabels]);
+
+  const activeFilter = useMemo<TaskFilter>(() => ({ ...filter, text: query }), [filter, query]);
+  const filtered = useMemo(() => filterTasks(tasks, activeFilter), [tasks, activeFilter]);
+
+  const shown = filtered.length;
+  const total = tasks.length;
+  useEffect(() => {
+    setCount({ shown, total });
+    return () => setCount(undefined);
+  }, [shown, total, setCount]);
+
+  return { filtered, searching: isFilterActive(activeFilter) };
+}
+
+function TasksSkeleton() {
+  return (
+    <div className="flex flex-col gap-2 p-3">
+      {[0, 1, 2].map((i) => (
+        <Skeleton key={i} className="h-12 w-full" />
+      ))}
+    </div>
   );
 }
 

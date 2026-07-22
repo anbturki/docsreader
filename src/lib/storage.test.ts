@@ -14,8 +14,15 @@ vi.mock("@tauri-apps/plugin-store", () => ({
   },
 }));
 
-const { loadViewSettings, defaultViewSettings, loadPaneLayout, isSplitMode, SPLIT_MODES } =
-  await import("./storage");
+const {
+  loadViewSettings,
+  saveViewSettings,
+  defaultViewSettings,
+  loadPaneLayout,
+  isSplitMode,
+  lensViewFor,
+  SPLIT_MODES,
+} = await import("./storage");
 
 describe("shortcut settings", () => {
   beforeEach(() => {
@@ -111,5 +118,39 @@ describe("split mode", () => {
     const layout = await loadPaneLayout();
 
     expect(layout.split).toBe("vertical");
+  });
+});
+
+describe("lens views", () => {
+  beforeEach(() => {
+    storeGet.mockReset();
+    storeSet.mockReset();
+    storeSave.mockReset();
+  });
+
+  it("round-trips the chosen view through the store", async () => {
+    await saveViewSettings({ ...defaultViewSettings, lensViews: { tasks: "list" } });
+
+    const [key, written] = storeSet.mock.calls[0];
+    expect(key).toBe("viewSettings");
+    storeGet.mockResolvedValue(written);
+
+    const settings = await loadViewSettings();
+
+    expect(settings.lensViews).toEqual({ tasks: "list" });
+    expect(lensViewFor(settings.lensViews, "tasks")).toBe("list");
+  });
+
+  it("drops a view the lens does not declare", async () => {
+    storeGet.mockResolvedValue({ lensViews: { tasks: "calendar", tree: "list" } });
+
+    const settings = await loadViewSettings();
+
+    expect(settings.lensViews).toEqual({});
+    expect(lensViewFor(settings.lensViews, "tasks")).toBe("board");
+  });
+
+  it("offers no view to a lens that declares none", () => {
+    expect(lensViewFor({}, "tree")).toBeUndefined();
   });
 });

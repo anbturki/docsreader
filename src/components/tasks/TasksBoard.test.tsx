@@ -1,9 +1,10 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
-import { TaskFilterProvider } from "@/components/explorer/TaskFilterContext";
+import { TaskFilterProvider, useTaskFilter } from "@/components/explorer/TaskFilterContext";
 import { TasksBoard } from "./TasksBoard";
 import type { Task, TaskStatus } from "@/lib/tasks";
+import type { LensViewId } from "@/lib/storage";
 
 const watchCallbacks: Array<(e: { type: unknown; paths: string[] }) => void> = [];
 
@@ -179,5 +180,82 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
 
     await waitFor(() => expect(screen.getByText(/Could not move task-1 to Done/)).toBeTruthy());
     expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy();
+  });
+});
+
+describe("the lens owns what every view shares", () => {
+  function lens(view: LensViewId, query = "") {
+    return (
+      <TaskFilterProvider view={view}>
+        <TasksBoard
+          activeRoot={ROOT}
+          query={query}
+          refreshSignal={0}
+          selectedPath={undefined}
+          onOpen={() => {}}
+          onOpenInNewTab={() => {}}
+        />
+        <CountLabel />
+      </TaskFilterProvider>
+    );
+  }
+
+  function CountLabel() {
+    const { count } = useTaskFilter();
+    return <output>{count ? `${count.shown}/${count.total}` : "none"}</output>;
+  }
+
+  it("renders the tasks as rows when the list view is chosen", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === "list_tasks") return [task("task-1", "To Do"), task("task-2", "Done")];
+      throw new Error(`unexpected ${cmd}`);
+    });
+
+    render(lens("list"));
+
+    await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
+    expect(document.querySelector('[data-slot="tasks-list"]')).not.toBeNull();
+    expect(document.querySelector("[data-status]")).toBeNull();
+  });
+
+  it("publishes the count and narrows by the shared query in either view", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === "list_tasks") return [task("task-1", "To Do"), task("task-2", "Done")];
+      throw new Error(`unexpected ${cmd}`);
+    });
+
+    const { rerender } = render(lens("list"));
+    await waitFor(() => expect(screen.getByText("2/2")).toBeTruthy());
+
+    rerender(lens("list", "task-2"));
+    await waitFor(() => expect(screen.getByText("1/2")).toBeTruthy());
+    expect(screen.queryByText("Title task-1")).toBeNull();
+
+    rerender(lens("board", "task-2"));
+    await waitFor(() => expect(screen.getByText("1/2")).toBeTruthy());
+    expect(within(column("Done")).getByText("Title task-2")).toBeTruthy();
+  });
+
+  it("shows the empty state once, whichever view is chosen", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === "list_tasks") return [];
+      throw new Error(`unexpected ${cmd}`);
+    });
+
+    render(lens("list"));
+
+    await waitFor(() => expect(screen.getByText("No tasks")).toBeTruthy());
+    expect(document.querySelector('[data-slot="tasks-list"]')).toBeNull();
+  });
+
+  it("says nothing matched while a query narrows everything away", async () => {
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === "list_tasks") return [task("task-1", "To Do")];
+      throw new Error(`unexpected ${cmd}`);
+    });
+
+    render(lens("board", "nothing matches this"));
+
+    await waitFor(() => expect(screen.getByText("No matching tasks")).toBeTruthy());
   });
 });

@@ -41,19 +41,17 @@ function toggle(status: TaskStatus): HTMLButtonElement {
 interface BoardProps {
   tasks: Task[];
   progress: Map<string, AcProgress>;
-  query?: string;
+  searching?: boolean;
   onAdvance?: (id: string, status: TaskStatus) => void;
 }
 
-function CollapsibleBoard({ tasks, progress, query = "", onAdvance }: BoardProps) {
+function CollapsibleBoard({ tasks, progress, searching = false, onAdvance }: BoardProps) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<TaskStatus>>(new Set());
   return (
     <TaskBoardView
       tasks={tasks}
-      query={query}
+      searching={searching}
       progress={progress}
-      loading={false}
-      error={undefined}
       selectedPath={undefined}
       onOpen={noop}
       onOpenInNewTab={noop}
@@ -79,7 +77,7 @@ describe("Smoke C2: board groups real tasks correctly", () => {
   ];
   const progress = new Map<string, AcProgress>([["/ws/tasks/task-2.md", { done: 1, total: 3 }]]);
 
-  function board(over: Omit<BoardProps, "tasks" | "progress"> = {}) {
+  function board(over: Partial<BoardProps> = {}) {
     return (
       <TaskFilterProvider>
         <CollapsibleBoard tasks={tasks} progress={progress} {...over} />
@@ -121,9 +119,8 @@ describe("Smoke C2: board groups real tasks correctly", () => {
       <TaskFilterProvider>
       <TaskBoardView
         tasks={[task("task-9", "Done")]}
+        searching={false}
         progress={new Map()}
-        loading={false}
-        error={undefined}
         selectedPath={undefined}
         onOpen={onOpen}
         onOpenInNewTab={noop}
@@ -134,33 +131,14 @@ describe("Smoke C2: board groups real tasks correctly", () => {
     expect(onOpen).toHaveBeenCalledWith("/ws/tasks/task-9.md");
   });
 
-  it("shows skeletons while loading with no tasks yet", () => {
-    render(
-      <TaskFilterProvider>
-      <TaskBoardView
-        tasks={[]}
-        progress={new Map()}
-        loading={true}
-        error={undefined}
-        selectedPath={undefined}
-        onOpen={noop}
-        onOpenInNewTab={noop}
-      />
-      </TaskFilterProvider>
-    );
-    expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
-    expect(document.querySelector("[data-status]")).toBeNull();
-  });
-
   it("calls onAdvance with the target status when a card is dragged across columns", () => {
     const onAdvance = vi.fn();
     render(
       <TaskFilterProvider>
       <TaskBoardView
         tasks={[task("task-1", "To Do")]}
+        searching={false}
         progress={new Map()}
-        loading={false}
-        error={undefined}
         selectedPath={undefined}
         onOpen={noop}
         onOpenInNewTab={noop}
@@ -173,22 +151,6 @@ describe("Smoke C2: board groups real tasks correctly", () => {
     fireEvent.dragStart(card);
     fireEvent.drop(column("In Progress"));
     expect(onAdvance).toHaveBeenCalledWith("task-1", "In Progress");
-  });
-
-  it("narrows to matching cards as the shared query changes, then restores on clear", () => {
-    const { rerender } = renderBoard();
-    expect(screen.getByText("Title task-1")).toBeTruthy();
-
-    rerender(board({ query: "Title task-2" }));
-    expect(screen.getByText("Title task-2")).toBeTruthy();
-    expect(screen.queryByText("Title task-1")).toBeNull();
-
-    rerender(board({ query: "nothing matches this" }));
-    expect(screen.getByText("No matching tasks")).toBeTruthy();
-
-    rerender(board({ query: "" }));
-    expect(screen.getByText("Title task-1")).toBeTruthy();
-    expect(screen.getByText("Title task-4")).toBeTruthy();
   });
 
   it("carries no filter field of its own", () => {
@@ -227,19 +189,19 @@ describe("Smoke C2: board groups real tasks correctly", () => {
     expect(toggle("Done").getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("reveals a collapsed status that holds query matches, and leaves it collapsed otherwise", () => {
+  it("reveals a collapsed status that holds matches, and leaves it collapsed otherwise", () => {
     const { rerender } = renderBoard();
     fireEvent.click(toggle("Done"));
     expect(within(column("Done")).queryByText("Title task-3")).toBeNull();
 
-    rerender(board({ query: "task-3" }));
+    rerender(board({ searching: true }));
     expect(within(column("Done")).getByText("Title task-3")).toBeTruthy();
     expect(toggle("Done").getAttribute("aria-expanded")).toBe("true");
 
-    rerender(board({ query: "task-1" }));
+    rerender(board({ tasks: tasks.filter((t) => t.status !== "Done"), searching: true }));
     expect(toggle("Done").getAttribute("aria-expanded")).toBe("false");
 
-    rerender(board({ query: "" }));
+    rerender(board({ searching: false }));
     expect(within(column("Done")).queryByText("Title task-3")).toBeNull();
   });
 
@@ -257,20 +219,4 @@ describe("Smoke C2: board groups real tasks correctly", () => {
     expect(column("Done").getAttribute("data-collapsed")).toBe("true");
   });
 
-  it("shows the empty state when there are no tasks", () => {
-    render(
-      <TaskFilterProvider>
-      <TaskBoardView
-        tasks={[]}
-        progress={new Map()}
-        loading={false}
-        error={undefined}
-        selectedPath={undefined}
-        onOpen={noop}
-        onOpenInNewTab={noop}
-      />
-      </TaskFilterProvider>
-    );
-    expect(screen.getByText("No tasks")).toBeTruthy();
-  });
 });

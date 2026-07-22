@@ -44,7 +44,7 @@ import { parseFrontmatter } from "@/lib/scan";
 import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
 import { CHROME_STYLE } from "@/components/layout/chrome";
-import type { SplitMode } from "@/lib/storage";
+import { lensViewFor, type LensViewId, type SplitMode } from "@/lib/storage";
 import "@/styles/code-theme.css";
 
 // "off" never reaches the split branch, but the map stays total so a new
@@ -365,6 +365,19 @@ function App() {
     [viewSettings]
   );
 
+  const handleLensViewChange = useCallback(
+    (view: LensViewId) => {
+      viewSettings.update({
+        ...viewSettings.settings,
+        lensViews: {
+          ...viewSettings.settings.lensViews,
+          [viewSettings.settings.sidebarLens]: view,
+        },
+      });
+    },
+    [viewSettings]
+  );
+
   const activeGitStatus = library.activeScan?.gitStatus;
   const gitStatusByPath = useMemo(() => {
     if (!activeGitStatus) return undefined;
@@ -518,6 +531,11 @@ function App() {
           }
           lens={viewSettings.settings.sidebarLens}
           onLensChange={handleLensChange}
+          lensView={lensViewFor(
+            viewSettings.settings.lensViews,
+            viewSettings.settings.sidebarLens
+          )}
+          onLensViewChange={handleLensViewChange}
           search={search}
           searchEntries={searchEntries}
           searchingContents={contentSearch.searching}

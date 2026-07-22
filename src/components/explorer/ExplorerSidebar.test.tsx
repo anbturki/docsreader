@@ -137,6 +137,8 @@ function Harness({
           onOpenWelcome={undefined}
           lens={lens}
           onLensChange={onLensChange}
+          lensView={undefined}
+          onLensViewChange={() => {}}
           search={search}
           searchEntries={searchEntries}
           searchingContents={false}
