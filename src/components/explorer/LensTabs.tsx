@@ -17,7 +17,13 @@ interface Props {
 
 export function LensTabs({ active, onChange }: Props) {
   return (
-    <div role="tablist" className="flex items-center gap-3 border-b border-border px-3 text-sm">
+    // The lens count has outgrown one row at the default sidebar width, so the
+    // row wraps. Without this the last tab rendered outside the sidebar and
+    // over the document; clipping it instead would hide a primary entry point.
+    <div
+      role="tablist"
+      className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5 border-b border-border px-2.5 text-[13px]"
+    >
       {SIDEBAR_LENSES.map((value) => {
         const isActive = active === value;
         return (
@@ -27,7 +33,7 @@ export function LensTabs({ active, onChange }: Props) {
             aria-selected={isActive}
             onClick={() => onChange(value)}
             className={cn(
-              "-mb-px border-b-2 py-1.5 transition-colors",
+              "-mb-px shrink-0 border-b-2 py-1.5 transition-colors",
               isActive
                 ? "border-primary font-medium text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"

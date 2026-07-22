@@ -49,3 +49,26 @@ describe("Smoke C1: tasks lens selectable + persists", () => {
     expect(settings.sidebarLens).toBe("tree");
   });
 });
+
+describe("lens tab row", () => {
+  it("renders every lens, including Search", () => {
+    render(<LensTabs active="search" onChange={() => {}} />);
+    for (const label of ["Tree", "Recent", "Tags", "Pinned", "Tasks", "Search"]) {
+      expect(screen.getByRole("tab", { name: label })).toBeTruthy();
+    }
+  });
+
+  it("wraps rather than overflowing, so no tab escapes the sidebar", () => {
+    const { container } = render(<LensTabs active="tree" onChange={() => {}} />);
+    const row = container.querySelector('[role="tablist"]');
+    expect(row?.className).toContain("flex-wrap");
+    expect(row?.className).toContain("min-w-0");
+  });
+
+  it("selects the search lens on click", () => {
+    const onChange = vi.fn();
+    render(<LensTabs active="tree" onChange={onChange} />);
+    screen.getByRole("tab", { name: "Search" }).click();
+    expect(onChange).toHaveBeenCalledWith("search");
+  });
+});
