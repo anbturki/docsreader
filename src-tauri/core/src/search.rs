@@ -3,7 +3,7 @@ use std::path::Path;
 
 use rayon::prelude::*;
 use regex::{Regex, RegexBuilder};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::error::{CoreError, ErrorCode};
 use crate::frontmatter::split_frontmatter;
@@ -83,13 +83,40 @@ impl SearchAbort for NeverAborts {
     }
 }
 
+/// Which fields a query is allowed to match. Mirrored in TypeScript as
+/// SEARCH_SCOPES; keep the two in step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum SearchScope {
+    #[default]
+    All,
+    Names,
+    Content,
+    Tags,
+}
+
+impl SearchScope {
+    fn matches_name(self) -> bool {
+        matches!(self, Self::All | Self::Names)
+    }
+
+    fn matches_content(self) -> bool {
+        matches!(self, Self::All | Self::Content)
+    }
+
+    fn matches_tag(self) -> bool {
+        matches!(self, Self::All | Self::Tags)
+    }
+}
+
 pub struct ContentQuery {
     terms: Vec<Regex>,
+    scope: SearchScope,
 }
 
 impl ContentQuery {
     /// Returns `None` for a query with no searchable terms.
-    pub fn parse(query: &str, case_sensitive: bool) -> Option<Self> {
+    pub fn parse(query: &str, case_sensitive: bool, scope: SearchScope) -> Option<Self> {
         let terms: Vec<Regex> = query
             .split_whitespace()
             .filter_map(|term| build_term(term, case_sensitive))
@@ -97,7 +124,7 @@ impl ContentQuery {
         if terms.is_empty() {
             return None;
         }
-        Some(Self { terms })
+        Some(Self { terms, scope })
     }
 }
 
@@ -133,7 +160,7 @@ pub fn search_content(
             if abort.is_aborted() {
                 return None;
             }
-            search_file(root, entry.path(), &query.terms)
+            search_file(root, entry.path(), query)
         })
         .collect();
 
@@ -150,46 +177,60 @@ pub fn search_content(
     })
 }
 
-fn search_file(root: &Path, path: &Path, terms: &[Regex]) -> Option<ContentHit> {
+struct DocFields<'a> {
+    title: Option<&'a str>,
+    tags: &'a [String],
+    /// File stem plus the workspace-relative path, so a query can match a
+    /// folder name the way it matches a file name.
+    name: &'a str,
+    body: &'a str,
+}
+
+fn search_file(root: &Path, path: &Path, query: &ContentQuery) -> Option<ContentHit> {
     // A file deleted or made unreadable between the walk and the read is simply
     // not a result; the next scan reconciles the tree.
     let content = std::fs::read_to_string(path).ok()?;
     let (_, body) = split_frontmatter(&content);
     let (title, tags) = parse_meta(&content);
-    let slug = path.file_stem()?.to_string_lossy().to_string();
+    let rel_path = relative_path(root, path);
 
+    let fields = DocFields {
+        title: title.as_deref(),
+        tags: &tags,
+        name: &rel_path,
+        body,
+    };
     let score = combine_terms(
-        terms
+        query
+            .terms
             .iter()
-            .map(|term| field_hits(term, title.as_deref(), &tags, &slug, body)),
+            .map(|term| field_hits(term, &fields, query.scope)),
     );
     if score == 0 {
         return None;
     }
 
-    let (lines, matched_lines) = matching_lines(body, first_body_line(&content, body), terms);
+    let (lines, matched_lines) = if query.scope.matches_content() {
+        matching_lines(body, first_body_line(&content, body), &query.terms)
+    } else {
+        (Vec::new(), 0)
+    };
 
     Some(ContentHit {
         path: path.to_string_lossy().to_string(),
-        rel_path: relative_path(root, path),
+        rel_path,
         score,
         lines,
         matched_lines,
     })
 }
 
-fn field_hits(
-    term: &Regex,
-    title: Option<&str>,
-    tags: &[String],
-    slug: &str,
-    body: &str,
-) -> FieldHits {
+fn field_hits(term: &Regex, fields: &DocFields<'_>, scope: SearchScope) -> FieldHits {
     FieldHits {
-        title: title.is_some_and(|t| term.is_match(t)),
-        tag: tags.iter().any(|tag| term.is_match(tag)),
-        slug: term.is_match(slug),
-        content: term.is_match(body),
+        title: scope.matches_name() && fields.title.is_some_and(|t| term.is_match(t)),
+        tag: scope.matches_tag() && fields.tags.iter().any(|tag| term.is_match(tag)),
+        slug: scope.matches_name() && term.is_match(fields.name),
+        content: scope.matches_content() && term.is_match(fields.body),
     }
 }
 
@@ -323,7 +364,11 @@ mod tests {
     }
 
     fn search(root: &Path, query: &str) -> Vec<ContentHit> {
-        let parsed = ContentQuery::parse(query, false).expect("query has terms");
+        search_scoped(root, query, SearchScope::All)
+    }
+
+    fn search_scoped(root: &Path, query: &str, scope: SearchScope) -> Vec<ContentHit> {
+        let parsed = ContentQuery::parse(query, false, scope).expect("query has terms");
         search_content(root, &parsed, &NeverAborts).unwrap().hits
     }
 
@@ -452,7 +497,7 @@ mod tests {
 
         assert_eq!(search(&dir, "gateway").len(), 1);
 
-        let sensitive = ContentQuery::parse("gateway", true).unwrap();
+        let sensitive = ContentQuery::parse("gateway", true, SearchScope::All).unwrap();
         let hits = search_content(&dir, &sensitive, &NeverAborts).unwrap().hits;
         assert!(hits.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
@@ -480,7 +525,7 @@ mod tests {
         let dir = test_dir("search_overlap");
         write(&dir, "overlap.md", "foobar\n");
 
-        let parsed = ContentQuery::parse("foo oob", false).unwrap();
+        let parsed = ContentQuery::parse("foo oob", false, SearchScope::All).unwrap();
         let hits = search_content(&dir, &parsed, &NeverAborts).unwrap().hits;
         assert_eq!(matched_text(&hits[0]), ["foob"]);
         let _ = std::fs::remove_dir_all(&dir);
@@ -512,6 +557,91 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    fn seed_scoped(tag: &str) -> std::path::PathBuf {
+        let dir = test_dir(tag);
+        write(
+            &dir,
+            "gateway-notes.md",
+            "---\ntags: [infra]\n---\n\nplain prose\n",
+        );
+        write(
+            &dir,
+            "other.md",
+            "---\ntitle: Unrelated\n---\n\nthe gateway is here\n",
+        );
+        write(
+            &dir,
+            "tagged.md",
+            "---\ntags: [gateway]\n---\n\nplain prose\n",
+        );
+        dir
+    }
+
+    #[test]
+    fn names_scope_matches_the_file_name_only() {
+        let dir = seed_scoped("scope_names");
+
+        let hits = search_scoped(&dir, "gateway", SearchScope::Names);
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].rel_path, "gateway-notes.md");
+        assert!(
+            hits[0].lines.is_empty(),
+            "no body snippet outside the content scope"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn content_scope_matches_the_body_only() {
+        let dir = seed_scoped("scope_content");
+
+        let hits = search_scoped(&dir, "gateway", SearchScope::Content);
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].rel_path, "other.md");
+        assert_eq!(hits[0].lines.len(), 1);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn tags_scope_matches_the_tags_only() {
+        let dir = seed_scoped("scope_tags");
+
+        let hits = search_scoped(&dir, "gateway", SearchScope::Tags);
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].rel_path, "tagged.md");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn all_scope_matches_every_field() {
+        let dir = seed_scoped("scope_all");
+
+        let hits = search_scoped(&dir, "gateway", SearchScope::All);
+
+        assert_eq!(hits.len(), 3);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn names_scope_matches_a_folder_in_the_path() {
+        let dir = test_dir("scope_folder");
+        write(&dir, "gateway/inner.md", "unrelated prose\n");
+
+        let hits = search_scoped(&dir, "gateway", SearchScope::Names);
+
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].rel_path, "gateway/inner.md");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn scope_defaults_to_searching_everything() {
+        assert_eq!(SearchScope::default(), SearchScope::All);
+    }
+
     #[test]
     fn no_matches_returns_no_hits() {
         let dir = test_dir("search_none");
@@ -523,8 +653,8 @@ mod tests {
 
     #[test]
     fn blank_query_has_no_terms() {
-        assert!(ContentQuery::parse("   ", false).is_none());
-        assert!(ContentQuery::parse("", false).is_none());
+        assert!(ContentQuery::parse("   ", false, SearchScope::All).is_none());
+        assert!(ContentQuery::parse("", false, SearchScope::All).is_none());
     }
 
     #[test]
@@ -532,7 +662,7 @@ mod tests {
         let dir = test_dir("search_abort");
         write(&dir, "a.md", "needle\n");
 
-        let parsed = ContentQuery::parse("needle", false).unwrap();
+        let parsed = ContentQuery::parse("needle", false, SearchScope::All).unwrap();
         let result = search_content(&dir, &parsed, &AlwaysAborts).unwrap();
         assert!(result.aborted);
         assert!(result.hits.is_empty());
@@ -543,7 +673,7 @@ mod tests {
     fn missing_folder_is_an_error() {
         let dir = test_dir("search_missing");
         let _ = std::fs::remove_dir_all(&dir);
-        let parsed = ContentQuery::parse("x", false).unwrap();
+        let parsed = ContentQuery::parse("x", false, SearchScope::All).unwrap();
         assert!(search_content(&dir, &parsed, &NeverAborts).is_err());
     }
 

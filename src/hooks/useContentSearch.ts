@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { searchContent, type ContentHit } from "@/lib/contentSearch";
+import { searchContent, type ContentHit, type SearchScope } from "@/lib/contentSearch";
 
 // Long enough that a typed word issues one search rather than one per letter,
 // short enough that results feel attached to the keystroke.
@@ -23,7 +23,8 @@ const IDLE: ContentSearchState = {
 export function useContentSearch(
   root: string | undefined,
   query: string,
-  enabled = true
+  enabled = true,
+  scope: SearchScope = "all"
 ): ContentSearchState {
   const [state, setState] = useState<ContentSearchState>(IDLE);
   // Every request carries a sequence number. A slow earlier search that lands
@@ -46,7 +47,7 @@ export function useContentSearch(
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const result = await searchContent(root, trimmed);
+          const result = await searchContent(root, trimmed, scope);
           if (isStale() || result.aborted) return;
           setState({
             hits: result.hits,
@@ -67,7 +68,7 @@ export function useContentSearch(
     }, SEARCH_DEBOUNCE_MS);
 
     return () => clearTimeout(timer);
-  }, [root, query, enabled]);
+  }, [root, query, enabled, scope]);
 
   return state;
 }

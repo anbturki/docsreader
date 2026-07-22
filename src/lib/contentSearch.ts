@@ -1,5 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 
+/// Mirrors SearchScope in src-tauri/core/src/search.rs; keep the two in step.
+export const SEARCH_SCOPES = ["all", "names", "content", "tags"] as const;
+
+export type SearchScope = (typeof SEARCH_SCOPES)[number];
+
+export const SEARCH_SCOPE_LABELS: Record<SearchScope, string> = {
+  all: "All",
+  names: "Names",
+  content: "Contents",
+  tags: "Tags",
+};
+
 export interface SnippetSegment {
   text: string;
   isMatch: boolean;
@@ -37,11 +49,12 @@ export const EMPTY_CONTENT_SEARCH: ContentSearchResult = {
 
 export async function searchContent(
   root: string,
-  query: string
+  query: string,
+  scope: SearchScope = "all"
 ): Promise<ContentSearchResult> {
   if (!query.trim()) return EMPTY_CONTENT_SEARCH;
   try {
-    return await invoke<ContentSearchResult>("search_content", { path: root, query });
+    return await invoke<ContentSearchResult>("search_content", { path: root, query, scope });
   } catch {
     // The backend detail is not useful to a reader; surfacing the folder being
     // unreadable is.
