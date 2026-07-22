@@ -59,7 +59,7 @@ export function TaskBoardView({
   onToggleStatus,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const { filter, setLabels } = useTaskFilter();
+  const { filter, setLabels, setCount } = useTaskFilter();
 
   const labels = useMemo(() => availableLabels(tasks), [tasks]);
   useEffect(() => setLabels(labels), [labels, setLabels]);
@@ -67,6 +67,13 @@ export function TaskBoardView({
   const filtered = useMemo(() => filterTasks(tasks, activeFilter), [tasks, activeFilter]);
   const columns = groupByStatus(filtered);
   const searching = isFilterActive(activeFilter);
+
+  const shown = filtered.length;
+  const total = tasks.length;
+  useEffect(() => {
+    setCount({ shown, total });
+    return () => setCount(undefined);
+  }, [shown, total, setCount]);
 
   const handleDrop = (status: TaskStatus) => {
     if (draggingId && onAdvance) onAdvance(draggingId, status);
@@ -80,12 +87,6 @@ export function TaskBoardView({
 
   return (
     <div className="flex flex-col gap-3 px-2 py-2" data-slot="tasks-board">
-      <span className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {filtered.length}
-        {searching && ` / ${tasks.length}`} task
-        {tasks.length === 1 ? "" : "s"}
-      </span>
-
       {error && <p className="px-1 text-xs text-destructive">{error}</p>}
 
       {loading && tasks.length === 0 ? (
