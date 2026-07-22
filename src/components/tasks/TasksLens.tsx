@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -13,13 +13,15 @@ import {
   type TaskFilter,
 } from "@/lib/taskFilter";
 import { useTaskFilter } from "@/components/explorer/TaskFilterContext";
-import { TASK_VIEWS } from "./taskViews";
+import type { TaskViewProps } from "./taskViewProps";
 import { useCollapsedStatuses } from "./useCollapsedStatuses";
 
 interface Props {
   // The lens fills whatever box it is given: a scrolling sidebar column, or a
   // pane that hands it the leftover height.
   className?: string;
+  /** How the narrowed tasks are drawn. The caller owns the choice. */
+  view: ComponentType<TaskViewProps>;
   activeRoot: string | undefined;
   query: string;
   refreshSignal: number;
@@ -29,8 +31,9 @@ interface Props {
   onOpenInOtherPane?: (path: string) => void;
 }
 
-export function TasksBoard({
+export function TasksLens({
   className,
+  view: View,
   activeRoot,
   query,
   refreshSignal,
@@ -43,11 +46,9 @@ export function TasksBoard({
   const progress = useTaskProgress(tasks, revision);
   const { displayTasks, advancingIds, advanceError, advance } = useAdvance(tasks, setStatus);
   const { collapsed, toggle } = useCollapsedStatuses(activeRoot);
-  const { view } = useTaskFilter();
   const { filtered, searching } = usePublishedFilter(displayTasks, query);
 
   const shownError = advanceError ?? error;
-  const View = TASK_VIEWS[view].component;
 
   return (
     <div className={cn("flex flex-col", className)} data-slot="tasks-lens">

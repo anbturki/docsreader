@@ -44,7 +44,7 @@ import { parseFrontmatter } from "@/lib/scan";
 import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
 import { CHROME_STYLE } from "@/components/layout/chrome";
-import { lensViewFor, type LensViewId, type SplitMode } from "@/lib/storage";
+import type { SplitMode, TaskTabView } from "@/lib/storage";
 import { explorerOpen, fileTarget, TAB_KIND_SPECS, TASKS_TARGET } from "@/lib/tabKinds";
 import "@/styles/code-theme.css";
 
@@ -401,15 +401,9 @@ function App() {
     [viewSettings]
   );
 
-  const handleLensViewChange = useCallback(
-    (view: LensViewId) => {
-      viewSettings.update({
-        ...viewSettings.settings,
-        lensViews: {
-          ...viewSettings.settings.lensViews,
-          [viewSettings.settings.sidebarLens]: view,
-        },
-      });
+  const handleTaskViewChange = useCallback(
+    (taskTabView: TaskTabView) => {
+      viewSettings.update({ ...viewSettings.settings, taskTabView });
     },
     [viewSettings]
   );
@@ -523,6 +517,12 @@ function App() {
           onCollapseAll={handleCollapseAll}
           split={panes.layout.split}
           onSplitChange={panes.setSplit}
+          taskView={
+            activeTab?.kind === TASKS_TARGET.kind
+              ? viewSettings.settings.taskTabView
+              : undefined
+          }
+          onTaskViewChange={handleTaskViewChange}
           canToggleOutline={!!activeFilePath}
           outlineOpen={viewSettings.settings.outlineOpen}
           onToggleOutline={toggleOutline}
@@ -570,11 +570,6 @@ function App() {
           }
           lens={viewSettings.settings.sidebarLens}
           onLensChange={handleLensChange}
-          lensView={lensViewFor(
-            viewSettings.settings.lensViews,
-            viewSettings.settings.sidebarLens
-          )}
-          onLensViewChange={handleLensViewChange}
           search={search}
           searchEntries={searchEntries}
           searchingContents={contentSearch.searching}

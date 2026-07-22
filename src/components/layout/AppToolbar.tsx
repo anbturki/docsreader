@@ -15,9 +15,15 @@ import { Button } from "@/components/ui/button";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { TaskViewSwitch } from "@/components/tasks/TaskViewSwitch";
 import { displayShortcut } from "@/lib/shortcuts";
 import { isMac } from "@/lib/platform";
-import { isSplitMode, SPLIT_MODES, type SplitMode } from "@/lib/storage";
+import {
+  isSplitMode,
+  SPLIT_MODES,
+  type SplitMode,
+  type TaskTabView,
+} from "@/lib/storage";
 
 const CHROME_ICON = "size-6 text-muted-foreground hover:text-foreground [&>svg]:size-4";
 
@@ -47,6 +53,10 @@ interface Props {
   split: SplitMode;
   onSplitChange: (split: SplitMode) => void;
 
+  /** Undefined while the active tab is not a tasks tab, which draws no switch. */
+  taskView: TaskTabView | undefined;
+  onTaskViewChange: (view: TaskTabView) => void;
+
   canToggleOutline: boolean;
   outlineOpen: boolean;
   onToggleOutline: () => void;
@@ -73,6 +83,8 @@ export function AppToolbar({
   onCollapseAll,
   split,
   onSplitChange,
+  taskView,
+  onTaskViewChange,
   canToggleOutline,
   outlineOpen,
   onToggleOutline,
@@ -135,6 +147,7 @@ export function AppToolbar({
             <ListCollapse />
           </Button>
         )}
+        {taskView && <TaskViewSwitch view={taskView} onChange={onTaskViewChange} />}
         <ToggleGroup
           type="single"
           value={split}

@@ -4,7 +4,7 @@ import { vi, describe, it, expect, beforeEach } from "vitest";
 
 import type { Tabs } from "@/hooks/useTabs";
 import type { TabContentProps } from "@/components/document/tabKinds";
-import { defaultViewSettings } from "@/lib/storage";
+import { defaultViewSettings, type TaskTabView } from "@/lib/storage";
 import { fileTarget, TASKS_TARGET } from "@/lib/tabKinds";
 import type { Task, TaskStatus } from "@/lib/tasks";
 import { TasksTabContent } from "./TasksTabContent";
@@ -75,7 +75,7 @@ function pane(): Tabs {
   };
 }
 
-function props(): TabContentProps {
+function props(taskTabView: TaskTabView = defaultViewSettings.taskTabView): TabContentProps {
   return {
     tab: {
       id: "t1",
@@ -90,7 +90,7 @@ function props(): TabContentProps {
     active: true,
     files: [],
     rootPath: ROOT,
-    viewSettings: defaultViewSettings,
+    viewSettings: { ...defaultViewSettings, taskTabView },
     paneFocused: true,
     onActiveScrollElChange: () => {},
     onDiffViewModeChange: () => {},
@@ -102,6 +102,10 @@ function column(status: TaskStatus): HTMLElement {
   const el = document.querySelector(`[data-status="${status}"]`);
   if (!(el instanceof HTMLElement)) throw new Error(`missing column ${status}`);
   return el;
+}
+
+function lens(): HTMLElement | null {
+  return document.querySelector('[data-slot="tasks-lens"]');
 }
 
 beforeEach(() => {
@@ -129,7 +133,7 @@ describe("the tasks tab", () => {
 
     await waitFor(() => expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy());
     expect(within(column("Done")).getByText("Title task-2")).toBeTruthy();
-    expect(document.querySelector('[data-slot="tasks-kanban"]')).toBeTruthy();
+    expect(document.querySelector('[data-slot="tasks-board"]')).toBeTruthy();
   });
 
   it("narrows to the tasks matching what was typed", async () => {
@@ -181,6 +185,40 @@ describe("the tasks tab", () => {
     screen.getByText("Title task-1").click();
 
     expect(openInActive).toHaveBeenCalledWith(fileTarget("/ws/tasks/task-1.md"));
+  });
+
+  it("shows the tasks as rows when the stored view is the list", async () => {
+    listOnly([task("task-1", "To Do"), task("task-2", "Done")]);
+
+    render(<TasksTabContent {...props("list")} />);
+
+    await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
+    expect(document.querySelector('[data-slot="tasks-list"]')).toBeTruthy();
+    expect(document.querySelector('[data-slot="tasks-board"]')).toBeNull();
+  });
+
+  it("fills the content area whichever view is stored", async () => {
+    listOnly([task("task-1", "To Do")]);
+
+    const { unmount } = render(<TasksTabContent {...props("board")} />);
+    await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
+    expect(lens()?.className).toContain("flex-1");
+    expect(lens()?.className).toContain("min-h-0");
+    unmount();
+
+    render(<TasksTabContent {...props("list")} />);
+    await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
+    expect(lens()?.className).toContain("flex-1");
+    expect(lens()?.className).toContain("min-h-0");
+  });
+
+  it("carries no view switch of its own: the toolbar owns that", async () => {
+    listOnly([task("task-1", "To Do")]);
+
+    render(<TasksTabContent {...props()} />);
+    await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
+
+    expect(screen.queryByRole("radio")).toBeNull();
   });
 
   it("says so when the workspace has no tasks", async () => {

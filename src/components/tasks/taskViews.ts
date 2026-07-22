@@ -1,27 +1,10 @@
 import type { ComponentType } from "react";
-import { Columns3, LayoutDashboard, List, type LucideIcon } from "lucide-react";
+import { Columns3, List, type LucideIcon } from "lucide-react";
 
-import type { Task, TaskStatus } from "@/lib/tasks";
-import type { AcProgress } from "@/lib/taskDoc";
-import type { LensViewId } from "@/lib/storage";
+import type { TaskTabView } from "@/lib/storage";
 import { TaskBoardView } from "./TaskBoardView";
-import { TaskKanbanView } from "./TaskKanbanView";
 import { TaskListView } from "./TaskListView";
-
-export interface TaskViewProps {
-  /** Already narrowed by the shared query and the header filters. */
-  tasks: Task[];
-  searching: boolean;
-  progress: Map<string, AcProgress>;
-  selectedPath: string | undefined;
-  onOpen: (path: string) => void;
-  onOpenInNewTab: (path: string) => void;
-  onOpenInOtherPane?: (path: string) => void;
-  advancingIds?: ReadonlySet<string>;
-  onAdvance?: (id: string, status: TaskStatus) => void;
-  collapsedStatuses?: ReadonlySet<TaskStatus>;
-  onToggleStatus?: (status: TaskStatus) => void;
-}
+import type { TaskViewProps } from "./taskViewProps";
 
 export interface TaskViewDef {
   label: string;
@@ -29,11 +12,7 @@ export interface TaskViewDef {
   component: ComponentType<TaskViewProps>;
 }
 
-export const TASK_VIEWS: Record<LensViewId, TaskViewDef> = {
-  board: { label: "Board", icon: Columns3, component: TaskBoardView },
+export const TASK_VIEWS: Record<TaskTabView, TaskViewDef> = {
   list: { label: "List", icon: List, component: TaskListView },
-  kanban: { label: "Columns", icon: LayoutDashboard, component: TaskKanbanView },
+  board: { label: "Board", icon: Columns3, component: TaskBoardView },
 };
-
-// The view a task tab opens in: the one the sidebar has no width for.
-export const TASK_TAB_VIEW: LensViewId = "kanban";

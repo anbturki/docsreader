@@ -2,9 +2,11 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/rea
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
 import { TaskFilterProvider, useTaskFilter } from "@/components/explorer/TaskFilterContext";
-import { TasksBoard } from "./TasksBoard";
+import { TasksLens } from "./TasksLens";
+import { TaskGroupList } from "./TaskGroupList";
+import { TASK_VIEWS } from "./taskViews";
 import type { Task, TaskStatus } from "@/lib/tasks";
-import type { LensViewId } from "@/lib/storage";
+import type { TaskTabView } from "@/lib/storage";
 
 const watchCallbacks: Array<(e: { type: unknown; paths: string[] }) => void> = [];
 
@@ -90,7 +92,8 @@ describe("collapsed statuses persist per workspace", () => {
   function board(root: string) {
     return (
       <TaskFilterProvider>
-      <TasksBoard
+      <TasksLens
+        view={TaskGroupList}
         activeRoot={root}
         query=""
         refreshSignal={0}
@@ -145,7 +148,7 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
 
     render(
       <TaskFilterProvider>
-        <TasksBoard activeRoot={ROOT} query="" refreshSignal={0} selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+        <TasksLens view={TaskGroupList} activeRoot={ROOT} query="" refreshSignal={0} selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
       </TaskFilterProvider>
     );
     await waitFor(() => expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy());
@@ -171,7 +174,7 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
 
     render(
       <TaskFilterProvider>
-        <TasksBoard activeRoot={ROOT} query="" refreshSignal={0} selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+        <TasksLens view={TaskGroupList} activeRoot={ROOT} query="" refreshSignal={0} selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
       </TaskFilterProvider>
     );
     await waitFor(() => expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy());
@@ -184,10 +187,11 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
 });
 
 describe("the lens owns what every view shares", () => {
-  function lens(view: LensViewId, query = "") {
+  function lens(view: TaskTabView, query = "") {
     return (
-      <TaskFilterProvider view={view}>
-        <TasksBoard
+      <TaskFilterProvider>
+        <TasksLens
+          view={TASK_VIEWS[view].component}
           activeRoot={ROOT}
           query={query}
           refreshSignal={0}

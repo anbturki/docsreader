@@ -1,19 +1,15 @@
-import { useId, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { TASK_STATUSES, type Task, type TaskStatus } from "@/lib/tasks";
 import { groupTasksByStatus } from "@/lib/taskFilter";
 import type { AcProgress } from "@/lib/taskDoc";
 import { STATUS_STYLES } from "@/lib/taskStyles";
-import type { TaskViewProps } from "./taskViews";
+import type { TaskViewProps } from "./taskViewProps";
 import { TaskCard } from "./TaskCard";
-
-const NO_COLLAPSED: ReadonlySet<TaskStatus> = new Set<TaskStatus>();
 
 export function TaskBoardView({
   tasks,
-  searching,
   progress,
   selectedPath,
   onOpen,
@@ -21,8 +17,6 @@ export function TaskBoardView({
   onOpenInOtherPane,
   advancingIds,
   onAdvance,
-  collapsedStatuses = NO_COLLAPSED,
-  onToggleStatus,
 }: TaskViewProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const columns = groupTasksByStatus(tasks);
@@ -32,22 +26,16 @@ export function TaskBoardView({
     setDraggingId(null);
   };
 
-  // A collapsed group that holds matches reveals itself while a query or filter
-  // is active, so search results are never hidden behind the reader's choice.
-  const isCollapsed = (status: TaskStatus, count: number) =>
-    collapsedStatuses.has(status) && !(searching && count > 0);
-
   return (
-    <div className="flex flex-col gap-3 px-2 py-2" data-slot="tasks-board">
-      {TASK_STATUSES.map((status) => {
-        const columnTasks = columns.get(status) ?? [];
-        return (
-          <TaskColumn
+    // Columns scroll sideways inside this box, so a board wider than the
+    // window never becomes a horizontal scrollbar on the page itself.
+    <div className="min-h-0 flex-1 overflow-x-auto p-3" data-slot="tasks-board">
+      <div className="flex h-full min-h-0 gap-3">
+        {TASK_STATUSES.map((status) => (
+          <BoardColumn
             key={status}
             status={status}
-            tasks={columnTasks}
-            collapsed={isCollapsed(status, columnTasks.length)}
-            onToggle={() => onToggleStatus?.(status)}
+            tasks={columns.get(status) ?? []}
             progress={progress}
             selectedPath={selectedPath}
             onOpen={onOpen}
@@ -60,8 +48,8 @@ export function TaskBoardView({
             onDragEndTask={() => setDraggingId(null)}
             onDropTask={handleDrop}
           />
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
@@ -69,8 +57,6 @@ export function TaskBoardView({
 interface ColumnProps {
   status: TaskStatus;
   tasks: Task[];
-  collapsed: boolean;
-  onToggle: () => void;
   progress: Map<string, AcProgress>;
   selectedPath: string | undefined;
   onOpen: (path: string) => void;
@@ -84,11 +70,9 @@ interface ColumnProps {
   onDropTask: (status: TaskStatus) => void;
 }
 
-function TaskColumn({
+function BoardColumn({
   status,
   tasks,
-  collapsed,
-  onToggle,
   progress,
   selectedPath,
   onOpen,
@@ -101,14 +85,15 @@ function TaskColumn({
   onDragEndTask,
   onDropTask,
 }: ColumnProps) {
-  const listId = useId();
   return (
     <section
       data-status={status}
-      data-collapsed={collapsed ? "true" : "false"}
+      aria-label={`${status}, ${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
       className={cn(
-        "flex flex-col gap-1.5",
-        isDropTarget && "rounded-md outline-dashed outline-1 outline-border"
+        // Columns share the width evenly down to a floor they will not go
+        // below; past that they overflow and the board scrolls sideways.
+        "flex h-full min-h-0 min-w-72 flex-1 flex-col rounded-lg border bg-muted/40",
+        isDropTarget && "border-dashed border-ring/60"
       )}
       onDragOver={draggable ? (e) => e.preventDefault() : undefined}
       onDrop={
@@ -120,44 +105,28 @@ function TaskColumn({
           : undefined
       }
     >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={!collapsed}
-        aria-controls={listId}
-        aria-label={`${status}, ${tasks.length} task${tasks.length === 1 ? "" : "s"}`}
-        className="flex items-center gap-2 rounded-md px-1 py-0.5 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      >
-        <ChevronRight
-          aria-hidden
-          className={cn(
-            "size-3.5 shrink-0 text-muted-foreground transition-transform",
-            !collapsed && "rotate-90"
-          )}
-        />
+      <header className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
         <Badge className={cn("border-transparent", STATUS_STYLES[status])}>{status}</Badge>
         <span className="tabular-nums text-xs text-muted-foreground">{tasks.length}</span>
-      </button>
-      {!collapsed && tasks.length > 0 && (
-        <ul id={listId} className="flex flex-col gap-1.5">
-          {tasks.map((task) => (
-            <li key={task.path}>
-              <TaskCard
-                task={task}
-                progress={progress.get(task.path)}
-                selected={task.path === selectedPath}
-                onOpen={onOpen}
-                onOpenInNewTab={onOpenInNewTab}
-                onOpenInOtherPane={onOpenInOtherPane}
-                draggable={draggable}
-                advancing={advancingIds?.has(task.id) ?? false}
-                onDragStart={() => onDragStartTask(task.id)}
-                onDragEnd={onDragEndTask}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
+      </header>
+      <ul className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
+        {tasks.map((task) => (
+          <li key={task.path}>
+            <TaskCard
+              task={task}
+              progress={progress.get(task.path)}
+              selected={task.path === selectedPath}
+              onOpen={onOpen}
+              onOpenInNewTab={onOpenInNewTab}
+              onOpenInOtherPane={onOpenInOtherPane}
+              draggable={draggable}
+              advancing={advancingIds?.has(task.id) ?? false}
+              onDragStart={() => onDragStartTask(task.id)}
+              onDragEnd={onDragEndTask}
+            />
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }

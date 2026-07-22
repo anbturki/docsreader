@@ -12,13 +12,14 @@ import {
 } from "@/components/explorer/TaskFilterContext";
 import { TaskFilterPopover } from "@/components/explorer/TaskFilterPopover";
 import type { TabContentProps } from "@/components/document/tabKinds";
-import { TasksBoard } from "./TasksBoard";
-import { TASK_TAB_VIEW } from "./taskViews";
+import { TasksLens } from "./TasksLens";
+import { TASK_VIEWS } from "./taskViews";
 
 export function TasksTabContent({
   pane,
   active,
   rootPath,
+  viewSettings,
   onOpenInOtherPane,
 }: TabContentProps) {
   const [query, setQuery] = useState("");
@@ -39,14 +40,15 @@ export function TasksTabContent({
       className={cn("absolute inset-0 flex flex-col", !active && "invisible")}
       aria-hidden={!active}
     >
-      <TaskFilterProvider view={TASK_TAB_VIEW}>
-        <BoardHeader
+      <TaskFilterProvider>
+        <TasksHeader
           query={query}
           onQueryChange={setQuery}
           onRefresh={() => setRefreshSignal((n) => n + 1)}
         />
-        <TasksBoard
+        <TasksLens
           className="min-h-0 flex-1"
+          view={TASK_VIEWS[viewSettings.taskTabView].component}
           activeRoot={rootPath}
           query={query}
           refreshSignal={refreshSignal}
@@ -66,7 +68,7 @@ interface HeaderProps {
   onRefresh: () => void;
 }
 
-function BoardHeader({ query, onQueryChange, onRefresh }: HeaderProps) {
+function TasksHeader({ query, onQueryChange, onRefresh }: HeaderProps) {
   const { count } = useTaskFilter();
 
   return (

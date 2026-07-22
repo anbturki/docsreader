@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/sidebar";
 import type { MarkdownFile } from "@/lib/scan";
 import type { TreeNode } from "@/lib/tree";
-import type { LensViewId, SidebarLens } from "@/lib/storage";
+import type { SidebarLens } from "@/lib/storage";
 import type { RootScan } from "@/hooks/useLibrary";
 import type { GitFileStatusKind } from "@/lib/git";
 import { ExplorerHeader } from "./ExplorerHeader";
@@ -26,7 +26,8 @@ import { TagsList } from "./TagsList";
 import { TaskFilterProvider } from "./TaskFilterContext";
 import type { SearchEntry } from "@/lib/searchEntries";
 import type { SidebarSearch } from "@/hooks/useSidebarSearch";
-import { TasksBoard } from "@/components/tasks/TasksBoard";
+import { TaskGroupList } from "@/components/tasks/TaskGroupList";
+import { TasksLens } from "@/components/tasks/TasksLens";
 
 interface Props {
   // workspaces
@@ -40,8 +41,6 @@ interface Props {
   // lens
   lens: SidebarLens;
   onLensChange: (lens: SidebarLens) => void;
-  lensView: LensViewId | undefined;
-  onLensViewChange: (view: LensViewId) => void;
   onOpenTasksTab: () => void;
 
   // search
@@ -81,7 +80,7 @@ interface Props {
 
 export function ExplorerSidebar(props: Props) {
   return (
-    <TaskFilterProvider view={props.lensView} onViewChange={props.onLensViewChange}>
+    <TaskFilterProvider>
       <SidebarPanels {...props} />
     </TaskFilterProvider>
   );
@@ -216,7 +215,7 @@ function SidebarPanels({
                 onTogglePin={onTogglePin}
               />
             ) : (
-              <LensView
+              <LensPanel
                 lens={lens}
                 activeRoot={activeRoot}
                 taskQuery={search.query}
@@ -258,7 +257,7 @@ function SidebarPanels({
   );
 }
 
-interface LensViewProps {
+interface LensPanelProps {
   lens: SidebarLens;
   activeRoot: string | undefined;
   taskQuery: string;
@@ -280,7 +279,7 @@ interface LensViewProps {
   onShowGitDiff?: (path: string) => void;
 }
 
-function LensView({
+function LensPanel({
   lens,
   activeRoot,
   taskQuery,
@@ -300,7 +299,7 @@ function LensView({
   onOpenInOtherPane,
   gitStatusByPath,
   onShowGitDiff,
-}: LensViewProps) {
+}: LensPanelProps) {
   if (lens === "tree") {
     if (!tree || filteredFiles.length === 0) {
       return (
@@ -342,7 +341,8 @@ function LensView({
   }
   if (lens === "tasks") {
     return (
-      <TasksBoard
+      <TasksLens
+        view={TaskGroupList}
         activeRoot={activeRoot}
         query={taskQuery}
         refreshSignal={refreshSignal}

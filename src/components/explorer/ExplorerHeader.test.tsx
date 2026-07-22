@@ -111,3 +111,13 @@ describe("ExplorerHeader task count", () => {
     expect(screen.queryByText(/task/)).toBeNull();
   });
 });
+
+describe("ExplorerHeader view switch", () => {
+  it("offers no choice of view: the sidebar draws tasks its one way", () => {
+    renderHeader("tasks", { shown: 3, total: 3 });
+    publish();
+
+    expect(screen.queryByRole("radio")).toBeNull();
+    expect(document.querySelector('[data-slot="toggle-group"]')).toBeNull();
+  });
+});

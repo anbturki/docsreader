@@ -1,5 +1,5 @@
 import tauriConfigSource from "../../../src-tauri/tauri.conf.json?raw";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeAll, beforeEach } from "vitest";
 
@@ -8,7 +8,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AppToolbar } from "./AppToolbar";
 import { CHROME_STYLE, MAC_WINDOW_CONTROLS } from "./chrome";
-import { SPLIT_MODES, type SplitMode } from "@/lib/storage";
+import {
+  SPLIT_MODES,
+  TASK_TAB_VIEWS,
+  type SplitMode,
+  type TaskTabView,
+} from "@/lib/storage";
 
 function trafficLightPosition(config: unknown): { x: number; y: number } {
   if (typeof config !== "object" || config === null) throw new Error("bad config");
@@ -43,6 +48,7 @@ const handlers = {
   onOpenQuickOpen: vi.fn(),
   onCollapseAll: vi.fn(),
   onSplitChange: vi.fn(),
+  onTaskViewChange: vi.fn(),
   onToggleOutline: vi.fn(),
   onToggleTheme: vi.fn(),
   onOpenSettings: vi.fn(),
@@ -52,9 +58,14 @@ const handlers = {
 const ROOTS = ["/ws/voice", "/ws/plain-folder"];
 
 function renderToolbar(
-  overrides: { sidebarOpen?: boolean; roots?: string[]; split?: SplitMode } = {}
+  overrides: {
+    sidebarOpen?: boolean;
+    roots?: string[];
+    split?: SplitMode;
+    taskView?: TaskTabView;
+  } = {}
 ) {
-  const { sidebarOpen = true, roots = ROOTS, split = "off" } = overrides;
+  const { sidebarOpen = true, roots = ROOTS, split = "off", taskView } = overrides;
   return render(
     <TooltipProvider>
       <SidebarProvider open={sidebarOpen}>
@@ -73,6 +84,8 @@ function renderToolbar(
           onCollapseAll={handlers.onCollapseAll}
           split={split}
           onSplitChange={handlers.onSplitChange}
+          taskView={taskView}
+          onTaskViewChange={handlers.onTaskViewChange}
           canToggleOutline
           outlineOpen={false}
           onToggleOutline={handlers.onToggleOutline}
@@ -223,6 +236,53 @@ describe("AppToolbar", () => {
     renderToolbar({ split: "horizontal" });
     await user.click(screen.getByRole("radio", { name: "Side by side" }));
     expect(handlers.onSplitChange).not.toHaveBeenCalled();
+  });
+
+  it("draws no tasks view switch while the active tab is not a tasks tab", () => {
+    renderToolbar();
+    expect(screen.queryByRole("group", { name: "Tasks view" })).toBeNull();
+    expect(screen.getAllByRole("radio")).toHaveLength(SPLIT_MODES.length);
+  });
+
+  it("offers one control per view while a tasks tab is active", () => {
+    renderToolbar({ taskView: "board" });
+    const group = screen.getByRole("group", { name: "Tasks view" });
+    expect(within(group).getAllByRole("radio")).toHaveLength(TASK_TAB_VIEWS.length);
+  });
+
+  it("marks the active view and reports the one the user picks", async () => {
+    const user = userEvent.setup();
+    renderToolbar({ taskView: "board" });
+
+    expect(screen.getByRole("radio", { name: "Board" }).getAttribute("data-state")).toBe("on");
+
+    await user.click(screen.getByRole("radio", { name: "List" }));
+    expect(handlers.onTaskViewChange).toHaveBeenCalledWith("list");
+  });
+
+  it("names no view after the columns' old internal word", () => {
+    renderToolbar({ taskView: "board" });
+    const group = screen.getByRole("group", { name: "Tasks view" });
+    expect(group.textContent ?? "").not.toMatch(/kanban/i);
+    for (const radio of within(group).getAllByRole("radio")) {
+      expect(radio.getAttribute("aria-label") ?? "").not.toMatch(/kanban/i);
+      expect(radio.getAttribute("title") ?? "").not.toMatch(/kanban/i);
+    }
+  });
+
+  it("keeps the bar the same height as the tasks switch comes and goes", () => {
+    const { unmount } = renderToolbar();
+    const withoutSwitch = toolbar().className;
+    const splitItem = screen.getAllByRole("radio")[0].className;
+    unmount();
+
+    renderToolbar({ taskView: "list" });
+    expect(toolbar().className).toBe(withoutSwitch);
+    const group = screen.getByRole("group", { name: "Tasks view" });
+    for (const radio of within(group).getAllByRole("radio")) {
+      expect(radio.className).toContain("size-6");
+    }
+    expect(splitItem).toContain("size-6");
   });
 
   it("keeps drag regions on the inert spacers", () => {

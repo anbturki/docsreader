@@ -36,7 +36,7 @@ export const TAB_KIND_VIEWS: Record<TabKind, TabKindView> = {
     content: TasksTabContent,
     standalone: {
       label: "Tasks",
-      hint: "Every task in this workspace, in columns",
+      hint: "Every task in this workspace, as a list or a board",
       icon: ListChecks,
     },
   },

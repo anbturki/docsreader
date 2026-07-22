@@ -20,10 +20,11 @@ const {
   defaultViewSettings,
   loadPaneLayout,
   isSplitMode,
-  lensViewFor,
   loadTabsState,
   saveTabsState,
+  isTaskTabView,
   SPLIT_MODES,
+  TASK_TAB_VIEWS,
 } = await import("./storage");
 
 describe("shortcut settings", () => {
@@ -123,7 +124,7 @@ describe("split mode", () => {
   });
 });
 
-describe("lens views", () => {
+describe("the tasks tab view", () => {
   beforeEach(() => {
     storeGet.mockReset();
     storeSet.mockReset();
@@ -131,7 +132,7 @@ describe("lens views", () => {
   });
 
   it("round-trips the chosen view through the store", async () => {
-    await saveViewSettings({ ...defaultViewSettings, lensViews: { tasks: "list" } });
+    await saveViewSettings({ ...defaultViewSettings, taskTabView: "list" });
 
     const [key, written] = storeSet.mock.calls[0];
     expect(key).toBe("viewSettings");
@@ -139,21 +140,37 @@ describe("lens views", () => {
 
     const settings = await loadViewSettings();
 
-    expect(settings.lensViews).toEqual({ tasks: "list" });
-    expect(lensViewFor(settings.lensViews, "tasks")).toBe("list");
+    expect(settings.taskTabView).toBe("list");
   });
 
-  it("drops a view the lens does not declare", async () => {
-    storeGet.mockResolvedValue({ lensViews: { tasks: "calendar", tree: "list" } });
+  it("accepts every declared view", () => {
+    for (const view of TASK_TAB_VIEWS) expect(isTaskTabView(view)).toBe(true);
+  });
+
+  it.each(["", "calendar", 2, null, undefined])("rejects %o", (value) => {
+    expect(isTaskTabView(value)).toBe(false);
+  });
+
+  // What sat on disk before the views moved to the tab: a per-lens map, whose
+  // "kanban" no longer names anything.
+  it("falls back to the default when the stored settings predate the tab views", async () => {
+    storeGet.mockResolvedValue({
+      sidebarLens: "tasks",
+      lensViews: { tasks: "kanban", tree: "list" },
+    });
 
     const settings = await loadViewSettings();
 
-    expect(settings.lensViews).toEqual({});
-    expect(lensViewFor(settings.lensViews, "tasks")).toBe("board");
+    expect(settings.taskTabView).toBe(defaultViewSettings.taskTabView);
+    expect(settings.sidebarLens).toBe("tasks");
   });
 
-  it("offers no view to a lens that declares none", () => {
-    expect(lensViewFor({}, "tree")).toBeUndefined();
+  it("falls back to the default when the stored view no longer exists", async () => {
+    storeGet.mockResolvedValue({ taskTabView: "kanban" });
+
+    const settings = await loadViewSettings();
+
+    expect(settings.taskTabView).toBe(defaultViewSettings.taskTabView);
   });
 });
 

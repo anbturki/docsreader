@@ -5,7 +5,7 @@ import type { AcProgress } from "@/lib/taskDoc";
 import { PRIORITY_STYLES, STATUS_STYLES } from "@/lib/taskStyles";
 import { EntryContextMenu } from "@/components/explorer/EntryContextMenu";
 import { SIDEBAR_ROW, fileOpenHandlers, sidebarRowState } from "@/components/explorer/sidebarRow";
-import type { TaskViewProps } from "./taskViews";
+import type { TaskViewProps } from "./taskViewProps";
 
 export function TaskListView({
   tasks,

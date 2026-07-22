@@ -3,11 +3,9 @@ import { Maximize2, RefreshCw, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { SidebarHeader } from "@/components/ui/sidebar";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { LENS_VIEW_OPTIONS, type SidebarLens } from "@/lib/storage";
+import type { SidebarLens } from "@/lib/storage";
 import { taskCountLabel } from "@/lib/taskFilter";
 import type { SidebarSearch } from "@/hooks/useSidebarSearch";
-import { TASK_VIEWS } from "@/components/tasks/taskViews";
 import { SidebarSearchPanel } from "./SidebarSearchPanel";
 import { TaskFilterPopover } from "./TaskFilterPopover";
 import { useTaskFilter } from "./TaskFilterContext";
@@ -45,7 +43,6 @@ export function ExplorerHeader({
           does not move between lenses. */}
       <div className="flex items-center justify-end gap-1 px-2">
         <TaskCountLabel active={lens === "tasks"} />
-        <ViewSwitch lens={lens} />
         <Button
           ref={toggleRef}
           type="button"
@@ -99,39 +96,6 @@ export function ExplorerHeader({
         />
       )}
     </SidebarHeader>
-  );
-}
-
-function ViewSwitch({ lens }: { lens: SidebarLens }) {
-  const { view, setView } = useTaskFilter();
-  const options = LENS_VIEW_OPTIONS[lens];
-  if (options.length < 2) return null;
-
-  return (
-    <ToggleGroup
-      type="single"
-      size="sm"
-      value={view}
-      onValueChange={(next) => {
-        const chosen = options.find((id) => id === next);
-        if (chosen) setView(chosen);
-      }}
-      className="mr-0.5"
-    >
-      {options.map((id) => {
-        const { label, icon: Icon } = TASK_VIEWS[id];
-        return (
-          <ToggleGroupItem
-            key={id}
-            value={id}
-            aria-label={`Show as ${label.toLowerCase()}`}
-            className="size-7 min-w-7 px-0 text-muted-foreground data-[state=on]:text-foreground"
-          >
-            <Icon />
-          </ToggleGroupItem>
-        );
-      })}
-    </ToggleGroup>
   );
 }
 

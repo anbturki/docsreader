@@ -45,27 +45,13 @@ export type DefaultFolderState = "expanded" | "top-level" | "collapsed";
 export const SIDEBAR_LENSES = ["tree", "recent", "tags", "pinned", "tasks"] as const;
 export type SidebarLens = (typeof SIDEBAR_LENSES)[number];
 
-export const LENS_VIEWS = ["board", "list", "kanban"] as const;
-export type LensViewId = (typeof LENS_VIEWS)[number];
+// A view is a property of the full-page tasks tab, which is the only surface
+// with the width to offer a choice. The sidebar draws tasks its one way.
+export const TASK_TAB_VIEWS = ["list", "board"] as const;
+export type TaskTabView = (typeof TASK_TAB_VIEWS)[number];
 
-// A view is a property of a lens: each lens declares the views it can be shown
-// in, first one first. A lens with fewer than two offers the reader no choice.
-// Side-by-side columns need width the sidebar does not have, so kanban is
-// offered by the content area rather than by any lens here.
-export const LENS_VIEW_OPTIONS: Record<SidebarLens, readonly LensViewId[]> = {
-  tree: [],
-  recent: [],
-  tags: [],
-  pinned: [],
-  tasks: ["board", "list"],
-};
-
-export type LensViewByLens = Partial<Record<SidebarLens, LensViewId>>;
-
-export function lensViewFor(views: LensViewByLens, lens: SidebarLens): LensViewId | undefined {
-  const options = LENS_VIEW_OPTIONS[lens];
-  const stored = views[lens];
-  return stored && options.includes(stored) ? stored : options[0];
+export function isTaskTabView(value: unknown): value is TaskTabView {
+  return TASK_TAB_VIEWS.some((view) => view === value);
 }
 
 export type DiffViewMode = "unified" | "split";
@@ -135,7 +121,7 @@ export interface ViewSettings {
   defaultFolderState: DefaultFolderState;
   hidePatterns: string[];
   sidebarLens: SidebarLens;
-  lensViews: LensViewByLens;
+  taskTabView: TaskTabView;
   welcomeOpened: boolean;
   autoReloadOnExternalChange: boolean;
   diffViewMode: DiffViewMode;
@@ -156,7 +142,7 @@ export const defaultViewSettings: ViewSettings = {
   defaultFolderState: "top-level",
   hidePatterns: [],
   sidebarLens: "tree",
-  lensViews: {},
+  taskTabView: "board",
   welcomeOpened: false,
   autoReloadOnExternalChange: false,
   diffViewMode: "unified",
@@ -303,7 +289,9 @@ export async function loadViewSettings(): Promise<ViewSettings> {
     defaultFolderState: normalizeDefaultFolderState(v.defaultFolderState),
     hidePatterns: normalizeHidePatterns(v.hidePatterns),
     sidebarLens: normalizeSidebarLens(v.sidebarLens),
-    lensViews: normalizeLensViews(v.lensViews),
+    taskTabView: isTaskTabView(v.taskTabView)
+      ? v.taskTabView
+      : defaultViewSettings.taskTabView,
     welcomeOpened: v.welcomeOpened === true,
     autoReloadOnExternalChange: v.autoReloadOnExternalChange === true,
     diffViewMode: v.diffViewMode === "split" ? "split" : "unified",
@@ -338,18 +326,6 @@ function normalizeSidebarLens(value: unknown): SidebarLens {
   return typeof value === "string" && (SIDEBAR_LENSES as readonly string[]).includes(value)
     ? (value as SidebarLens)
     : "tree";
-}
-
-function normalizeLensViews(value: unknown): LensViewByLens {
-  if (!value || typeof value !== "object") return {};
-  const stored = value as Record<string, unknown>;
-  const out: LensViewByLens = {};
-  for (const lens of SIDEBAR_LENSES) {
-    const view = stored[lens];
-    const options: readonly string[] = LENS_VIEW_OPTIONS[lens];
-    if (typeof view === "string" && options.includes(view)) out[lens] = view as LensViewId;
-  }
-  return out;
 }
 
 function normalizeFontSize(value: unknown): FontSize {
