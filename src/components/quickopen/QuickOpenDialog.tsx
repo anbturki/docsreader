@@ -12,6 +12,8 @@ import {
 import type { MarkdownFile } from "@/lib/scan";
 import { useContentSearch } from "@/hooks/useContentSearch";
 import { SearchSnippet } from "@/components/explorer/SearchSnippet";
+import { SearchScopeTabs } from "@/components/explorer/SearchScopeTabs";
+import type { SearchScope } from "@/lib/contentSearch";
 
 export interface QuickOpenFile extends MarkdownFile {
   rootPath: string;
@@ -33,26 +35,35 @@ export default function QuickOpenDialog({
   onSelect,
 }: Props) {
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<SearchScope>("all");
   const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
-    if (!open) setQuery("");
+    if (open) return;
+    setQuery("");
+    setScope("all");
   }, [open]);
 
+  const showFiles = scope === "all" || scope === "names";
   const ranked = useMemo(
-    () => rankFiles(files, deferredQuery),
-    [files, deferredQuery]
+    () => (showFiles ? rankFiles(files, deferredQuery) : []),
+    [showFiles, files, deferredQuery]
   );
 
   // Name ranking above stays synchronous so the list never lags a keystroke;
   // matches from inside documents land a moment later in their own group.
-  const contentSearch = useContentSearch(roots, query, open);
-  const contentHits = useMemo(() => {
+  const contentSearch = useContentSearch(roots, query, open, scope);
+  const documentHits = useMemo(() => {
+    if (scope === "names") return [];
+    // Only a tag search legitimately has no matched line; elsewhere a hit
+    // without one matched by name, and listing it under a heading that claims
+    // otherwise would be a lie.
+    const needsLine = scope !== "tags";
     const alreadyListed = new Set(ranked.map((file) => file.path));
     return contentSearch.hits.filter(
-      (hit) => hit.lines.length > 0 && !alreadyListed.has(hit.path)
+      (hit) => !alreadyListed.has(hit.path) && (!needsLine || hit.lines.length > 0)
     );
-  }, [contentSearch.hits, ranked]);
+  }, [scope, contentSearch.hits, ranked]);
 
   return (
     <CommandDialog
@@ -67,8 +78,10 @@ export default function QuickOpenDialog({
           value={query}
           onValueChange={setQuery}
         />
+        <SearchScopeTabs active={scope} onChange={setScope} />
         <CommandList>
-          <CommandEmpty>No matching files.</CommandEmpty>
+          <CommandEmpty>No matches.</CommandEmpty>
+          {ranked.length > 0 && (
           <CommandGroup heading="Files">
             {ranked.map((file) => (
               <CommandItem
@@ -87,9 +100,10 @@ export default function QuickOpenDialog({
               </CommandItem>
             ))}
           </CommandGroup>
-          {contentHits.length > 0 && (
-            <CommandGroup heading="In documents">
-              {contentHits.map((hit) => (
+          )}
+          {documentHits.length > 0 && (
+            <CommandGroup heading={scope === "tags" ? "Tagged" : "In documents"}>
+              {documentHits.map((hit) => (
                 <CommandItem
                   key={hit.path}
                   value={`content:${hit.path}`}
@@ -101,7 +115,7 @@ export default function QuickOpenDialog({
                   <FileText className="text-muted-foreground" />
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate text-sm">{hit.relPath}</span>
-                    <SearchSnippet match={hit.lines[0]} />
+                    {hit.lines[0] && <SearchSnippet match={hit.lines[0]} />}
                   </div>
                 </CommandItem>
               ))}

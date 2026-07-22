@@ -164,7 +164,7 @@ describe("SearchResults", () => {
   it("offers every scope", () => {
     renderResults();
 
-    for (const label of ["All", "Names", "Contents", "Tags"]) {
+    for (const label of ["All", "Files", "Contents", "Tags"]) {
       expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
     }
   });

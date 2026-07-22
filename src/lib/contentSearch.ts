@@ -7,7 +7,7 @@ export type SearchScope = (typeof SEARCH_SCOPES)[number];
 
 export const SEARCH_SCOPE_LABELS: Record<SearchScope, string> = {
   all: "All",
-  names: "Names",
+  names: "Files",
   content: "Contents",
   tags: "Tags",
 };

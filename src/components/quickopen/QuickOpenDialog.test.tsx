@@ -113,6 +113,48 @@ describe("QuickOpenDialog", () => {
   it("searches every open workspace", () => {
     renderDialog([]);
 
-    expect(mockedSearch).toHaveBeenCalledWith(["/ws"], "", true);
+    expect(mockedSearch).toHaveBeenCalledWith(["/ws"], "", true, "all");
+  });
+
+  it("offers every scope filter", () => {
+    renderDialog([]);
+
+    for (const label of ["All", "Files", "Contents", "Tags"]) {
+      expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("hides file matches when narrowed to contents", async () => {
+    const user = userEvent.setup();
+    setHits([hit("notes/deep.md")]);
+    renderDialog([file("notes/alpha.md")]);
+    expect(screen.getByText("alpha.md")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("tab", { name: "Contents" }));
+
+    expect(screen.queryByText("alpha.md")).not.toBeInTheDocument();
+    expect(screen.getByText("notes/deep.md")).toBeInTheDocument();
+  });
+
+  it("hides document matches when narrowed to files", async () => {
+    const user = userEvent.setup();
+    setHits([hit("notes/deep.md")]);
+    renderDialog([file("notes/alpha.md")]);
+
+    await user.click(screen.getByRole("tab", { name: "Files" }));
+
+    expect(screen.getByText("alpha.md")).toBeInTheDocument();
+    expect(screen.queryByText("In documents")).not.toBeInTheDocument();
+  });
+
+  it("labels tag matches as tagged", async () => {
+    const user = userEvent.setup();
+    const tagged = { ...hit("notes/deep.md"), lines: [], matchedLines: 0 };
+    setHits([tagged]);
+    renderDialog([]);
+
+    await user.click(screen.getByRole("tab", { name: "Tags" }));
+
+    expect(screen.getByText("Tagged")).toBeInTheDocument();
   });
 });
