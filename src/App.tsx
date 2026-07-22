@@ -45,7 +45,7 @@ import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
 import { CHROME_STYLE } from "@/components/layout/chrome";
 import { lensViewFor, type LensViewId, type SplitMode } from "@/lib/storage";
-import { fileTarget, TAB_KIND_SPECS, TASKS_TARGET } from "@/lib/tabKinds";
+import { explorerOpen, fileTarget, TAB_KIND_SPECS, TASKS_TARGET } from "@/lib/tabKinds";
 import "@/styles/code-theme.css";
 
 // "off" never reaches the split branch, but the map stays total so a new
@@ -86,7 +86,15 @@ function App() {
   useTheme(viewSettings.settings.colorScheme, viewSettings.settings.accentColor);
   const deferredSettings = useDeferredValue(viewSettings.settings);
   const setSidebarOpen = sidebar.setOpen;
-  const revealSidebar = useCallback(() => setSidebarOpen(true), [setSidebarOpen]);
+  // A tab that is itself a view of the workspace hides the explorer without
+  // touching the remembered preference, so an ordinary document still opens
+  // the way the reader left it. Asking for the explorer while such a tab is
+  // showing is answered here instead.
+  const [explorerShownBeside, setExplorerShownBeside] = useState(false);
+  const revealSidebar = useCallback(() => {
+    setSidebarOpen(true);
+    setExplorerShownBeside(true);
+  }, [setSidebarOpen]);
   // Mirrors the split every editor uses: Cmd+F searches the open document,
   // Shift+Cmd+F searches the sidebar. Find-in-document owns Cmd+F in
   // TabScrollPane, so the two never contend for the same chord.
@@ -323,6 +331,10 @@ function App() {
   // Only a tab backed by a file has a path to place in the breadcrumb, an
   // outline to draw, or a row to highlight in the sidebar.
   const activeTab = tabs.activeTab;
+  const hidesExplorer = activeTab ? !TAB_KIND_SPECS[activeTab.kind].wantsExplorer : false;
+  useEffect(() => {
+    if (!hidesExplorer) setExplorerShownBeside(false);
+  }, [hidesExplorer]);
   const activeFilePath =
     activeTab && TAB_KIND_SPECS[activeTab.kind].readsFromDisk ? activeTab.ref : undefined;
   const activeFile = activeFilePath
@@ -483,8 +495,8 @@ function App() {
           row; both the inset panel and the content card then start at the
           same y without either restating the offset. */}
       <SidebarProvider
-        open={sidebar.open}
-        onOpenChange={sidebar.setOpen}
+        open={explorerOpen(activeTab?.kind, sidebar.open, explorerShownBeside)}
+        onOpenChange={hidesExplorer ? setExplorerShownBeside : sidebar.setOpen}
         style={CHROME_STYLE}
         // The variant sizes itself off the viewport with a minimum, which
         // leaves no definite height for the panes to divide and lets a long

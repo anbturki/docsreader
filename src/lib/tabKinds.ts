@@ -15,15 +15,30 @@ export interface TabKindSpec {
   // Only a kind backed by a file on disk is loaded, watched, edited, and
   // scroll-restored; everything else in a tab is the kind's own business.
   readsFromDisk: boolean;
+  // A kind that is already a view of the whole workspace, so the explorer
+  // beside it would only say the same thing again in less room.
+  wantsExplorer: boolean;
 }
 
 // What a tab of each kind is. What draws it lives beside the components, in
 // TAB_KIND_VIEWS; both are keyed on TAB_KINDS, so a new kind cannot land in
 // one without the other.
 export const TAB_KIND_SPECS: Record<TabKind, TabKindSpec> = {
-  file: { title: basename, readsFromDisk: true },
-  tasks: { title: () => "Tasks", readsFromDisk: false },
+  file: { title: basename, readsFromDisk: true, wantsExplorer: true },
+  tasks: { title: () => "Tasks", readsFromDisk: false, wantsExplorer: false },
 };
+
+// Beside a tab that is its own view of the workspace the explorer starts
+// hidden and answers a request to show it separately, so the reader's
+// remembered preference survives the visit untouched.
+export function explorerOpen(
+  kind: TabKind | undefined,
+  remembered: boolean,
+  shownBeside: boolean
+): boolean {
+  if (!kind || TAB_KIND_SPECS[kind].wantsExplorer) return remembered;
+  return shownBeside;
+}
 
 export function fileTarget(path: string): TabTarget {
   return { kind: "file", ref: path };
