@@ -1,4 +1,6 @@
+import type { CSSProperties } from "react";
 import { Monitor, Moon, Sun } from "lucide-react";
+import { ACCENT_HUE_PROPERTY } from "@/hooks/useTheme";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Select,
@@ -62,6 +64,12 @@ const DARK_PREVIEWS: Record<DarkCodeTheme, CodeThemePreview> = {
   nord: { bg: "#2e3440", fg: "#d8dee9", accent: "#88c0d0" },
 };
 
+const swatchStyle = (
+  accent: AccentColor,
+): CSSProperties & Record<typeof ACCENT_HUE_PROPERTY, string> => ({
+  [ACCENT_HUE_PROPERTY]: String(ACCENT_HUE[accent]),
+});
+
 const cardClass =
   "h-14 flex-col gap-1 rounded-md border bg-card text-card-foreground transition-colors " +
   "hover:bg-accent " +
@@ -102,8 +110,8 @@ export function AppearanceSection({ settings, onChange }: Props) {
             <ToggleGroupItem key={value} value={value} className={cardClass}>
               <span
                 aria-hidden
-                className="size-5 rounded-full border"
-                style={{ background: `oklch(0.6 0.2 ${ACCENT_HUE[value]})` }}
+                className="accent-swatch size-5 rounded-full border"
+                style={swatchStyle(value)}
               />
               <span className="text-xs font-normal">{label}</span>
             </ToggleGroupItem>

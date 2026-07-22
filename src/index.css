@@ -65,12 +65,18 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.55 0.22 280);
-    --primary-foreground: oklch(0.985 0 0);
-    /* The accent held at one value for both schemes; useTheme rewrites it from
-       the chosen hue. Deliberately absent from .dark: that is the point. */
-    --primary-fixed: oklch(0.55 0.22 280);
+    /* The one accent definition; useTheme rewrites the hue alone. The parts stay
+       addressable because a swatch previewing another accent has to recompose
+       them against its own hue: --primary-fixed is substituted here, so a child
+       overriding the hue cannot re-resolve it. Deliberately absent from .dark:
+       holding one value across both schemes is what "fixed" means. */
+    --primary-fixed-hue: 280;
+    --primary-fixed-l: 0.55;
+    --primary-fixed-c: 0.22;
+    --primary-fixed: oklch(var(--primary-fixed-l) var(--primary-fixed-c) var(--primary-fixed-hue));
     --primary-fixed-foreground: oklch(0.985 0 0);
+    --primary: var(--primary-fixed);
+    --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);
@@ -80,7 +86,7 @@
     --destructive: oklch(0.577 0.245 27.325);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+    --ring: var(--primary);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -104,7 +110,9 @@
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.7 0.18 280);
+    /* The accent lightened for dark surfaces; the only value allowed to differ
+       from the fixed accent, and still built on the same hue. */
+    --primary: oklch(0.7 0.18 var(--primary-fixed-hue));
     --primary-foreground: oklch(0.145 0 0);
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
@@ -115,7 +123,7 @@
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --ring: var(--primary);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -188,6 +196,12 @@
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* The accent preview in settings; each swatch supplies its own hue. Composed
+     here so what it shows is the accent definition above, not a second formula. */
+  .accent-swatch {
+    background: oklch(var(--primary-fixed-l) var(--primary-fixed-c) var(--primary-fixed-hue));
   }
 }
 

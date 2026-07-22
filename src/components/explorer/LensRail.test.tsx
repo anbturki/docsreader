@@ -167,6 +167,15 @@ describe("lens rail", () => {
     expect(tab.className).toContain("data-active:font-light");
   });
 
+  it("dims the resting label only slightly: 10px on a solid accent has no contrast to spare", () => {
+    renderRail("tree");
+    const tab = screen.getByRole("tab", { name: "Tree" });
+    const dimming = tab.className.match(/(?:^| )text-primary-fixed-foreground\/(\d+)/);
+    expect(dimming).not.toBeNull();
+    expect(Number(dimming?.[1])).toBeGreaterThanOrEqual(88);
+    expect(Number(dimming?.[1])).toBeLessThan(100);
+  });
+
   it("keeps a keyboard focus ring, since colour alone is not focus", () => {
     renderRail("tree");
     const tab = screen.getByRole("tab", { name: "Tree" });

@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 import { ACCENT_HUE, type AccentColor, type ColorScheme } from "@/lib/storage";
 
-const LIGHT_PRIMARY = (hue: number) => `oklch(0.55 0.22 ${hue})`;
-const DARK_PRIMARY = (hue: number) => `oklch(0.7 0.18 ${hue})`;
+export const ACCENT_HUE_PROPERTY = "--primary-fixed-hue";
 
 function applyTheme(scheme: "light" | "dark", accent: AccentColor): void {
   const root = document.documentElement;
@@ -18,13 +17,9 @@ function applyTheme(scheme: "light" | "dark", accent: AccentColor): void {
   if (scheme === "dark") root.classList.add("dark");
   else root.classList.remove("dark");
 
-  const hue = ACCENT_HUE[accent];
-  const primary = scheme === "dark" ? DARK_PRIMARY(hue) : LIGHT_PRIMARY(hue);
-  root.style.setProperty("--primary", primary);
-  root.style.setProperty("--ring", primary);
-  // Same accent in both schemes, for surfaces that stay put while the rest of
-  // the UI inverts around them.
-  root.style.setProperty("--primary-fixed", LIGHT_PRIMARY(hue));
+  // The hue is the whole of the accent choice; the stylesheet owns how it is
+  // drawn, in each scheme and for the fixed surfaces that ignore the scheme.
+  root.style.setProperty(ACCENT_HUE_PROPERTY, String(ACCENT_HUE[accent]));
   root.style.colorScheme = scheme;
 
   void root.offsetHeight;
