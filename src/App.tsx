@@ -1,5 +1,4 @@
 import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { message } from "@tauri-apps/plugin-dialog";
@@ -44,13 +43,8 @@ import { fetchGitHead, type GitFileStatusKind } from "@/lib/git";
 import { parseFrontmatter } from "@/lib/scan";
 import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
+import { CHROME_STYLE } from "@/components/layout/chrome";
 import "@/styles/code-theme.css";
-
-const CHROME_STYLE: CSSProperties &
-  Record<"--sidebar-width" | "--toolbar-height", string> = {
-  "--sidebar-width": "20rem",
-  "--toolbar-height": "2.75rem",
-};
 
 function App() {
   const library = useLibrary();
