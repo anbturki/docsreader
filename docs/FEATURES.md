@@ -26,7 +26,8 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 - **Backlinks:** the sidebar lists every doc that links to the one you are reading, grouped by folder
 - **Tabs:** many docs open at once; scroll position remembered per tab
 - **Split view:** read two docs side-by-side or stacked; each pane keeps its own tabs, scroll, and external-change banner. Toggle from the header, drag the splitter to resize, or use Cmd+\ (horizontal), Cmd+Shift+\ (vertical), Cmd+1 / Cmd+2 to focus a pane. "Open in other pane" lives in the file context menu.
-- **Search:** filename, path, frontmatter title, or tag
+- **Search:** filename, path, frontmatter title, tag, or the text inside the documents themselves. Results are ranked and show the matching line in context
+- **Find in document:** Cmd+F highlights every match in the open doc, with next/previous and a running count
 - **Sticky favorites:** pin individual files to the top of any workspace
 - **Clutter rules:** glob patterns silently exclude files and folders from the explorer
 
