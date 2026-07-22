@@ -3,16 +3,13 @@ import type { CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { message } from "@tauri-apps/plugin-dialog";
-import { Columns2, ListCollapse, ListTree, Moon, PanelLeft, RefreshCw, Rows2, Search, Settings as SettingsIcon, Square, Sun } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
 import { BacklinksPanel } from "@/components/document/BacklinksPanel";
 import { OutlinePanel } from "@/components/document/OutlinePanel";
-import { displayShortcut, matchShortcut, parseShortcut } from "@/lib/shortcuts";
+import { matchShortcut, parseShortcut } from "@/lib/shortcuts";
 
 const QuickOpenDialog = lazy(() => import("@/components/quickopen/QuickOpenDialog"));
-import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import {
@@ -21,8 +18,8 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { ExplorerSidebar } from "@/components/explorer/ExplorerSidebar";
+import { AppToolbar } from "@/components/layout/AppToolbar";
 import { ConvertWorkspacePrompt } from "@/components/explorer/ConvertWorkspacePrompt";
-import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
 import { PaneView } from "@/components/document/PaneView";
 import { UpdateToast } from "@/components/document/UpdateToast";
 
@@ -33,7 +30,6 @@ import { mergeSearchEntries } from "@/lib/searchEntries";
 import type { SearchScope } from "@/lib/contentSearch";
 import { useConvertPrompt } from "@/hooks/useConvertPrompt";
 import { usePanes } from "@/hooks/usePanes";
-import type { SplitMode } from "@/lib/storage";
 import { useTheme } from "@/hooks/useTheme";
 import { useViewSettings } from "@/hooks/useViewSettings";
 import { useSidebarState } from "@/hooks/useSidebarState";
@@ -50,12 +46,10 @@ import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
 import "@/styles/code-theme.css";
 
-const CHROME_ICON = "size-6 text-muted-foreground hover:text-foreground [&>svg]:size-4";
-
-// The fixed header sits outside SidebarProvider, so it cannot inherit the
-// variable the provider sets; both elements carry this same declaration.
-const SIDEBAR_WIDTH_STYLE: CSSProperties & Record<"--sidebar-width", string> = {
+const CHROME_STYLE: CSSProperties &
+  Record<"--sidebar-width" | "--toolbar-height", string> = {
   "--sidebar-width": "20rem",
+  "--toolbar-height": "2.75rem",
 };
 
 function App() {
@@ -459,155 +453,65 @@ function App() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <header
-        data-tauri-drag-region
-        style={SIDEBAR_WIDTH_STYLE}
-        className={`fixed right-0 top-0 z-30 flex h-9 items-center gap-2 border-b bg-background pr-2 ${
-          sidebar.open ? "left-(--sidebar-width) pl-2" : "left-0 pl-[100px]"
-        }`}
-      >
-        <button
-          type="button"
-          onClick={() => sidebar.setOpen(!sidebar.open)}
-          title="Toggle sidebar"
-          aria-label="Toggle sidebar"
-          className={CHROME_ICON}
-        >
-          <PanelLeft />
-        </button>
-        {headerRelPath && (
-          <PathBreadcrumb relPath={headerRelPath} onSegmentClick={setSearch} />
-        )}
-
-        <div data-tauri-drag-region className="flex-1" />
-        <button
-          type="button"
-          onClick={() => {
+      <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen} style={CHROME_STYLE}>
+        <AppToolbar
+          roots={library.roots}
+          activeRoot={library.activeRoot}
+          workspaceNamesByRoot={workspaceNamesByRoot}
+          onSelectRoot={(path) => void library.selectRoot(path)}
+          onRemoveRoot={(path) => void library.removeRoot(path)}
+          onPickDirectory={() => void library.pickDirectory()}
+          sidebarOpen={sidebar.open}
+          onSidebarOpenChange={sidebar.setOpen}
+          breadcrumbPath={headerRelPath || undefined}
+          onBreadcrumbSegmentClick={setSearch}
+          quickOpenShortcut={viewSettings.settings.quickOpenShortcut}
+          onOpenQuickOpen={() => {
             setQuickOpenMounted(true);
             setQuickOpen(true);
           }}
-          className="flex h-7 w-52 items-center gap-2 rounded-md border bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover:bg-muted"
-        >
-          <Search className="size-3.5" />
-          <span>Search</span>
-          <kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[10px] leading-4">
-            {displayShortcut(viewSettings.settings.quickOpenShortcut)}
-          </kbd>
-        </button>
-        <div data-tauri-drag-region className="flex-1" />
-
-        <div className="flex items-center gap-0.5">
-          {library.activeRoot && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className={CHROME_ICON}
-              title="Refresh workspace"
-              aria-label="Refresh workspace"
-              disabled={!!library.activeScan?.scanning}
-              onClick={() => library.activeRoot && void library.rescan(library.activeRoot)}
-            >
-              <RefreshCw className={library.activeScan?.scanning ? "animate-spin" : ""} />
-            </Button>
-          )}
-          {library.activeRoot && viewSettings.settings.sidebarLens === "tree" && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className={CHROME_ICON}
-              title="Collapse all"
-              aria-label="Collapse all"
-              onClick={handleCollapseAll}
-            >
-              <ListCollapse />
-            </Button>
-          )}
-          <ToggleGroup
-            type="single"
-            value={panes.layout.split}
-            onValueChange={(v) => v && panes.setSplit(v as SplitMode)}
-            variant="outline"
-            spacing={0}
-            aria-label="Split layout"
-            className="mx-1"
-          >
-            <ToggleGroupItem value="off" className="size-6" title="Single pane" aria-label="Single pane">
-              <Square className="size-3.5" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="horizontal" className="size-6" title="Side by side" aria-label="Side by side">
-              <Columns2 className="size-3.5" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="vertical" className="size-6" title="Stacked" aria-label="Stacked">
-              <Rows2 className="size-3.5" />
-            </ToggleGroupItem>
-          </ToggleGroup>
-          {tabs.activeTab && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className={`${CHROME_ICON} aria-pressed:bg-accent aria-pressed:text-foreground`}
-              title={viewSettings.settings.outlineOpen ? "Hide outline" : "Show outline"}
-              aria-label="Toggle outline"
-              aria-pressed={viewSettings.settings.outlineOpen}
-              onClick={toggleOutline}
-            >
-              <ListTree />
-            </Button>
-          )}
-          <Button
-            size="icon"
-            variant="ghost"
-            className={CHROME_ICON}
-            title="Toggle light / dark"
-            aria-label="Toggle theme"
-            onClick={() =>
-              viewSettings.update({
-                ...viewSettings.settings,
-                colorScheme: isDark ? "light" : "dark",
-              })
-            }
-          >
-            {isDark ? <Sun /> : <Moon />}
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className={CHROME_ICON}
-            title="Settings"
-            aria-label="Settings"
-            onMouseEnter={() => setSettingsMounted(true)}
-            onFocus={() => setSettingsMounted(true)}
-            onClick={() => {
-              setSettingsMounted(true);
-              setSettingsSection(undefined);
-              setSettingsOpen(true);
-            }}
-          >
-            <SettingsIcon />
-          </Button>
-          {settingsMounted && (
-            <Suspense fallback={null}>
-              <SettingsDialog
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-                settings={viewSettings.settings}
-                onChange={viewSettings.update}
-                initialSection={settingsSection}
-                onOpenWelcome={() => void handleOpenWelcome()}
-                updater={updater}
-              />
-            </Suspense>
-          )}
-        </div>
-      </header>
-      <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen} style={SIDEBAR_WIDTH_STYLE}>
+          scanning={!!library.activeScan?.scanning}
+          onRefresh={() => library.activeRoot && void library.rescan(library.activeRoot)}
+          canCollapseAll={
+            !!library.activeRoot && viewSettings.settings.sidebarLens === "tree"
+          }
+          onCollapseAll={handleCollapseAll}
+          split={panes.layout.split}
+          onSplitChange={panes.setSplit}
+          canToggleOutline={!!tabs.activeTab}
+          outlineOpen={viewSettings.settings.outlineOpen}
+          onToggleOutline={toggleOutline}
+          isDark={isDark}
+          onToggleTheme={() =>
+            viewSettings.update({
+              ...viewSettings.settings,
+              colorScheme: isDark ? "light" : "dark",
+            })
+          }
+          onOpenSettings={() => {
+            setSettingsMounted(true);
+            setSettingsSection(undefined);
+            setSettingsOpen(true);
+          }}
+          onPrefetchSettings={() => setSettingsMounted(true)}
+        />
+        {settingsMounted && (
+          <Suspense fallback={null}>
+            <SettingsDialog
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+              settings={viewSettings.settings}
+              onChange={viewSettings.update}
+              initialSection={settingsSection}
+              onOpenWelcome={() => void handleOpenWelcome()}
+              updater={updater}
+            />
+          </Suspense>
+        )}
         <ExplorerSidebar
           roots={library.roots}
           activeRoot={library.activeRoot}
           activeScan={library.activeScan}
-          workspaceNamesByRoot={workspaceNamesByRoot}
-          onSelectRoot={(path) => void library.selectRoot(path)}
-          onRemoveRoot={(path) => void library.removeRoot(path)}
           onPickDirectory={() => void library.pickDirectory()}
           onOpenWelcome={
             viewSettings.settings.welcomeOpened
@@ -651,7 +555,7 @@ function App() {
           onOpenInOtherPane={panes.openInOtherPane}
         />
 
-        <SidebarInset className="flex h-svh flex-col pt-9">
+        <SidebarInset className="flex h-svh flex-col pt-(--toolbar-height)">
 
           <UpdateToast
             phase={updater.phase}

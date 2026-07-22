@@ -22,7 +22,6 @@ import { SearchResults } from "./SearchResults";
 import { TagsList } from "./TagsList";
 import type { SearchEntry } from "@/lib/searchEntries";
 import type { SearchScope } from "@/lib/contentSearch";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { TasksBoard } from "@/components/tasks/TasksBoard";
 
 interface Props {
@@ -30,9 +29,6 @@ interface Props {
   roots: string[];
   activeRoot: string | undefined;
   activeScan: RootScan | undefined;
-  workspaceNamesByRoot: Record<string, string>;
-  onSelectRoot: (path: string) => void;
-  onRemoveRoot: (path: string) => void;
   onPickDirectory: () => void;
   onOpenWelcome: (() => void) | undefined;
 
@@ -82,9 +78,6 @@ export function ExplorerSidebar({
   roots,
   activeRoot,
   activeScan,
-  workspaceNamesByRoot,
-  onSelectRoot,
-  onRemoveRoot,
   onPickDirectory,
   onOpenWelcome,
   lens,
@@ -116,22 +109,14 @@ export function ExplorerSidebar({
   onShowGitDiff,
 }: Props) {
   return (
-    <Sidebar collapsible="offcanvas" className="*:data-[sidebar=sidebar]:flex-row">
+    <Sidebar
+      collapsible="offcanvas"
+      className="top-(--toolbar-height) h-auto *:data-[sidebar=sidebar]:flex-row"
+    >
       {roots.length > 0 && <LensRail active={lens} onChange={onLensChange} />}
 
       <Sidebar collapsible="none" className="min-w-0 flex-1">
-        <SidebarHeader data-tauri-drag-region className="gap-0 p-0 pt-9">
-          {roots.length > 0 && (
-            <WorkspaceSwitcher
-              roots={roots}
-              activeRoot={activeRoot}
-              workspaceNamesByRoot={workspaceNamesByRoot}
-              onSelect={onSelectRoot}
-              onRemove={onRemoveRoot}
-              onAdd={onPickDirectory}
-            />
-          )}
-
+        <SidebarHeader className="gap-0 p-0">
           {roots.length > 0 && (
             <div className="px-2 pt-2 pb-2">
               <SearchInput value={search} onChange={onSearchChange} />

@@ -5,7 +5,6 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -32,8 +31,6 @@ export function LensRail({ active, onChange }: Props) {
       collapsible="none"
       className="w-fit min-w-(--sidebar-width-icon) shrink-0 border-r border-sidebar-border"
     >
-      {/* Clears the window title bar, matching the content column's header offset. */}
-      <SidebarHeader data-tauri-drag-region className="p-0 pt-9" />
       <SidebarContent>
         <SidebarGroup className="p-1">
           <SidebarGroupContent>

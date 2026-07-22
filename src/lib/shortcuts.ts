@@ -1,12 +1,11 @@
+import { isMac } from "@/lib/platform";
+
 export interface ParsedShortcut {
   mod: boolean;
   shift: boolean;
   alt: boolean;
   key: string;
 }
-
-const isMac =
-  typeof navigator !== "undefined" && /mac|iphone|ipad|ipod/i.test(navigator.platform);
 
 export function parseShortcut(str: string): ParsedShortcut | undefined {
   const parts = str

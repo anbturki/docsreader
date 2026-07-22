@@ -82,7 +82,7 @@ export function WorkspaceSwitcher({
     workspaces.find((workspace) => workspace.root === activeRoot) ?? workspaces[0];
 
   return (
-    <SidebarMenu className="px-2 pt-2 pb-1">
+    <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -110,6 +110,11 @@ describe("lens rail", () => {
     expect(rail?.className).toContain("min-w-(--sidebar-width-icon)");
   });
 
+  it("carries no title-bar spacer, since the toolbar sits above the sidebar", () => {
+    const { container } = renderRail("tree");
+    expect(container.querySelector('[data-slot="sidebar-header"]')).toBeNull();
+  });
+
   it("shows each label as visible text under the icon", () => {
     renderRail("tree");
     for (const label of LENS_LABELS) {
