@@ -341,7 +341,12 @@ export async function saveTabsState(
   await store.save();
 }
 
-export type SplitMode = "off" | "horizontal" | "vertical";
+export const SPLIT_MODES = ["off", "horizontal", "vertical"] as const;
+export type SplitMode = (typeof SPLIT_MODES)[number];
+
+export function isSplitMode(value: unknown): value is SplitMode {
+  return SPLIT_MODES.some((mode) => mode === value);
+}
 
 export interface PaneLayout {
   split: SplitMode;
@@ -358,8 +363,7 @@ export const defaultPaneLayout: PaneLayout = {
 export async function loadPaneLayout(): Promise<PaneLayout> {
   const v = await store.get<Partial<PaneLayout>>(PANE_LAYOUT_KEY);
   if (!v || typeof v !== "object") return defaultPaneLayout;
-  const split: SplitMode =
-    v.split === "horizontal" || v.split === "vertical" ? v.split : "off";
+  const split: SplitMode = isSplitMode(v.split) ? v.split : defaultPaneLayout.split;
   const rawSize = typeof v.splitSize === "number" && Number.isFinite(v.splitSize) ? v.splitSize : 50;
   const splitSize = Math.min(85, Math.max(15, rawSize));
   const activePane: 0 | 1 = v.activePane === 1 ? 1 : 0;

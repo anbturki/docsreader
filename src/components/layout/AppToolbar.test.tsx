@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AppToolbar } from "./AppToolbar";
 import { CHROME_STYLE, MAC_WINDOW_CONTROLS } from "./chrome";
+import { SPLIT_MODES, type SplitMode } from "@/lib/storage";
 
 function trafficLightPosition(config: unknown): { x: number; y: number } {
   if (typeof config !== "object" || config === null) throw new Error("bad config");
@@ -50,8 +51,10 @@ const handlers = {
 
 const ROOTS = ["/ws/voice", "/ws/plain-folder"];
 
-function renderToolbar(overrides: { sidebarOpen?: boolean; roots?: string[] } = {}) {
-  const { sidebarOpen = true, roots = ROOTS } = overrides;
+function renderToolbar(
+  overrides: { sidebarOpen?: boolean; roots?: string[]; split?: SplitMode } = {}
+) {
+  const { sidebarOpen = true, roots = ROOTS, split = "off" } = overrides;
   return render(
     <TooltipProvider>
       <SidebarProvider open={sidebarOpen}>
@@ -68,7 +71,7 @@ function renderToolbar(overrides: { sidebarOpen?: boolean; roots?: string[] } = 
           onOpenQuickOpen={handlers.onOpenQuickOpen}
           canCollapseAll
           onCollapseAll={handlers.onCollapseAll}
-          split="off"
+          split={split}
           onSplitChange={handlers.onSplitChange}
           canToggleOutline
           outlineOpen={false}
@@ -201,6 +204,25 @@ describe("AppToolbar", () => {
     renderToolbar();
     await user.click(screen.getByText("Search"));
     expect(handlers.onOpenQuickOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers one control per split mode", () => {
+    renderToolbar();
+    expect(screen.getAllByRole("radio")).toHaveLength(SPLIT_MODES.length);
+  });
+
+  it("reports the split mode the user picked", async () => {
+    const user = userEvent.setup();
+    renderToolbar();
+    await user.click(screen.getByRole("radio", { name: "Side by side" }));
+    expect(handlers.onSplitChange).toHaveBeenCalledWith("horizontal");
+  });
+
+  it("swallows a value outside the split modes instead of passing it through", async () => {
+    const user = userEvent.setup();
+    renderToolbar({ split: "horizontal" });
+    await user.click(screen.getByRole("radio", { name: "Side by side" }));
+    expect(handlers.onSplitChange).not.toHaveBeenCalled();
   });
 
   it("keeps drag regions on the inert spacers", () => {

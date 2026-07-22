@@ -8,6 +8,7 @@ import {
   Settings as SettingsIcon,
   Square,
   Sun,
+  type LucideIcon,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,9 +17,15 @@ import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { displayShortcut } from "@/lib/shortcuts";
 import { isMac } from "@/lib/platform";
-import type { SplitMode } from "@/lib/storage";
+import { isSplitMode, SPLIT_MODES, type SplitMode } from "@/lib/storage";
 
 const CHROME_ICON = "size-6 text-muted-foreground hover:text-foreground [&>svg]:size-4";
+
+const SPLIT_CONTROLS: Record<SplitMode, { icon: LucideIcon; label: string }> = {
+  off: { icon: Square, label: "Single pane" },
+  horizontal: { icon: Columns2, label: "Side by side" },
+  vertical: { icon: Rows2, label: "Stacked" },
+};
 
 interface Props {
   roots: string[];
@@ -109,7 +116,7 @@ export function AppToolbar({
       >
         <Search className="size-3.5" />
         <span>Search</span>
-        <kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[10px] leading-4">
+        <kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-2xs leading-4">
           {displayShortcut(quickOpenShortcut)}
         </kbd>
       </button>
@@ -131,21 +138,22 @@ export function AppToolbar({
         <ToggleGroup
           type="single"
           value={split}
-          onValueChange={(v) => v && onSplitChange(v as SplitMode)}
+          onValueChange={(v) => {
+            if (isSplitMode(v)) onSplitChange(v);
+          }}
           variant="outline"
           spacing={0}
           aria-label="Split layout"
           className="mx-1"
         >
-          <ToggleGroupItem value="off" className="size-6" title="Single pane" aria-label="Single pane">
-            <Square className="size-3.5" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="horizontal" className="size-6" title="Side by side" aria-label="Side by side">
-            <Columns2 className="size-3.5" />
-          </ToggleGroupItem>
-          <ToggleGroupItem value="vertical" className="size-6" title="Stacked" aria-label="Stacked">
-            <Rows2 className="size-3.5" />
-          </ToggleGroupItem>
+          {SPLIT_MODES.map((mode) => {
+            const { icon: Icon, label } = SPLIT_CONTROLS[mode];
+            return (
+              <ToggleGroupItem key={mode} value={mode} className="size-6" title={label} aria-label={label}>
+                <Icon className="size-3.5" />
+              </ToggleGroupItem>
+            );
+          })}
         </ToggleGroup>
         {canToggleOutline && (
           <Button

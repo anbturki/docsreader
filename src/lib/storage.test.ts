@@ -14,7 +14,8 @@ vi.mock("@tauri-apps/plugin-store", () => ({
   },
 }));
 
-const { loadViewSettings, defaultViewSettings } = await import("./storage");
+const { loadViewSettings, defaultViewSettings, loadPaneLayout, isSplitMode, SPLIT_MODES } =
+  await import("./storage");
 
 describe("shortcut settings", () => {
   beforeEach(() => {
@@ -79,5 +80,36 @@ describe("shortcut settings", () => {
     expect(defaultViewSettings.findInDocumentShortcut).not.toBe(
       defaultViewSettings.workspaceSearchShortcut
     );
+  });
+});
+
+describe("split mode", () => {
+  beforeEach(() => {
+    storeGet.mockReset();
+  });
+
+  it("accepts every declared mode", () => {
+    for (const mode of SPLIT_MODES) expect(isSplitMode(mode)).toBe(true);
+  });
+
+  it.each(["", "diagonal", 2, null, undefined])("rejects %o", (value) => {
+    expect(isSplitMode(value)).toBe(false);
+  });
+
+  it("falls back to a single pane when the stored mode is not one of ours", async () => {
+    storeGet.mockResolvedValue({ split: "diagonal", splitSize: 40, activePane: 1 });
+
+    const layout = await loadPaneLayout();
+
+    expect(layout.split).toBe("off");
+    expect(layout.activePane).toBe(0);
+  });
+
+  it("keeps a stored mode it recognises", async () => {
+    storeGet.mockResolvedValue({ split: "vertical", splitSize: 40, activePane: 1 });
+
+    const layout = await loadPaneLayout();
+
+    expect(layout.split).toBe("vertical");
   });
 });

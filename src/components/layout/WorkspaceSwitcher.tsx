@@ -70,7 +70,7 @@ function WorkspaceBadge({ workspace }: { workspace: WorkspaceLabel }) {
   return (
     <div
       data-slot="workspace-badge"
-      className="flex aspect-square size-5 shrink-0 items-center justify-center rounded-md border bg-background text-[10px] font-semibold text-foreground"
+      className="flex aspect-square size-5 shrink-0 items-center justify-center rounded-md border bg-background text-2xs font-semibold text-foreground"
     >
       {workspace.initial}
     </div>

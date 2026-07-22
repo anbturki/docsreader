@@ -44,7 +44,16 @@ import { parseFrontmatter } from "@/lib/scan";
 import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
 import { CHROME_STYLE } from "@/components/layout/chrome";
+import type { SplitMode } from "@/lib/storage";
 import "@/styles/code-theme.css";
+
+// "off" never reaches the split branch, but the map stays total so a new
+// split mode has to declare its orientation instead of silently defaulting.
+const PANE_ORIENTATION: Record<SplitMode, "horizontal" | "vertical"> = {
+  off: "horizontal",
+  horizontal: "horizontal",
+  vertical: "vertical",
+};
 
 function App() {
   const library = useLibrary();
@@ -582,7 +591,7 @@ function App() {
               ) : (
                 <ResizablePanelGroup
                   key={panes.layout.split}
-                  orientation={panes.layout.split === "horizontal" ? "horizontal" : "vertical"}
+                  orientation={PANE_ORIENTATION[panes.layout.split]}
                   onLayoutChanged={(layout) => {
                     const v = layout["pane0"];
                     if (typeof v === "number") panes.setSplitSize(v);
