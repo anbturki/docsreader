@@ -39,6 +39,12 @@
     --color-muted: var(--muted);
     --color-secondary-foreground: var(--secondary-foreground);
     --color-secondary: var(--secondary);
+    --color-scheme-light-screen: var(--scheme-light-screen);
+    --color-scheme-light-panel: var(--scheme-light-panel);
+    --color-scheme-light-line: var(--scheme-light-line);
+    --color-scheme-dark-screen: var(--scheme-dark-screen);
+    --color-scheme-dark-panel: var(--scheme-dark-panel);
+    --color-scheme-dark-line: var(--scheme-dark-line);
     --color-primary-fixed-foreground: var(--primary-fixed-foreground);
     --color-primary-fixed: var(--primary-fixed);
     --color-primary-foreground: var(--primary-foreground);
@@ -65,14 +71,15 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    /* The one accent definition; useTheme rewrites the hue alone. The parts stay
-       addressable because a swatch previewing another accent has to recompose
-       them against its own hue: --primary-fixed is substituted here, so a child
-       overriding the hue cannot re-resolve it. Deliberately absent from .dark:
-       holding one value across both schemes is what "fixed" means. */
-    --primary-fixed-hue: 280;
+    /* The one accent definition; useTheme rewrites these three numbers. The
+       parts stay addressable because a swatch previewing another accent has to
+       recompose them against its own values: --primary-fixed is substituted
+       here, so a child overriding a part cannot re-resolve it. Deliberately
+       absent from .dark: holding one value across both schemes is what "fixed"
+       means. */
     --primary-fixed-l: 0.55;
     --primary-fixed-c: 0.22;
+    --primary-fixed-hue: 280;
     --primary-fixed: oklch(var(--primary-fixed-l) var(--primary-fixed-c) var(--primary-fixed-hue));
     --primary-fixed-foreground: oklch(0.985 0 0);
     --primary: var(--primary-fixed);
@@ -101,6 +108,15 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+    /* The miniature light and dark screens in the appearance picker. Absent
+       from .dark on purpose: each one has to keep showing its own scheme while
+       the app around it shows the other. */
+    --scheme-light-screen: oklch(1 0 0);
+    --scheme-light-panel: oklch(0.93 0 0);
+    --scheme-light-line: oklch(0.87 0 0);
+    --scheme-dark-screen: oklch(0.18 0 0);
+    --scheme-dark-panel: oklch(0.3 0 0);
+    --scheme-dark-line: oklch(0.38 0 0);
 }
 
 .dark {
@@ -111,8 +127,10 @@
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
     /* The accent lightened for dark surfaces; the only value allowed to differ
-       from the fixed accent, and still built on the same hue. */
-    --primary: oklch(0.7 0.18 var(--primary-fixed-hue));
+       from the fixed accent, and still built from it. The chroma is scaled
+       rather than fixed so a muted or achromatic accent stays muted here;
+       9/11 is exactly the 0.22 -> 0.18 the saturated accents already shipped. */
+    --primary: oklch(0.7 calc(var(--primary-fixed-c) * 9 / 11) var(--primary-fixed-hue));
     --primary-foreground: oklch(0.145 0 0);
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);

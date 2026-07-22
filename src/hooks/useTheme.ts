@@ -1,9 +1,36 @@
 import { useEffect } from "react";
-import { ACCENT_HUE, type AccentColor, type ColorScheme } from "@/lib/storage";
+import type { CSSProperties } from "react";
+import {
+  ACCENT_SPEC,
+  type AccentColor,
+  type ColorScheme,
+  type ResolvedScheme,
+} from "@/lib/storage";
 
-export const ACCENT_HUE_PROPERTY = "--primary-fixed-hue";
+export const ACCENT_PROPERTIES = {
+  lightness: "--primary-fixed-l",
+  chroma: "--primary-fixed-c",
+  hue: "--primary-fixed-hue",
+} as const;
 
-function applyTheme(scheme: "light" | "dark", accent: AccentColor): void {
+export type AccentCustomProperties = Record<
+  (typeof ACCENT_PROPERTIES)[keyof typeof ACCENT_PROPERTIES],
+  string
+>;
+
+export function accentProperties(
+  accent: AccentColor,
+): CSSProperties & AccentCustomProperties {
+  const spec = ACCENT_SPEC[accent];
+  const properties: AccentCustomProperties = {
+    [ACCENT_PROPERTIES.lightness]: String(spec.lightness),
+    [ACCENT_PROPERTIES.chroma]: String(spec.chroma),
+    [ACCENT_PROPERTIES.hue]: String(spec.hue),
+  };
+  return properties;
+}
+
+function applyTheme(scheme: ResolvedScheme, accent: AccentColor): void {
   const root = document.documentElement;
 
   // Elements with `transition-colors` (e.g. task cards) would otherwise
@@ -17,9 +44,11 @@ function applyTheme(scheme: "light" | "dark", accent: AccentColor): void {
   if (scheme === "dark") root.classList.add("dark");
   else root.classList.remove("dark");
 
-  // The hue is the whole of the accent choice; the stylesheet owns how it is
-  // drawn, in each scheme and for the fixed surfaces that ignore the scheme.
-  root.style.setProperty(ACCENT_HUE_PROPERTY, String(ACCENT_HUE[accent]));
+  // The accent is these three numbers and nothing else; the stylesheet owns how
+  // they are drawn, in each scheme and on the fixed surfaces that ignore it.
+  for (const [property, value] of Object.entries(accentProperties(accent))) {
+    root.style.setProperty(property, value);
+  }
   root.style.colorScheme = scheme;
 
   void root.offsetHeight;

@@ -23,8 +23,23 @@ export const TABS_KEY_PANE1 = TABS_STATE_PANE1_KEY;
 export type ContentWidth = "narrow" | "full";
 export type FontFamily = "sans" | "serif" | "mono";
 export type FontSize = "sm" | "md" | "lg";
-export type ColorScheme = "light" | "dark" | "system";
-export type AccentColor = "violet" | "blue" | "green" | "orange" | "rose" | "slate";
+export const RESOLVED_SCHEMES = ["light", "dark"] as const;
+export type ResolvedScheme = (typeof RESOLVED_SCHEMES)[number];
+export const COLOR_SCHEMES = [...RESOLVED_SCHEMES, "system"] as const;
+export type ColorScheme = (typeof COLOR_SCHEMES)[number];
+export const ACCENT_COLORS = [
+  "rose",
+  "orange",
+  "bronze",
+  "green",
+  "teal",
+  "blue",
+  "slate",
+  "violet",
+  "magenta",
+  "black",
+] as const;
+export type AccentColor = (typeof ACCENT_COLORS)[number];
 export type DefaultFolderState = "expanded" | "top-level" | "collapsed";
 export const SIDEBAR_LENSES = ["tree", "recent", "tags", "pinned", "tasks"] as const;
 export type SidebarLens = (typeof SIDEBAR_LENSES)[number];
@@ -55,13 +70,27 @@ export const FONT_SIZE_PX: Record<FontSize, number> = {
   lg: 20,
 };
 
-export const ACCENT_HUE: Record<AccentColor, number> = {
-  violet: 280,
-  blue: 240,
-  green: 145,
-  orange: 40,
-  rose: 0,
-  slate: 250,
+export interface AccentSpec {
+  lightness: number;
+  chroma: number;
+  hue: number;
+}
+
+// The only place an accent colour is written down. A hue alone cannot describe
+// an achromatic or a muted accent, so each one carries its own lightness and
+// chroma; the six that shipped before keep the 0.55/0.22 pair they were drawn
+// with, because a stored selection must not change colour under anyone.
+export const ACCENT_SPEC: Record<AccentColor, AccentSpec> = {
+  rose: { lightness: 0.55, chroma: 0.22, hue: 0 },
+  orange: { lightness: 0.55, chroma: 0.22, hue: 40 },
+  bronze: { lightness: 0.52, chroma: 0.06, hue: 70 },
+  green: { lightness: 0.55, chroma: 0.22, hue: 145 },
+  teal: { lightness: 0.51, chroma: 0.22, hue: 195 },
+  blue: { lightness: 0.55, chroma: 0.22, hue: 240 },
+  slate: { lightness: 0.55, chroma: 0.22, hue: 250 },
+  violet: { lightness: 0.55, chroma: 0.22, hue: 280 },
+  magenta: { lightness: 0.55, chroma: 0.22, hue: 330 },
+  black: { lightness: 0.28, chroma: 0, hue: 0 },
 };
 
 export interface ViewSettings {
@@ -292,17 +321,15 @@ function normalizeFontSize(value: unknown): FontSize {
 }
 
 function normalizeColorScheme(value: unknown): ColorScheme {
-  return value === "light" || value === "dark" ? value : "system";
+  return (COLOR_SCHEMES as readonly unknown[]).includes(value)
+    ? (value as ColorScheme)
+    : defaultViewSettings.colorScheme;
 }
 
 function normalizeAccentColor(value: unknown): AccentColor {
-  return value === "blue" ||
-    value === "green" ||
-    value === "orange" ||
-    value === "rose" ||
-    value === "slate"
-    ? value
-    : "violet";
+  return (ACCENT_COLORS as readonly unknown[]).includes(value)
+    ? (value as AccentColor)
+    : defaultViewSettings.accentColor;
 }
 
 export async function saveViewSettings(settings: ViewSettings): Promise<void> {

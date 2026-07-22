@@ -1,11 +1,17 @@
-import { render } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
-import { ACCENT_HUE, defaultViewSettings, type AccentColor } from "@/lib/storage";
-import { ACCENT_HUE_PROPERTY } from "@/hooks/useTheme";
+import {
+  ACCENT_COLORS,
+  ACCENT_SPEC,
+  COLOR_SCHEMES,
+  defaultViewSettings,
+  type ViewSettings,
+} from "@/lib/storage";
+import { ACCENT_PROPERTIES } from "@/hooks/useTheme";
 import { AppearanceSection } from "./AppearanceSection";
 
-function renderSection() {
-  return render(<AppearanceSection settings={defaultViewSettings} onChange={vi.fn()} />);
+function renderSection(settings: ViewSettings = defaultViewSettings) {
+  return render(<AppearanceSection settings={settings} onChange={vi.fn()} />);
 }
 
 describe("AppearanceSection", () => {
@@ -13,22 +19,45 @@ describe("AppearanceSection", () => {
     const { container } = renderSection();
     const swatches = container.querySelectorAll<HTMLElement>(".accent-swatch");
 
-    expect(swatches).toHaveLength(Object.keys(ACCENT_HUE).length);
+    expect(swatches).toHaveLength(ACCENT_COLORS.length);
     for (const swatch of swatches) {
-      // The stylesheet composes the colour; the swatch supplies only the hue.
+      // The stylesheet composes the colour; the swatch supplies only the parts.
       expect(swatch.style.background).toBe("");
       expect(swatch.style.backgroundColor).toBe("");
-      expect(swatch.style.getPropertyValue(ACCENT_HUE_PROPERTY)).not.toBe("");
+      for (const property of Object.values(ACCENT_PROPERTIES)) {
+        expect(swatch.style.getPropertyValue(property)).not.toBe("");
+      }
     }
   });
 
-  it("gives every accent its own hue, in the settings order", () => {
+  it("gives every accent its own full colour, in the defined order", () => {
     const { container } = renderSection();
-    const hues = [...container.querySelectorAll<HTMLElement>(".accent-swatch")].map((el) =>
-      Number(el.style.getPropertyValue(ACCENT_HUE_PROPERTY))
-    );
+    const drawn = [...container.querySelectorAll<HTMLElement>(".accent-swatch")].map((el) => ({
+      lightness: Number(el.style.getPropertyValue(ACCENT_PROPERTIES.lightness)),
+      chroma: Number(el.style.getPropertyValue(ACCENT_PROPERTIES.chroma)),
+      hue: Number(el.style.getPropertyValue(ACCENT_PROPERTIES.hue)),
+    }));
 
-    const accents = Object.keys(ACCENT_HUE) as AccentColor[];
-    expect(hues).toEqual(accents.map((accent) => ACCENT_HUE[accent]));
+    expect(drawn).toEqual(ACCENT_COLORS.map((accent) => ACCENT_SPEC[accent]));
+  });
+
+  it("offers every accent and every scheme as a named, checkable choice", () => {
+    renderSection();
+    const accents = screen.getByRole("radiogroup", { name: "Accent color" });
+    const schemes = screen.getByRole("radiogroup", { name: "Color scheme" });
+
+    expect(within(accents).getAllByRole("radio")).toHaveLength(ACCENT_COLORS.length);
+    expect(within(schemes).getAllByRole("radio")).toHaveLength(COLOR_SCHEMES.length);
+    for (const radio of within(accents).getAllByRole("radio")) {
+      expect(radio).toHaveAccessibleName(expect.stringMatching(/\S/));
+    }
+  });
+
+  it("marks the selection with state, not with colour alone", () => {
+    renderSection({ ...defaultViewSettings, accentColor: "bronze", colorScheme: "dark" });
+
+    expect(screen.getByRole("radio", { name: "Bronze" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "Rose" })).toHaveAttribute("aria-checked", "false");
+    expect(screen.getByRole("radio", { name: "Dark" })).toHaveAttribute("aria-checked", "true");
   });
 });
