@@ -5,10 +5,13 @@ import type { CSSProperties } from "react";
 // numbers mirror app.windows[0].trafficLightPosition; AppToolbar.test.tsx reads the
 // config back and fails if the two drift.
 //
-// `y` is not a top offset: the platform centres the 14px controls inside a band
-// of `button height + y`, so the top edge lands at y/2. Centring them in the bar
-// therefore wants y = bar height - button height, measured at 36px and 14px.
-export const MAC_WINDOW_CONTROLS = { x: 11, y: 22 } as const;
+// `y` is not a top offset. Measured in a running window at two values, the top
+// edge lands at `y - 9`: y=18 put it at 9, y=22 at 13. Centring the 14px
+// controls in the 36px bar wants a top edge of 11, so y = 20. Both earlier
+// values came from reasoning about what the platform ought to do; only the
+// measurement settled it, so re-measure rather than re-derive if the bar height
+// changes.
+export const MAC_WINDOW_CONTROLS = { x: 11, y: 20 } as const;
 
 // Close, minimise and zoom are 14px wide, pitched 23px apart: 11 to 71 measured
 // in a running window, so the group spans 60 rather than the 54 first assumed.

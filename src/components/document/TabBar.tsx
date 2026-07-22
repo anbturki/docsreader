@@ -11,8 +11,11 @@ interface Props {
 
 export function TabBar({ tabs, activeId, onActivate, onClose }: Props) {
   if (tabs.length === 0) return null;
+  // The strip scrolls sideways only. Left alone, setting one axis makes the
+  // browser compute the other to auto as well, and a stray pixel of height
+  // paints a vertical scrollbar over the tab titles.
   return (
-    <div className="flex shrink-0 items-center overflow-x-auto border-b bg-background/40">
+    <div className="flex shrink-0 items-center overflow-x-auto overflow-y-hidden border-b bg-background/40">
       {tabs.map((tab) => (
         <TabItem
           key={tab.id}
