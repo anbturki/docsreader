@@ -195,6 +195,16 @@
   html {
     @apply font-sans;
     }
+  /* The window is the whole of the app, so the height comes from here and
+     every panel below fills its parent. Without this anchor the layout has no
+     definite height to divide up, only a minimum, and a long document grows
+     the page instead of scrolling inside its pane. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    }
 
   /*
     Tailwind v4 sets `cursor: default` on buttons to match browser defaults.

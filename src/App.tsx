@@ -462,7 +462,10 @@ function App() {
         open={sidebar.open}
         onOpenChange={sidebar.setOpen}
         style={CHROME_STYLE}
-        className="pt-(--toolbar-height)"
+        // The variant sizes itself off the viewport with a minimum, which
+        // leaves no definite height for the panes to divide and lets a long
+        // document push the whole window taller. Anchored to the root instead.
+        className="h-full min-h-0 pt-(--toolbar-height)"
       >
         <AppToolbar
           roots={library.roots}
