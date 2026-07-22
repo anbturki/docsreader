@@ -120,6 +120,29 @@ fn unknown_slug(slug: &str, registry: &[WorkspaceEntry], ambient: &ResolvedWorks
     ))
 }
 
+/// Refusal for an un-slugged write whose resolution was a fallback: the user
+/// default handed back for a folder that is not a workspace yet. Writing would
+/// create a catch-all nobody chose, so the caller is sent to pick or create one.
+pub fn no_write_target(available: &[String], fallback_root: &Path) -> CoreError {
+    let recovery = if available.is_empty() {
+        format!(
+            "no workspace exists yet: call init_workspace with the project directory to create one for this project, or with no arguments to create your personal notes at {}, then retry with the slug it reports",
+            fallback_root.display()
+        )
+    } else {
+        format!(
+            "retry with workspace set to one of [{}], or call init_workspace with the project directory to create one for this project; with no arguments it creates your personal notes at {}",
+            available.join(", "),
+            fallback_root.display()
+        )
+    };
+    CoreError::new(
+        ErrorCode::WorkspaceNotFound,
+        "nothing here names a workspace to write to, and writing anyway would land this work in a shared folder that identifies no project",
+    )
+    .with_recovery(recovery)
+}
+
 fn ambiguous_slug(slug: &str, matches: &[ResolvedWorkspace]) -> CoreError {
     let paths: Vec<String> = matches
         .iter()

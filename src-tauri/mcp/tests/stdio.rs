@@ -584,21 +584,28 @@ fn workspace_tool_descriptions_tell_a_caller_to_list_first_and_name_the_project(
 }
 
 #[test]
-fn the_created_default_workspace_reports_the_slug_it_was_given() {
+fn the_user_workspace_reports_the_slug_it_was_given_once_it_exists() {
     let home = temp_home();
     let mut c = McpClient::spawn(home.path(), &[], json!({}));
     init_project(&mut c, home.path(), "notes");
+
+    let (created, is_err) = c.call("init_workspace", json!({}));
+    assert!(!is_err, "{created}");
+    let slug = created["slug"].as_str().unwrap().to_string();
+    assert_ne!(
+        slug, "notes",
+        "the project workspace already holds that slug"
+    );
 
     let (doc, is_err) = c.call(
         "write_doc",
         json!({"title": "First", "body": "# First", "status": "research"}),
     );
-    assert!(!is_err, "{doc}");
-    let slug = doc["workspace"]["slug"].as_str().unwrap().to_string();
-    assert_ne!(
-        slug, "notes",
-        "the project workspace already holds that slug"
+    assert!(
+        !is_err,
+        "a real user workspace takes un-slugged writes: {doc}"
     );
+    assert_eq!(doc["workspace"]["slug"], json!(slug));
 
     let (list, is_err) = c.call("list_docs", json!({"workspace": slug}));
     assert!(!is_err, "{list}");
@@ -607,4 +614,147 @@ fn the_created_default_workspace_reports_the_slug_it_was_given() {
         1,
         "the reported slug must name the workspace the doc was written into"
     );
+}
+
+#[test]
+fn an_un_slugged_write_in_a_clean_session_is_refused_not_absorbed_into_user_notes() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({}));
+
+    let (listed, _) = c.call("list_workspaces", json!({}));
+    assert_eq!(listed["defaultUserWorkspace"]["exists"], false);
+
+    let writes = [
+        (
+            "write_doc",
+            json!({"title": "Plan", "body": "# Plan", "status": "research"}),
+        ),
+        (
+            "write_task",
+            json!({"title": "Wire CI", "description": "Add the pipeline"}),
+        ),
+        (
+            "write_memory",
+            json!({"topic": "deploy target", "content": "staging"}),
+        ),
+    ];
+    for (tool, args) in writes {
+        let (payload, is_err) = c.call(tool, args);
+        assert!(is_err, "{tool} must refuse without a workspace: {payload}");
+        assert_eq!(payload["error"]["code"], "workspace_not_found", "{tool}");
+        assert!(
+            payload["error"]["message"]
+                .as_str()
+                .unwrap()
+                .contains("names a workspace to write to"),
+            "{tool} must refuse on the missing choice, not on a missing folder: {payload}"
+        );
+        let recovery = payload["error"]["recovery"].as_str().unwrap();
+        assert!(
+            recovery.contains("init_workspace"),
+            "{tool} recovery must name the way out: {recovery}"
+        );
+    }
+
+    assert!(
+        !home.path().join("notes").exists(),
+        "the refused writes must not create the user workspace"
+    );
+    let (listed, _) = c.call("list_workspaces", json!({}));
+    assert_eq!(listed["workspaces"].as_array().unwrap().len(), 0);
+    assert_eq!(listed["defaultUserWorkspace"]["exists"], false);
+}
+
+#[test]
+fn reads_in_a_clean_session_still_answer_from_the_user_workspace() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({}));
+
+    for (tool, key) in [("search_memory", "memories"), ("list_tasks", "tasks")] {
+        let (payload, is_err) = c.call(tool, json!({}));
+        assert!(!is_err, "{tool} must keep working: {payload}");
+        assert_eq!(payload["workspace"]["slug"], "notes", "{tool}");
+        assert_eq!(payload[key].as_array().unwrap().len(), 0, "{tool}");
+    }
+
+    // list_docs already reported the empty folder before this policy; it must
+    // still be that answer and not the write refusal.
+    let (payload, is_err) = c.call("list_docs", json!({}));
+    assert!(is_err, "{payload}");
+    assert!(
+        payload["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("is missing"),
+        "reads keep their own error, not the write refusal: {payload}"
+    );
+
+    assert!(
+        !home.path().join("notes").exists(),
+        "a read must not create the user workspace"
+    );
+}
+
+#[test]
+fn an_un_slugged_write_offers_the_picker_and_lands_in_the_picked_workspace() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({"elicitation": {}}));
+    init_project(&mut c, home.path(), "chosen");
+    // A bare ~/notes folder carries no marker, so it is still a fallback while
+    // being a slug the picker can offer.
+    std::fs::create_dir_all(home.path().join("notes")).unwrap();
+
+    let mut picker = None;
+    let (doc, is_err) = c.call_with(
+        "write_doc",
+        json!({"title": "Plan", "body": "# Plan", "status": "research"}),
+        |msg| {
+            assert_eq!(msg["method"], "elicitation/create");
+            picker = Some(msg["params"].clone());
+            json!({"action": "accept", "content": {"workspace": "chosen"}})
+        },
+    );
+    assert!(!is_err, "{doc}");
+    assert_eq!(doc["workspace"]["slug"], "chosen");
+    assert_eq!(
+        std::fs::read_dir(home.path().join("notes"))
+            .unwrap()
+            .count(),
+        0,
+        "nothing may land in the user folder that was not picked"
+    );
+
+    let picker = picker.expect("server asked which workspace to write to");
+    let field = &picker["requestedSchema"]["properties"]["workspace"];
+    assert!(
+        field["enum"].as_array().unwrap().contains(&json!("chosen")),
+        "{picker}"
+    );
+    assert!(
+        field.get("default").is_none(),
+        "the fallback must not be preselected as the answer: {picker}"
+    );
+}
+
+#[test]
+fn declining_the_picker_refuses_the_un_slugged_write_with_the_workspaces_that_exist() {
+    let home = temp_home();
+    let mut c = McpClient::spawn(home.path(), &[], json!({"elicitation": {}}));
+    init_project(&mut c, home.path(), "existing");
+
+    let (payload, is_err) = c.call_with(
+        "write_doc",
+        json!({"title": "Plan", "body": "# Plan", "status": "research"}),
+        |_| json!({"action": "decline"}),
+    );
+    assert!(is_err, "{payload}");
+    assert_eq!(payload["error"]["code"], "workspace_not_found");
+    assert!(
+        payload["error"]["recovery"]
+            .as_str()
+            .unwrap()
+            .contains("existing"),
+        "the refusal must name the workspaces a retry could use: {payload}"
+    );
+    assert!(!home.path().join("notes").exists());
 }

@@ -10,8 +10,9 @@ workspace folder.
 ## Model
 
 - A workspace is a folder of markdown docs. Default user workspace: `~/notes`
-  (created on first write). A project workspace is `<project>/notes`; when one
-  exists it takes precedence. See "Choosing a workspace".
+  (created by `init_workspace`, never by a write). A project workspace is
+  `<project>/notes`; when one exists it takes precedence. See "Choosing a
+  workspace".
 - Docs live in the folder matching their lifecycle status:
   `research/`, `in-progress/`, `done/`, `archived/`. The folder IS the status.
 - Optional phase subfolders group work inside a status, e.g.
@@ -43,6 +44,10 @@ first option that fits and proceed without asking:
    be picked up automatically.
 3. `~/notes` only for work that belongs to no project. Do not park a new
    project's docs or tasks there.
+
+A write with no `workspace` argument is refused when nothing here resolves to
+a workspace, rather than falling back to `~/notes`; the refusal lists the
+workspaces that do exist. Reads still fall back, so they never need setup.
 
 The `name` is what humans pick from in the app, so it must identify the
 project or product: `"Acme Billing API"`, never `"Notes"` or `"Docs"`. Leave

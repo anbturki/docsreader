@@ -18,8 +18,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    DocsServer, client_name, doc_resource_link, doc_uri, ensure_workspace_exists, error_result,
-    resolve_or_pick,
+    DocsServer, client_name, doc_resource_link, doc_uri, error_result, require_workspace_dir,
+    resolve_for_write,
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -30,8 +30,9 @@ pub struct WriteDocParams {
     pub body: String,
     /// Lifecycle status: one of "research", "in-progress", "done", "archived".
     pub status: String,
-    /// Workspace slug (see list_workspaces). Omit to use the resolved default
-    /// workspace (project ./notes if present, else user ~/notes).
+    /// Workspace slug (see list_workspaces). Omit to use the workspace
+    /// resolved from the current project; when none resolves, the write is
+    /// refused instead of landing in the shared user workspace.
     pub workspace: Option<String>,
     /// Phase subfolder within the status folder, e.g. "discovery" or "v2-launch".
     pub phase: Option<String>,
@@ -139,8 +140,8 @@ async fn located(
     peer: &Peer<RoleServer>,
     workspace: Option<&str>,
 ) -> Result<ResolvedWorkspace, CoreError> {
-    let mut ws = resolve_or_pick(peer, workspace).await?;
-    ensure_workspace_exists(&mut ws)?;
+    let ws = resolve_for_write(peer, workspace).await?;
+    require_workspace_dir(&ws)?;
     Ok(ws)
 }
 

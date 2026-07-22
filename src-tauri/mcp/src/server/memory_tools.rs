@@ -8,8 +8,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    DocsServer, TRUNCATION_GUIDANCE, client_name, doc_uri, ensure_workspace_exists, error_result,
-    resolve_or_pick, take_within_budget,
+    DocsServer, TRUNCATION_GUIDANCE, client_name, doc_uri, error_result, require_workspace_dir,
+    resolve_for_write, resolve_or_pick, take_within_budget,
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -22,7 +22,9 @@ pub struct WriteMemoryParams {
     pub content: String,
     /// Topic tags.
     pub tags: Option<Vec<String>>,
-    /// Workspace slug (see list_workspaces). Omit to use the resolved default.
+    /// Workspace slug (see list_workspaces). Omit to use the workspace
+    /// resolved from the current project; when none resolves, the write is
+    /// refused instead of landing in the shared user workspace.
     pub workspace: Option<String>,
 }
 
@@ -80,8 +82,8 @@ impl DocsServer {
     ) -> Result<Json<MemoryWriteResult>, CallToolResult> {
         let agent = client_name(&peer);
         let result = async {
-            let mut ws = resolve_or_pick(&peer, p.workspace.as_deref()).await?;
-            ensure_workspace_exists(&mut ws)?;
+            let ws = resolve_for_write(&peer, p.workspace.as_deref()).await?;
+            require_workspace_dir(&ws)?;
             let entry = write_memory_core(
                 &ws.root,
                 &p.topic,
