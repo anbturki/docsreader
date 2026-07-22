@@ -27,6 +27,13 @@ import {
 
 const CHROME_ICON = "size-6 text-muted-foreground hover:text-foreground [&>svg]:size-4";
 
+// Equal flex tracks are given equal size, so the search holds one position
+// whatever flanks it. Spacers centred it on its neighbours instead, and it slid
+// whenever a breadcrumb lengthened or a control appeared beside the tab. That
+// position is the centre of the padding box, which the window-control inset puts
+// 37.5px right of the window centre; the point is that it never moves.
+export const TOOLBAR_COLUMNS = "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]";
+
 const SPLIT_CONTROLS: Record<SplitMode, { icon: LucideIcon; label: string }> = {
   off: { icon: Square, label: "Single pane" },
   horizontal: { icon: Columns2, label: "Side by side" },
@@ -97,30 +104,31 @@ export function AppToolbar({
     <header
       data-tauri-drag-region
       data-slot="app-toolbar"
-      className={`fixed inset-x-0 top-0 z-30 flex h-(--toolbar-height) items-center gap-2 border-b bg-background pr-2 ${
+      className={`fixed inset-x-0 top-0 z-30 grid h-(--toolbar-height) ${TOOLBAR_COLUMNS} items-center gap-2 border-b bg-background pr-2 ${
         isMac ? "pl-(--window-controls-inset)" : "pl-2"
       }`}
     >
-      {roots.length > 0 && (
-        <div data-slot="workspace-switcher-slot" className="max-w-48 shrink-0">
-          <WorkspaceSwitcher
-            roots={roots}
-            activeRoot={activeRoot}
-            workspaceNamesByRoot={workspaceNamesByRoot}
-            onSelect={onSelectRoot}
-            onRemove={onRemoveRoot}
-            onAdd={onPickDirectory}
+      <div data-tauri-drag-region className="flex min-w-0 items-center gap-2">
+        {roots.length > 0 && (
+          <div data-slot="workspace-switcher-slot" className="max-w-48 shrink-0">
+            <WorkspaceSwitcher
+              roots={roots}
+              activeRoot={activeRoot}
+              workspaceNamesByRoot={workspaceNamesByRoot}
+              onSelect={onSelectRoot}
+              onRemove={onRemoveRoot}
+              onAdd={onPickDirectory}
+            />
+          </div>
+        )}
+        {breadcrumbPath && (
+          <PathBreadcrumb
+            relPath={breadcrumbPath}
+            onSegmentClick={onBreadcrumbSegmentClick}
           />
-        </div>
-      )}
-      {breadcrumbPath && (
-        <PathBreadcrumb
-          relPath={breadcrumbPath}
-          onSegmentClick={onBreadcrumbSegmentClick}
-        />
-      )}
+        )}
+      </div>
 
-      <div data-tauri-drag-region className="flex-1" />
       <button
         type="button"
         onClick={onOpenQuickOpen}
@@ -132,9 +140,8 @@ export function AppToolbar({
           {displayShortcut(quickOpenShortcut)}
         </kbd>
       </button>
-      <div data-tauri-drag-region className="flex-1" />
 
-      <div className="flex items-center gap-0.5">
+      <div data-tauri-drag-region className="flex items-center justify-end gap-0.5">
         {canCollapseAll && (
           <Button
             size="icon"

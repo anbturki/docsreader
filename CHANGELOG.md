@@ -89,7 +89,9 @@ Nothing yet.
 
 - **One toolbar across the window.** The separate document toolbar and sidebar
   header are replaced by a single bar spanning the full window width, holding the
-  workspace switcher, and it no longer shifts when the sidebar is toggled.
+  workspace switcher. Nothing in it moves as you switch tabs: the search sits at
+  a fixed point rather than drifting with the length of the path beside it or
+  with a control appearing for the open tab.
 - **Lenses moved to a vertical rail** down the left edge, each an icon with its
   name, so adding lenses no longer reflows the sidebar. The sidebar is wider to
   pay for it, leaving the content column wider than the whole sidebar used to be.

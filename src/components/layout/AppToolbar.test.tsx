@@ -6,7 +6,7 @@ import { vi, describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
-import { AppToolbar } from "./AppToolbar";
+import { AppToolbar, TOOLBAR_COLUMNS } from "./AppToolbar";
 import { CHROME_STYLE, MAC_WINDOW_CONTROLS } from "./chrome";
 import {
   SPLIT_MODES,
@@ -285,9 +285,33 @@ describe("AppToolbar", () => {
     expect(splitItem).toContain("size-6");
   });
 
-  it("keeps drag regions on the inert spacers", () => {
+  it("leaves the empty space beside the controls draggable", () => {
     renderToolbar();
     expect(toolbar().hasAttribute("data-tauri-drag-region")).toBe(true);
     expect(toolbar().querySelectorAll("[data-tauri-drag-region]")).toHaveLength(2);
+  });
+
+  // Equal flex tracks are given equal size, so a search between them is centred
+  // on the window. Flanking it with spacers centred it on its neighbours, and it
+  // slid 143px as a breadcrumb lengthened or the tasks switch appeared.
+  it("flanks the search with two tracks of equal width", () => {
+    renderToolbar();
+    const [left, , right] = TOOLBAR_COLUMNS.replace(/^grid-cols-\[|\]$/g, "").split("_");
+    expect(left).toBe(right);
+    expect(toolbar().className).toContain(TOOLBAR_COLUMNS);
+  });
+
+  it("centres the search on the window, not on what flanks it", () => {
+    const { unmount } = renderToolbar();
+    const search = screen.getByText("Search").closest("button");
+    expect(search?.parentElement).toBe(toolbar());
+    expect(Array.from(toolbar().children).indexOf(search as Element)).toBe(1);
+    expect(toolbar().children).toHaveLength(3);
+    unmount();
+
+    // Neither a longer path nor the tasks switch may change the track template.
+    renderToolbar({ taskView: "board" });
+    expect(toolbar().className).toContain(TOOLBAR_COLUMNS);
+    expect(toolbar().children).toHaveLength(3);
   });
 });
