@@ -27,9 +27,20 @@ const EXCLUDED_TAGS = ["SCRIPT", "STYLE"] as const;
 // "2α". Math is found by its LaTeX source in workspace search.
 const MATHML_MIRROR_CLASS = "katex-mathml";
 
+// The find bar renders inside the element it searches, so without this it
+// matches its own "N of M" label: counts include the bar, and a query like
+// "no" oscillates forever between "No results" and "1 of 1".
+export const FIND_CHROME_ATTR = "data-find-chrome";
+
+// A one-character query against a long document would otherwise build a Range
+// per match. Painting already stops well before this, so the cap only bounds
+// what a single keystroke can allocate.
+export const MAX_RANGES = 2000;
+
 function isExcludedElement(element: Element): boolean {
   if (EXCLUDED_TAGS.some((tag) => tag === element.tagName)) return true;
   if (element.getAttribute("aria-hidden") === "true") return true;
+  if (element.hasAttribute(FIND_CHROME_ATTR)) return true;
   return element.classList.contains(MATHML_MIRROR_CLASS);
 }
 
@@ -104,6 +115,7 @@ function collectSpans(matcher: RegExp, text: string): MatchSpan[] {
       continue;
     }
     spans.push({ start: match.index, end: match.index + match[0].length });
+    if (spans.length === MAX_RANGES) break;
   }
 
   return spans;

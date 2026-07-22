@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { findRanges } from "@/lib/findMatches";
+import { findRanges, FIND_CHROME_ATTR } from "@/lib/findMatches";
 import {
   createHighlightPainter,
   FIND_OVERLAY_ATTR,
@@ -69,7 +69,7 @@ export function useFindInDocument(
   useEffect(() => {
     if (!scroller || !open) return;
     const observer = new MutationObserver((records) => {
-      if (records.every(isOwnPaint)) return;
+      if (records.every(isSelfInflicted)) return;
       recompute();
     });
     observer.observe(scroller, { childList: true, subtree: true, characterData: true });
@@ -122,11 +122,13 @@ export function useFindInDocument(
   };
 }
 
-function isOwnPaint(record: MutationRecord): boolean {
-  return (
-    record.target instanceof Element &&
-    record.target.closest(`[${FIND_OVERLAY_ATTR}]`) !== null
-  );
+// A character-data mutation targets the Text node, not an element, so matching
+// on the target alone missed the find bar's own label rewriting itself and
+// recomputed in a loop.
+function isSelfInflicted(record: MutationRecord): boolean {
+  const target =
+    record.target instanceof Element ? record.target : record.target.parentElement;
+  return target?.closest(`[${FIND_OVERLAY_ATTR}], [${FIND_CHROME_ATTR}]`) != null;
 }
 
 function scrollRangeIntoView(scroller: HTMLElement, range: Range): void {

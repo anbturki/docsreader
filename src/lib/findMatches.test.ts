@@ -1,5 +1,5 @@
 import katex from "katex";
-import { findRanges } from "./findMatches";
+import { findRanges, FIND_CHROME_ATTR, MAX_RANGES } from "./findMatches";
 
 function mount(html: string): HTMLElement {
   const host = document.createElement("div");
@@ -206,5 +206,28 @@ describe("findRanges", () => {
     const ranges = findRanges(root, "needle");
 
     expect(texts(ranges)).toEqual(["needle"]);
+  });
+});
+
+describe("find chrome", () => {
+  it("skips the find bar's own label, so its counter cannot count itself", () => {
+    const root = document.createElement("div");
+    root.innerHTML = `
+      <div ${FIND_CHROME_ATTR}><span>No results</span></div>
+      <p>nothing here</p>`;
+    document.body.appendChild(root);
+
+    // "no" appears in the bar's "No results" and once in the prose.
+    expect(findRanges(root, "no")).toHaveLength(1);
+    root.remove();
+  });
+
+  it("caps the ranges it builds for a query that matches everywhere", () => {
+    const root = document.createElement("div");
+    root.textContent = "a".repeat(MAX_RANGES + 500);
+    document.body.appendChild(root);
+
+    expect(findRanges(root, "a")).toHaveLength(MAX_RANGES);
+    root.remove();
   });
 });

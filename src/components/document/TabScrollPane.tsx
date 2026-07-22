@@ -5,6 +5,7 @@ import type { ViewSettings } from "@/lib/storage";
 import type { Tab } from "@/hooks/useTabs";
 import { parseFrontmatter } from "@/lib/scan";
 import { useFindInDocument } from "@/hooks/useFindInDocument";
+import { FIND_CHROME_ATTR } from "@/lib/findMatches";
 import { matchShortcut, parseShortcut } from "@/lib/shortcuts";
 import { DocumentView } from "./DocumentView";
 import { ExternalChangeBanner } from "./ExternalChangeBanner";
@@ -153,7 +154,10 @@ export function TabScrollPane({
       {/* Sticky with no height so the bar stays pinned while the document
           scrolls beneath it without displacing the content. */}
       {find.open && (
-        <div className="pointer-events-none sticky top-0 z-10 h-0">
+        <div
+          {...{ [FIND_CHROME_ATTR]: "" }}
+          className="pointer-events-none sticky top-0 z-10 h-0"
+        >
           <div className="pointer-events-auto flex justify-end p-3">
             <FindBar find={find} />
           </div>
