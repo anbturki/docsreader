@@ -21,6 +21,7 @@ import { RAIL_ITEM } from "./railItem";
 import { SearchResults } from "./SearchResults";
 import { SidebarToggle } from "./SidebarToggle";
 import { TagsList } from "./TagsList";
+import { TaskFilterProvider } from "./TaskFilterContext";
 import type { SearchEntry } from "@/lib/searchEntries";
 import type { SidebarSearch } from "@/hooks/useSidebarSearch";
 import { TasksBoard } from "@/components/tasks/TasksBoard";
@@ -32,6 +33,7 @@ interface Props {
   activeScan: RootScan | undefined;
   onPickDirectory: () => void;
   onOpenWelcome: (() => void) | undefined;
+  onRefresh: () => void;
 
   // lens
   lens: SidebarLens;
@@ -72,12 +74,21 @@ interface Props {
   onShowGitDiff?: (path: string) => void;
 }
 
-export function ExplorerSidebar({
+export function ExplorerSidebar(props: Props) {
+  return (
+    <TaskFilterProvider>
+      <SidebarPanels {...props} />
+    </TaskFilterProvider>
+  );
+}
+
+function SidebarPanels({
   roots,
   activeRoot,
   activeScan,
   onPickDirectory,
   onOpenWelcome,
+  onRefresh,
   lens,
   onLensChange,
   search,
@@ -140,7 +151,14 @@ export function ExplorerSidebar({
           // left open so the seam between them is the card's border alone.
           className="ml-(--chrome-inset) min-w-0 flex-1 rounded-l-md border border-r-0 border-sidebar-border"
         >
-          {roots.length > 0 && <ExplorerHeader lens={lens} search={search} />}
+          {roots.length > 0 && (
+            <ExplorerHeader
+              lens={lens}
+              search={search}
+              scanning={!!activeScan?.scanning}
+              onRefresh={onRefresh}
+            />
+          )}
 
           <SidebarContent className="overflow-x-hidden">
             {roots.length === 0 ? (
@@ -204,14 +222,18 @@ export function ExplorerSidebar({
             )}
           </SidebarContent>
 
-          <SidebarFooter className="gap-2 text-xs text-muted-foreground">
-            <ExplorerFooter
-              activeScan={activeScan}
-              matchCount={showingResults ? searchEntries.length : filteredFiles.length}
-              hiddenCount={hiddenCount}
-              onOpenSettings={onOpenSettings}
-            />
-          </SidebarFooter>
+          {hiddenCount > 0 && (
+            <SidebarFooter className="p-2 text-xs text-muted-foreground">
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="self-start rounded-sm underline-offset-2 hover:underline focus:underline focus:outline-none"
+                title="Manage hidden files in Settings"
+              >
+                {hiddenCount} hidden
+              </button>
+            </SidebarFooter>
+          )}
         </Sidebar>
       )}
     </Sidebar>
@@ -333,54 +355,5 @@ function LensView({
       onOpenInOtherPane={onOpenInOtherPane}
       onTogglePin={onTogglePin}
     />
-  );
-}
-
-function ExplorerFooter({
-  activeScan,
-  matchCount,
-  hiddenCount,
-  onOpenSettings,
-}: {
-  activeScan: RootScan | undefined;
-  matchCount: number;
-  hiddenCount: number;
-  onOpenSettings: () => void;
-}) {
-  if (!activeScan) return null;
-  if (activeScan.scanning) {
-    return (
-      <span className="animate-pulse px-2">
-        Scanning… {activeScan.progress?.filesFound ?? 0} files,{" "}
-        {activeScan.progress?.dirsVisited ?? 0} dirs
-      </span>
-    );
-  }
-  const total = activeScan.result.files.length;
-  const visible = total - hiddenCount;
-  const skipped = activeScan.result.skipped ?? 0;
-  return (
-    <span className="flex items-center gap-2 px-2">
-      <span>
-        {visible} files
-        {activeScan.result.truncated && " (50k cap)"}
-        {matchCount !== visible && ` · ${matchCount} match`}
-      </span>
-      {skipped > 0 && (
-        <span title="Files that could not be read or were too large to include">
-          {skipped} skipped
-        </span>
-      )}
-      {hiddenCount > 0 && (
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          className="ml-auto rounded-sm underline-offset-2 hover:underline focus:underline focus:outline-none"
-          title="Manage hidden files in Settings"
-        >
-          {hiddenCount} hidden
-        </button>
-      )}
-    </span>
   );
 }

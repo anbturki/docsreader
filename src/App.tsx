@@ -456,8 +456,6 @@ function App() {
             setQuickOpenMounted(true);
             setQuickOpen(true);
           }}
-          scanning={!!library.activeScan?.scanning}
-          onRefresh={() => library.activeRoot && void library.rescan(library.activeRoot)}
           canCollapseAll={
             !!library.activeRoot && viewSettings.settings.sidebarLens === "tree"
           }
@@ -499,6 +497,7 @@ function App() {
           activeRoot={library.activeRoot}
           activeScan={library.activeScan}
           onPickDirectory={() => void library.pickDirectory()}
+          onRefresh={() => library.activeRoot && void library.rescan(library.activeRoot)}
           onOpenWelcome={
             viewSettings.settings.welcomeOpened
               ? undefined

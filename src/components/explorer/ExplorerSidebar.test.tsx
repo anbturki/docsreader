@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeAll } from "vitest";
 
@@ -10,6 +10,7 @@ import { useSidebarSearch } from "@/hooks/useSidebarSearch";
 import type { SidebarLens } from "@/lib/storage";
 import type { SearchEntry } from "@/lib/searchEntries";
 import type { MarkdownFile } from "@/lib/scan";
+import type { RootScan } from "@/hooks/useLibrary";
 
 import { ExplorerSidebar } from "./ExplorerSidebar";
 
@@ -104,6 +105,10 @@ interface HarnessProps {
   searchEntries?: SearchEntry[];
   defaultOpen?: boolean;
   onLensChange?: (lens: SidebarLens) => void;
+  activeScan?: RootScan;
+  hiddenCount?: number;
+  onRefresh?: () => void;
+  onOpenSettings?: () => void;
 }
 
 function Harness({
@@ -113,6 +118,10 @@ function Harness({
   searchEntries = [],
   defaultOpen = true,
   onLensChange = () => {},
+  activeScan,
+  hiddenCount = 0,
+  onRefresh = () => {},
+  onOpenSettings = () => {},
 }: HarnessProps) {
   const search = useSidebarSearch({ shortcut: SHORTCUT });
   const [open, setOpen] = useState(defaultOpen);
@@ -122,8 +131,9 @@ function Harness({
         <ExplorerSidebar
           roots={roots}
           activeRoot={roots[0]}
-          activeScan={undefined}
+          activeScan={activeScan}
           onPickDirectory={() => {}}
+          onRefresh={onRefresh}
           onOpenWelcome={undefined}
           lens={lens}
           onLensChange={onLensChange}
@@ -141,8 +151,8 @@ function Harness({
           isPinned={() => false}
           onTogglePin={() => {}}
           onHide={() => {}}
-          hiddenCount={0}
-          onOpenSettings={() => {}}
+          hiddenCount={hiddenCount}
+          onOpenSettings={onOpenSettings}
           selectedPath={undefined}
           onSelectFile={() => {}}
           onOpenInNewTab={() => {}}
@@ -356,5 +366,103 @@ describe("collapsing to the lens rail", () => {
   it("still offers a way out when there is no workspace to show a rail", () => {
     render(<Harness roots={[]} defaultOpen={false} />);
     expect(screen.getByRole("button", { name: "Expand sidebar" })).toBeInTheDocument();
+  });
+});
+
+function scanOf(files: MarkdownFile[]): RootScan {
+  return {
+    result: { root: "/ws/voice", files, truncated: false, skipped: 3 },
+    scanning: false,
+  };
+}
+
+describe("the sidebar footer", () => {
+  it("no longer counts the workspace at the bottom of the panel", () => {
+    const files = [file("notes/alpha.md", "alpha.md"), file("notes/beta.md", "beta.md")];
+    const { container } = render(<Harness activeScan={scanOf(files)} filteredFiles={files} />);
+
+    expect(screen.queryByText(/\d+ files/)).toBeNull();
+    expect(screen.queryByText(/skipped/)).toBeNull();
+    expect(container.querySelector('[data-slot="sidebar-footer"]')).toBeNull();
+  });
+
+  it("keeps the only way back to files that are hidden", async () => {
+    const user = userEvent.setup();
+    const onOpenSettings = vi.fn();
+    render(<Harness activeScan={scanOf([])} hiddenCount={4} onOpenSettings={onOpenSettings} />);
+
+    await user.click(screen.getByRole("button", { name: "4 hidden" }));
+
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("one title per lens", () => {
+  it("names the tasks lens exactly once", async () => {
+    render(<Harness lens="tasks" />);
+    expect(await screen.findByText("Wire the relay")).toBeInTheDocument();
+
+    expect(screen.getAllByText("Tasks")).toHaveLength(1);
+    expect(screen.getByRole("tab", { name: "Tasks" })).toBeInTheDocument();
+  });
+});
+
+describe("workspace controls in the sidebar header", () => {
+  function headerRow(container: HTMLElement) {
+    const header = container.querySelector('[data-slot="sidebar-header"]');
+    if (!header) throw new Error("no sidebar header");
+    const row = header.firstElementChild;
+    if (!row) throw new Error("no control row");
+    return { header, row };
+  }
+
+  it("refreshes the workspace from the header", async () => {
+    const user = userEvent.setup();
+    const onRefresh = vi.fn();
+    const { container } = render(<Harness onRefresh={onRefresh} />);
+
+    const refresh = screen.getByRole("button", { name: "Refresh workspace" });
+    expect(headerRow(container).row.contains(refresh)).toBe(true);
+
+    await user.click(refresh);
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens the task filters from beside the search", async () => {
+    const user = userEvent.setup();
+    render(<Harness lens="tasks" />);
+
+    const trigger = screen.getByRole("button", { name: "Filter tasks" });
+    expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    await user.click(trigger);
+
+    expect(trigger).toHaveAttribute("aria-expanded", "true");
+    const popover = screen.getByRole("dialog");
+    expect(
+      within(popover).getByRole("combobox", { name: "Filter by priority" })
+    ).toBeInTheDocument();
+  });
+
+  it("offers no task filter on lenses that have none", () => {
+    render(<Harness lens="tree" />);
+    expect(screen.queryByRole("button", { name: "Filter tasks" })).toBeNull();
+  });
+
+  it("keeps the header geometry identical across lenses", async () => {
+    const tree = render(<Harness lens="tree" />);
+    const treeRow = headerRow(tree.container);
+    const treeClasses = [treeRow.header.className, treeRow.row.className];
+    const treeSizes = [...treeRow.row.querySelectorAll("button")].map((b) => b.className);
+    tree.unmount();
+
+    const tasks = render(<Harness lens="tasks" />);
+    expect(await screen.findByText("Wire the relay")).toBeInTheDocument();
+    const tasksRow = headerRow(tasks.container);
+
+    expect([tasksRow.header.className, tasksRow.row.className]).toEqual(treeClasses);
+    for (const classes of [...treeSizes, ...[...tasksRow.row.querySelectorAll("button")].map((b) => b.className)]) {
+      expect(classes).toContain("size-7");
+    }
   });
 });

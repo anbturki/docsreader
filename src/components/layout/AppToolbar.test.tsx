@@ -40,7 +40,6 @@ const handlers = {
   onPickDirectory: vi.fn(),
   onBreadcrumbSegmentClick: vi.fn(),
   onOpenQuickOpen: vi.fn(),
-  onRefresh: vi.fn(),
   onCollapseAll: vi.fn(),
   onSplitChange: vi.fn(),
   onToggleOutline: vi.fn(),
@@ -67,8 +66,6 @@ function renderToolbar(overrides: { sidebarOpen?: boolean; roots?: string[] } = 
           onBreadcrumbSegmentClick={handlers.onBreadcrumbSegmentClick}
           quickOpenShortcut="Mod+P"
           onOpenQuickOpen={handlers.onOpenQuickOpen}
-          scanning={false}
-          onRefresh={handlers.onRefresh}
           canCollapseAll
           onCollapseAll={handlers.onCollapseAll}
           split="off"
@@ -110,7 +107,6 @@ beforeEach(() => {
 });
 
 const CONTROL_LABELS = [
-  "Refresh workspace",
   "Collapse all",
   "Toggle outline",
   "Toggle theme",
@@ -125,6 +121,11 @@ describe("AppToolbar", () => {
     }
     expect(screen.getByRole("group", { name: "Split layout" })).toBeTruthy();
     expect(screen.getByText("Search")).toBeTruthy();
+  });
+
+  it("leaves refreshing the workspace to the sidebar that owns it", () => {
+    renderToolbar();
+    expect(screen.queryByRole("button", { name: "Refresh workspace" })).toBeNull();
   });
 
   it("keeps the same full-width geometry in both sidebar states", () => {

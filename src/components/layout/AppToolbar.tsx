@@ -3,7 +3,6 @@ import {
   ListCollapse,
   ListTree,
   Moon,
-  RefreshCw,
   Rows2,
   Search,
   Settings as SettingsIcon,
@@ -35,8 +34,6 @@ interface Props {
   quickOpenShortcut: string;
   onOpenQuickOpen: () => void;
 
-  scanning: boolean;
-  onRefresh: () => void;
   canCollapseAll: boolean;
   onCollapseAll: () => void;
 
@@ -65,8 +62,6 @@ export function AppToolbar({
   onBreadcrumbSegmentClick,
   quickOpenShortcut,
   onOpenQuickOpen,
-  scanning,
-  onRefresh,
   canCollapseAll,
   onCollapseAll,
   split,
@@ -121,19 +116,6 @@ export function AppToolbar({
       <div data-tauri-drag-region className="flex-1" />
 
       <div className="flex items-center gap-0.5">
-        {activeRoot && (
-          <Button
-            size="icon"
-            variant="ghost"
-            className={CHROME_ICON}
-            title="Refresh workspace"
-            aria-label="Refresh workspace"
-            disabled={scanning}
-            onClick={onRefresh}
-          >
-            <RefreshCw className={scanning ? "animate-spin" : ""} />
-          </Button>
-        )}
         {canCollapseAll && (
           <Button
             size="icon"
