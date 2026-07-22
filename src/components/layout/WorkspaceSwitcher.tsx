@@ -16,6 +16,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import { WORKSPACE_DIR_NAME } from "@/lib/workspace";
+
+// cursor-pointer replaces the cursor-default that DropdownMenuItem and
+// DropdownMenuSubTrigger set for native-menu feel; cn() is tailwind-merge, so the
+// base class drops out rather than competing.
+const MENU_ROW = "cursor-pointer gap-2 p-1.5";
 
 interface Props {
   roots: string[];
@@ -34,9 +40,17 @@ interface WorkspaceLabel {
   title: string;
 }
 
+// Managed workspaces all live at <project>/notes, so the last segment names every
+// one of them identically and the project above it is the distinguishing part.
+function fallbackLabel(segments: string[]): string | undefined {
+  const last = segments[segments.length - 1];
+  if (last !== WORKSPACE_DIR_NAME) return last;
+  return segments[segments.length - 2] ?? last;
+}
+
 function describeWorkspace(root: string, name: string | undefined): WorkspaceLabel {
   const segments = root.split("/").filter(Boolean);
-  const label = name || segments[segments.length - 1] || root;
+  const label = name || fallbackLabel(segments) || root;
   const firstCodePoint = label.codePointAt(0);
   return {
     root,
@@ -49,12 +63,24 @@ function describeWorkspace(root: string, name: string | undefined): WorkspaceLab
   };
 }
 
+// DropdownMenuItem forces text-accent-foreground onto every descendant while
+// focused, so the badge must stay legible under that colour rather than rely on
+// a foreground of its own.
+function WorkspaceBadge({ workspace }: { workspace: WorkspaceLabel }) {
+  return (
+    <div
+      data-slot="workspace-badge"
+      className="flex aspect-square size-5 shrink-0 items-center justify-center rounded-md border bg-background text-[10px] font-semibold text-foreground"
+    >
+      {workspace.initial}
+    </div>
+  );
+}
+
 function WorkspaceIdentity({ workspace }: { workspace: WorkspaceLabel }) {
   return (
     <>
-      <div className="flex aspect-square size-6 shrink-0 items-center justify-center rounded-md bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">
-        {workspace.initial}
-      </div>
+      <WorkspaceBadge workspace={workspace} />
       <div className="grid min-w-0 flex-1 text-left leading-tight">
         <span className="truncate text-sm font-medium">{workspace.name}</span>
         <span className="truncate text-xs text-muted-foreground">
@@ -87,13 +113,13 @@ export function WorkspaceSwitcher({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
-              size="lg"
               title={active.title}
-              className="h-auto gap-2 py-1.5 data-open:bg-sidebar-accent data-open:text-sidebar-accent-foreground"
+              className="h-7 gap-2 rounded-md border bg-muted/40 px-1.5 py-1 hover:bg-muted hover:text-foreground data-open:bg-muted data-open:text-foreground data-open:hover:bg-muted data-open:hover:text-foreground"
             >
               <span className="sr-only">Switch workspace</span>
-              <WorkspaceIdentity workspace={active} />
-              <ChevronsUpDown className="ml-auto text-muted-foreground" />
+              <WorkspaceBadge workspace={active} />
+              <span className="truncate text-sm font-medium">{active.name}</span>
+              <ChevronsUpDown className="ml-auto shrink-0 text-muted-foreground" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent
@@ -107,7 +133,7 @@ export function WorkspaceSwitcher({
               <DropdownMenuItem
                 key={workspace.root}
                 title={workspace.title}
-                className="gap-2 p-1.5"
+                className={MENU_ROW}
                 onSelect={() => onSelect(workspace.root)}
               >
                 <WorkspaceIdentity workspace={workspace} />
@@ -117,12 +143,12 @@ export function WorkspaceSwitcher({
               </DropdownMenuItem>
             ))}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 p-1.5" onSelect={onAdd}>
+            <DropdownMenuItem className={MENU_ROW} onSelect={onAdd}>
               <FolderPlus className="text-muted-foreground" />
               Add workspace
             </DropdownMenuItem>
             <DropdownMenuSub>
-              <DropdownMenuSubTrigger className="gap-2 p-1.5">
+              <DropdownMenuSubTrigger className={MENU_ROW}>
                 <Trash2 className="text-muted-foreground" />
                 Remove workspace
               </DropdownMenuSubTrigger>
@@ -133,7 +159,7 @@ export function WorkspaceSwitcher({
                       key={workspace.root}
                       title={workspace.title}
                       variant="destructive"
-                      className="gap-2 p-1.5"
+                      className={MENU_ROW}
                       onSelect={() => onRemove(workspace.root)}
                     >
                       <WorkspaceIdentity workspace={workspace} />

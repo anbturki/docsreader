@@ -1,3 +1,4 @@
+import tauriConfigSource from "../../../src-tauri/tauri.conf.json?raw";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeAll, beforeEach } from "vitest";
@@ -6,6 +7,25 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AppToolbar } from "./AppToolbar";
+import { CHROME_STYLE, MAC_WINDOW_CONTROLS } from "./chrome";
+
+function trafficLightPosition(config: unknown): { x: number; y: number } {
+  if (typeof config !== "object" || config === null) throw new Error("bad config");
+  const app = (config as Record<string, unknown>).app;
+  if (typeof app !== "object" || app === null) throw new Error("no app config");
+  const windows = (app as Record<string, unknown>).windows;
+  if (!Array.isArray(windows) || windows.length === 0) throw new Error("no windows");
+  const position = (windows[0] as Record<string, unknown>).trafficLightPosition;
+  if (
+    typeof position !== "object" ||
+    position === null ||
+    typeof (position as Record<string, unknown>).x !== "number" ||
+    typeof (position as Record<string, unknown>).y !== "number"
+  ) {
+    throw new Error("no trafficLightPosition");
+  }
+  return position as { x: number; y: number };
+}
 
 const { platform } = vi.hoisted(() => ({ platform: { isMac: false } }));
 vi.mock("@/lib/platform", () => ({
@@ -138,6 +158,13 @@ describe("AppToolbar", () => {
     expect(handlers.onSelectRoot).toHaveBeenCalledWith("/ws/plain-folder");
   });
 
+  it("caps the workspace switcher instead of reserving a fixed width", () => {
+    renderToolbar();
+    const slot = toolbar().querySelector("[data-slot='workspace-switcher-slot']");
+    expect(slot?.className).toContain("max-w-");
+    expect(slot?.className).not.toMatch(/(^|\s)w-\d/);
+  });
+
   it("omits the workspace switcher when there are no workspaces", () => {
     renderToolbar({ roots: [] });
     expect(screen.queryByRole("button", { name: /switch workspace/i })).toBeNull();
@@ -146,13 +173,22 @@ describe("AppToolbar", () => {
   it("reserves room for the window controls on macOS", () => {
     platform.isMac = true;
     renderToolbar();
-    expect(toolbar().className).toContain("pl-[100px]");
+    expect(toolbar().className).toContain("pl-(--window-controls-inset)");
   });
 
   it("reserves no window-control room off macOS", () => {
     renderToolbar();
-    expect(toolbar().className).not.toContain("pl-[100px]");
+    expect(toolbar().className).not.toContain("--window-controls-inset");
     expect(toolbar().className).toContain("pl-2");
+  });
+
+  it("keeps the window-control inset in step with the configured position", () => {
+    const config: unknown = JSON.parse(tauriConfigSource);
+    expect(trafficLightPosition(config)).toEqual(MAC_WINDOW_CONTROLS);
+    expect(CHROME_STYLE["--window-controls-inset"]).toMatch(/^\d+px$/);
+    expect(parseInt(CHROME_STYLE["--window-controls-inset"], 10)).toBeGreaterThan(
+      MAC_WINDOW_CONTROLS.x
+    );
   });
 
   it("toggles the sidebar without depending on its current state", async () => {

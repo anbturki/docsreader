@@ -1,8 +1,54 @@
+/// <reference types="node" />
+// Vitest stubs CSS module imports, so the theme tokens have to be read off disk.
+import { readFileSync } from "node:fs";
+import dropdownMenuSource from "@/components/ui/dropdown-menu.tsx?raw";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+
+const THEMES = ["light", "dark"] as const;
+type Theme = (typeof THEMES)[number];
+
+const THEME_SELECTOR: Record<Theme, string> = { light: ":root", dark: ".dark" };
+
+const MIN_LIGHTNESS_DELTA = 0.4;
+
+function themeTokens(theme: Theme): Record<string, number> {
+  const block = readFileSync("src/index.css", "utf8").match(
+    new RegExp(`\\${THEME_SELECTOR[theme]}\\s*\\{([^}]*)\\}`)
+  );
+  if (!block) throw new Error(`no ${THEME_SELECTOR[theme]} block in index.css`);
+
+  const tokens: Record<string, number> = {};
+  for (const [, name, lightness] of block[1].matchAll(
+    /--([\w-]+):\s*oklch\(\s*([\d.]+)/g
+  )) {
+    tokens[name] = Number(lightness);
+  }
+  return tokens;
+}
+
+// The colour DropdownMenuItem forces onto every descendant while focused.
+function forcedItemForeground(): string {
+  const match = dropdownMenuSource.match(/focus:\*\*:text-([\w-]+)/);
+  if (!match) throw new Error("dropdown-menu no longer forces a descendant colour");
+  return match[1];
+}
+
+function tokenOf(
+  element: Element,
+  prefix: string,
+  tokens: Record<string, number>
+): string {
+  const found = [...element.classList]
+    .filter((name) => name.startsWith(prefix))
+    .map((name) => name.slice(prefix.length))
+    .find((token) => token in tokens);
+  if (!found) throw new Error(`no ${prefix}<token> class on the badge`);
+  return found;
+}
 
 const handlers = {
   onSelect: vi.fn(),
@@ -51,6 +97,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  document.documentElement.classList.remove("dark");
   Object.values(handlers).forEach((h) => h.mockReset());
 });
 
@@ -61,6 +108,57 @@ describe("WorkspaceSwitcher", () => {
     expect(trigger()).toHaveTextContent("Vinfra Voice");
     expect(trigger()).toHaveAttribute("title", "Vinfra Voice\n/ws/voice");
   });
+
+  it("keeps the location off the trigger and on the menu rows", async () => {
+    const user = userEvent.setup();
+    renderSwitcher();
+
+    expect(trigger().textContent).not.toContain("ws/voice");
+
+    await user.click(trigger());
+    const row = await screen.findByRole("menuitem", { name: /Vinfra Voice/ });
+    expect(row.textContent).toContain("Vinfra Voice");
+    expect(row.textContent).toContain("ws/voice");
+  });
+
+  it("truncates a long workspace name instead of widening the trigger", () => {
+    const root = "/ws/voice";
+    renderSwitcher([root], root, {
+      [root]: "A workspace name long enough to overrun any toolbar",
+    });
+
+    const label = [...trigger().querySelectorAll("span")].find((span) =>
+      span.textContent?.startsWith("A workspace name")
+    );
+    expect(label?.className).toContain("truncate");
+  });
+
+  it.each(THEMES)(
+    "keeps the badge legible on a focused row in the %s theme",
+    async (theme) => {
+      const user = userEvent.setup();
+      document.documentElement.classList.toggle("dark", theme === "dark");
+      renderSwitcher();
+      await user.click(trigger());
+
+      const row = await screen.findByRole("menuitem", { name: /Vinfra Voice/ });
+      row.focus();
+      const badge = row.querySelector("[data-slot='workspace-badge']");
+      expect(badge).not.toBeNull();
+      if (!badge) return;
+
+      expect(badge.className).not.toContain("sidebar");
+
+      const tokens = themeTokens(theme);
+      const background = tokens[tokenOf(badge, "bg-", tokens)];
+      const foregrounds = [tokenOf(badge, "text-", tokens), forcedItemForeground()];
+      for (const foreground of foregrounds) {
+        expect(Math.abs(tokens[foreground] - background)).toBeGreaterThanOrEqual(
+          MIN_LIGHTNESS_DELTA
+        );
+      }
+    }
+  );
 
   it("falls back to the folder name when a workspace has no marker name", async () => {
     const user = userEvent.setup();
@@ -160,6 +258,49 @@ describe("WorkspaceSwitcher", () => {
     const other = screen.getByRole("menuitem", { name: /plain-folder/ });
     expect(active.querySelector("svg.lucide-check")).not.toBeNull();
     expect(other.querySelector("svg.lucide-check")).toBeNull();
+  });
+
+  it("labels a managed workspace by its project, not its notes folder", () => {
+    renderSwitcher(["/code/acme-billing/notes"], "/code/acme-billing/notes", {});
+
+    expect(trigger()).toHaveTextContent("acme-billing");
+    expect(trigger().textContent).not.toContain("notes");
+    expect(
+      trigger().querySelector("[data-slot='workspace-badge']")?.textContent
+    ).toBe("A");
+  });
+
+  it("labels an arbitrary folder by its own last segment", () => {
+    renderSwitcher(["/code/scratchpad"], "/code/scratchpad", {});
+
+    expect(trigger()).toHaveTextContent("scratchpad");
+    expect(
+      trigger().querySelector("[data-slot='workspace-badge']")?.textContent
+    ).toBe("S");
+  });
+
+  it("prefers an explicit marker name over either fallback", () => {
+    renderSwitcher(["/code/acme-billing/notes"], "/code/acme-billing/notes", {
+      "/code/acme-billing/notes": "Billing",
+    });
+
+    expect(trigger()).toHaveTextContent("Billing");
+    expect(
+      trigger().querySelector("[data-slot='workspace-badge']")?.textContent
+    ).toBe("B");
+  });
+
+  it("shows a pointer cursor on every clickable row", async () => {
+    const user = userEvent.setup();
+    renderSwitcher();
+    await user.click(trigger());
+
+    const rows = await screen.findAllByRole("menuitem");
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row.className).toContain("cursor-pointer");
+      expect(row.className).not.toContain("cursor-default");
+    }
   });
 
   it("renders nothing without roots", () => {

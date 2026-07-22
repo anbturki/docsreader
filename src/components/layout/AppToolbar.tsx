@@ -90,11 +90,11 @@ export function AppToolbar({
       data-tauri-drag-region
       data-slot="app-toolbar"
       className={`fixed inset-x-0 top-0 z-30 flex h-(--toolbar-height) items-center gap-2 border-b bg-background pr-2 ${
-        isMac ? "pl-[100px]" : "pl-2"
+        isMac ? "pl-(--window-controls-inset)" : "pl-2"
       }`}
     >
       {roots.length > 0 && (
-        <div className="w-56 shrink-0">
+        <div data-slot="workspace-switcher-slot" className="max-w-48 shrink-0">
           <WorkspaceSwitcher
             roots={roots}
             activeRoot={activeRoot}
