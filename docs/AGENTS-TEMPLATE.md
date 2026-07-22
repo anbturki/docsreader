@@ -19,8 +19,12 @@ to the index, never committed, and nothing else in the repo is touched).
 - Pass `workspace: "my-project"` on every docsreader call so nothing lands
   in the wrong workspace. If a call fails with `workspace_not_found`, create
   the workspace once with `init_workspace {path: "<absolute repo root>",
-  slug: "my-project"}` and retry. This repo being a git repository is not a
-  reason to write elsewhere.
+  slug: "my-project", name: "My Project"}` and retry. Check
+  `list_workspaces` first and reuse a match; a reply of "already a DocsReader
+  workspace" means it exists and is ready, so keep writing there. This repo
+  being a git repository is not a reason to write elsewhere. The `name` is
+  what humans pick from in the app, so name it after this project or product
+  ("Acme Billing API"), never "Notes" or "Docs".
 - Never track this project's docs or tasks in `~/notes` or another project's
   workspace; a label is not a substitute for a workspace.
 - Read the `docsreader://onboarding` resource once per session for the full

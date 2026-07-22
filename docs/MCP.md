@@ -28,7 +28,7 @@ Homebrew users from before v0.6.0: run `brew upgrade --cask docsreader` once so 
 
 Every tool takes an optional `workspace` slug - omit it to use the resolved default (a project `./notes` if present, else `~/notes`). Tool errors carry recovery hints, so agents self-correct instead of stalling.
 
-Give each project its own workspace: labels group work inside a workspace, they do not separate projects. In order of preference, an agent starting on a project with no workspace should `init_workspace {path: "<project root>"}` (a git repository is fine - only the `notes` folder is written, and files there are staged, never committed); failing that, use a sibling folder such as `<parent>/<project>-notes` and pass its slug explicitly; `~/notes` is for work that belongs to no project.
+Give each project its own workspace: labels group work inside a workspace, they do not separate projects. List first, reuse second, create last - `list_workspaces` before writing, and an "already a DocsReader workspace" answer from `init_workspace` means that workspace is ready, not that you should write elsewhere. In order of preference, an agent starting on a project with no workspace should `init_workspace {path: "<project root>", name: "<the project or product>"}` (a git repository is fine - only the `notes` folder is written, and files there are staged, never committed); failing that, use a sibling folder such as `<parent>/<project>-notes` and pass its slug explicitly; `~/notes` is for work that belongs to no project. The `name` is what the app's switcher lists, so it must identify the project or product (`"Acme Billing API"`, not `"Notes"`).
 
 ### Workspaces
 

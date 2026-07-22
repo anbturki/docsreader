@@ -38,7 +38,9 @@ fn ensure_target_is_fresh(root: &Path) -> Result<(), CoreError> {
             ErrorCode::Conflict,
             format!("{} is already a DocsReader workspace", root.display()),
         )
-        .with_recovery("it is ready to use; call write_doc or list_workspaces"));
+        .with_recovery(
+            "nothing to fix: this is the workspace to use. Take its slug from list_workspaces, pass it on later calls, and carry on writing here instead of looking for another location",
+        ));
     }
     let has_content = std::fs::read_dir(root)?.next().is_some();
     if has_content {

@@ -25,18 +25,29 @@ Each project gets its own workspace. Labels and tags group work inside one
 workspace; they do not separate projects, and `list_tasks` in a shared
 workspace returns other projects' tasks too.
 
+List first, reuse second, create last: `list_workspaces` before writing, and
+if one already belongs to this project, use it. `init_workspace` answering
+"already a DocsReader workspace" means the same thing - that workspace is
+ready, keep writing there rather than looking for somewhere else.
+
 When asked to track work for a project that has no workspace yet, take the
 first option that fits and proceed without asking:
 
-1. `init_workspace {path: "<project root>"}`, creating `<project>/notes`. The
-   project root being a git repository is not a blocker: only the `notes`
-   folder is written, and files there are staged but never committed.
+1. `init_workspace {path: "<project root>", name: "<the project or product>"}`,
+   creating `<project>/notes`. The project root being a git repository is not
+   a blocker: only the `notes` folder is written, and files there are staged
+   but never committed.
 2. If the project's own tree must stay untouched, use a sibling folder:
    `init_workspace {path: "<parent>/<project>-notes"}`. Pass that workspace's
    slug on every later call, since it is outside the project tree and will not
    be picked up automatically.
 3. `~/notes` only for work that belongs to no project. Do not park a new
    project's docs or tasks there.
+
+The `name` is what humans pick from in the app, so it must identify the
+project or product: `"Acme Billing API"`, never `"Notes"` or `"Docs"`. Leave
+`slug` to its default (the project folder name) unless `list_workspaces`
+already shows that slug in use.
 
 ## Workflow
 
