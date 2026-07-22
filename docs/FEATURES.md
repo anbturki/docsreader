@@ -51,9 +51,10 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 ## Tasks
 
 - **Task header:** a doc the MCP wrote as a task (Backlog.md-shaped frontmatter) renders a header - status pill, priority, assignee, and an acceptance-criteria progress bar - instead of plain markdown
-- **Tasks board:** a lens stacking tasks under a To Do, In Progress, or Done group; cards show priority, assignee, and progress, and open the underlying file on click
-- **Board or list:** a switch in the sidebar header shows the same tasks as the grouped board or as one flat list in id order, each row carrying its status, priority, assignee, and progress. The choice is remembered across sessions. Grouping, folding, and drag-to-advance belong to the board; the list trades them for density
-- **Drag-to-advance:** drag a card to another group to change its status; the write goes through the same core the agents use, so a GUI move and an MCP `set_task_status` stay consistent
+- **Tasks in the sidebar:** a lens stacking tasks under a To Do, In Progress, or Done heading; cards show priority, assignee, and progress, and open the underlying file on click
+- **Tasks full-window:** open the tasks as their own tab, where there is room for a board of side-by-side status columns. The document explorer steps aside while it is showing, since the board already lists the workspace
+- **Board or list:** a switch in the toolbar, shown only while the tasks tab is open, draws them as that board or as rows grouped under each status, every row carrying its labels, assignee, priority, and progress under a header naming the columns. The choice is remembered across sessions
+- **Drag-to-advance:** drag a card to another status to change it, in the sidebar or across the full-window board; the write goes through the same core the agents use, so a move here and an MCP `set_task_status` stay consistent
 - **Collapsible groups:** fold a status group away by its heading; the choice is remembered per workspace, and a folded group reopens on its own while a search or filter has matches in it
 - **Task filters:** the sidebar search matches task titles and ids, and the filter control beside it holds priority and label in a popover; filters compose, and the header row keeps a running count that reads `shown / total` while anything is narrowing the set. Both the search and the filters apply to whichever view is showing
 
