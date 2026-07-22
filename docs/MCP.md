@@ -26,9 +26,9 @@ Homebrew users from before v0.6.0: run `brew upgrade --cask docsreader` once so 
 
 ## Tools
 
-Every tool takes an optional `workspace` slug. Omit it and the server resolves one from where the agent is working: a project `./notes` if there is one above it, else your `~/notes` once that has been set up as a workspace. Reads fall back to `~/notes` either way, so a session that has no workspace yet can still look around.
+Every tool takes an optional `workspace` slug. Omit it and the server resolves one from where the agent is working: a project `./notes` if there is one above it, else your `~/notes`. Reads resolve that way always, so a session that has no workspace of its own can still look around.
 
-Writes do not fall back. When nothing resolves - no project workspace above the agent, and `~/notes` not set up - a write with no `workspace` argument is refused instead of creating a workspace on the spot. Clients that can put a question to you are offered a pick from the workspaces that exist; when the client cannot be asked, the refusal lists them and points at `init_workspace`. Only `init_workspace` creates a workspace. An explicit `workspace` slug is always honoured, including `notes`: naming it is a choice, and only an unnamed write can drift.
+Writes do not fall back. A write with no `workspace` argument is refused unless a workspace actually covers where the agent is working: a project `./notes` above it, or `~/notes` when that is where the agent is standing. Working from an unrelated folder is refused even when `~/notes` exists, because filing project work in the shared folder is the mistake this prevents. Clients that can put a question to you are offered a pick from the workspaces that exist; when the client cannot be asked, the refusal lists them and points at `init_workspace`. Only `init_workspace` creates a workspace. An explicit `workspace` slug is always honoured, including `notes`: naming it is a choice, and only an unnamed write can drift.
 
 Tool errors carry recovery hints, so agents self-correct instead of stalling.
 
