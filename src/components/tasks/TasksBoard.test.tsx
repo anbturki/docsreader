@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
+import { TaskFilterProvider } from "@/components/explorer/TaskFilterContext";
 import { TasksBoard } from "./TasksBoard";
 import type { Task, TaskStatus } from "@/lib/tasks";
 
@@ -87,6 +88,7 @@ describe("collapsed statuses persist per workspace", () => {
 
   function board(root: string) {
     return (
+      <TaskFilterProvider>
       <TasksBoard
         activeRoot={root}
         query=""
@@ -94,6 +96,7 @@ describe("collapsed statuses persist per workspace", () => {
         onOpen={() => {}}
         onOpenInNewTab={() => {}}
       />
+      </TaskFilterProvider>
     );
   }
 
@@ -139,7 +142,9 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
     });
 
     render(
-      <TasksBoard activeRoot={ROOT} query="" selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+      <TaskFilterProvider>
+        <TasksBoard activeRoot={ROOT} query="" selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+      </TaskFilterProvider>
     );
     await waitFor(() => expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy());
 
@@ -163,7 +168,9 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
     });
 
     render(
-      <TasksBoard activeRoot={ROOT} query="" selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+      <TaskFilterProvider>
+        <TasksBoard activeRoot={ROOT} query="" selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+      </TaskFilterProvider>
     );
     await waitFor(() => expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy());
 

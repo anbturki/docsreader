@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { ChevronRight, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -11,11 +11,10 @@ import {
   availableLabels,
   filterTasks,
   isFilterActive,
-  EMPTY_TASK_FILTER,
   type TaskFilter,
 } from "@/lib/taskFilter";
 import { STATUS_STYLES } from "@/lib/taskStyles";
-import { TaskBoardFilters } from "./TaskBoardFilters";
+import { useTaskFilter } from "@/components/explorer/TaskFilterContext";
 import { TaskCard } from "./TaskCard";
 
 interface Props {
@@ -63,13 +62,13 @@ export function TaskBoardView({
   onToggleStatus,
 }: Props) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<TaskFilter>(EMPTY_TASK_FILTER);
+  const { filter, setLabels } = useTaskFilter();
 
   const labels = useMemo(() => availableLabels(tasks), [tasks]);
+  useEffect(() => setLabels(labels), [labels, setLabels]);
   const activeFilter = useMemo<TaskFilter>(() => ({ ...filter, text: query }), [filter, query]);
   const filtered = useMemo(() => filterTasks(tasks, activeFilter), [tasks, activeFilter]);
   const columns = groupByStatus(filtered);
-  const hasTasks = tasks.length > 0;
   const searching = isFilterActive(activeFilter);
 
   const handleDrop = (status: TaskStatus) => {
@@ -101,10 +100,6 @@ export function TaskBoardView({
         </Button>
       </div>
 
-      {hasTasks && !loading && (
-        <TaskBoardFilters filter={filter} labels={labels} onChange={setFilter} />
-      )}
-
       {error && <p className="px-1 text-xs text-destructive">{error}</p>}
 
       {loading && tasks.length === 0 ? (
@@ -115,7 +110,7 @@ export function TaskBoardView({
             <EmptyTitle>{searching ? "No matching tasks" : "No tasks"}</EmptyTitle>
             <EmptyDescription>
               {searching
-                ? "Adjust the search or filters above."
+                ? "Adjust the search or filters in the sidebar header."
                 : "Agents create tasks in tasks/ via MCP."}
             </EmptyDescription>
           </EmptyHeader>

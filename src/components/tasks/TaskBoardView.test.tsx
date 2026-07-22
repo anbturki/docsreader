@@ -2,6 +2,7 @@ import { useState } from "react";
 import { render, screen, within, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 
+import { TaskFilterProvider } from "@/components/explorer/TaskFilterContext";
 import { TaskBoardView } from "./TaskBoardView";
 import type { Task, TaskStatus } from "@/lib/tasks";
 import type { AcProgress } from "@/lib/taskDoc";
@@ -80,7 +81,11 @@ describe("Smoke C2: board groups real tasks correctly", () => {
   const progress = new Map<string, AcProgress>([["/ws/tasks/task-2.md", { done: 1, total: 3 }]]);
 
   function board(over: Omit<BoardProps, "tasks" | "progress"> = {}) {
-    return <CollapsibleBoard tasks={tasks} progress={progress} {...over} />;
+    return (
+      <TaskFilterProvider>
+        <CollapsibleBoard tasks={tasks} progress={progress} {...over} />
+      </TaskFilterProvider>
+    );
   }
 
   function renderBoard() {
@@ -114,6 +119,7 @@ describe("Smoke C2: board groups real tasks correctly", () => {
   it("opens the task on card click", async () => {
     const onOpen = vi.fn();
     render(
+      <TaskFilterProvider>
       <TaskBoardView
         tasks={[task("task-9", "Done")]}
         progress={new Map()}
@@ -124,6 +130,7 @@ describe("Smoke C2: board groups real tasks correctly", () => {
         onOpen={onOpen}
         onOpenInNewTab={noop}
       />
+      </TaskFilterProvider>
     );
     screen.getByText("Title task-9").click();
     expect(onOpen).toHaveBeenCalledWith("/ws/tasks/task-9.md");
@@ -131,6 +138,7 @@ describe("Smoke C2: board groups real tasks correctly", () => {
 
   it("shows skeletons while loading with no tasks yet", () => {
     render(
+      <TaskFilterProvider>
       <TaskBoardView
         tasks={[]}
         progress={new Map()}
@@ -141,6 +149,7 @@ describe("Smoke C2: board groups real tasks correctly", () => {
         onOpen={noop}
         onOpenInNewTab={noop}
       />
+      </TaskFilterProvider>
     );
     expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
     expect(document.querySelector("[data-status]")).toBeNull();
@@ -149,6 +158,7 @@ describe("Smoke C2: board groups real tasks correctly", () => {
   it("calls onAdvance with the target status when a card is dragged across columns", () => {
     const onAdvance = vi.fn();
     render(
+      <TaskFilterProvider>
       <TaskBoardView
         tasks={[task("task-1", "To Do")]}
         progress={new Map()}
@@ -160,6 +170,7 @@ describe("Smoke C2: board groups real tasks correctly", () => {
         onOpenInNewTab={noop}
         onAdvance={onAdvance}
       />
+      </TaskFilterProvider>
     );
     const card = screen.getByText("Title task-1").closest("button");
     if (!card) throw new Error("card not found");
@@ -189,9 +200,12 @@ describe("Smoke C2: board groups real tasks correctly", () => {
     expect(screen.queryByPlaceholderText(/filter tasks/i)).toBeNull();
   });
 
-  it("keeps the priority filter, which the shared query does not cover", () => {
+  // The priority and label filters moved into the sidebar header, so the board
+  // must not grow a second set of its own.
+  it("hosts no filter controls, which now live in the sidebar header", () => {
     renderBoard();
-    expect(screen.getByLabelText("Filter by priority")).toBeTruthy();
+    expect(screen.queryByLabelText("Filter by priority")).toBeNull();
+    expect(screen.queryByLabelText("Filter by label")).toBeNull();
   });
 
   it("collapses a status to its header, keeping the count and hiding the cards", () => {
@@ -249,6 +263,7 @@ describe("Smoke C2: board groups real tasks correctly", () => {
 
   it("shows the empty state when there are no tasks", () => {
     render(
+      <TaskFilterProvider>
       <TaskBoardView
         tasks={[]}
         progress={new Map()}
@@ -259,6 +274,7 @@ describe("Smoke C2: board groups real tasks correctly", () => {
         onOpen={noop}
         onOpenInNewTab={noop}
       />
+      </TaskFilterProvider>
     );
     expect(screen.getByText("No tasks")).toBeTruthy();
   });
