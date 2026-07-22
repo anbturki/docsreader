@@ -42,6 +42,7 @@ interface Props {
   onLensChange: (lens: SidebarLens) => void;
   lensView: LensViewId | undefined;
   onLensViewChange: (view: LensViewId) => void;
+  onOpenTasksTab: () => void;
 
   // search
   search: SidebarSearch;
@@ -95,6 +96,7 @@ function SidebarPanels({
   onRefresh,
   lens,
   onLensChange,
+  onOpenTasksTab,
   search,
   searchEntries,
   searchingContents,
@@ -171,6 +173,7 @@ function SidebarPanels({
               search={search}
               scanning={!!activeScan?.scanning}
               onRefresh={refreshLens}
+              onOpenTasksTab={onOpenTasksTab}
             />
           )}
 

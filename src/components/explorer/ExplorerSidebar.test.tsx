@@ -138,6 +138,7 @@ function Harness({
           lens={lens}
           onLensChange={onLensChange}
           lensView={undefined}
+          onOpenTasksTab={() => {}}
           onLensViewChange={() => {}}
           search={search}
           searchEntries={searchEntries}

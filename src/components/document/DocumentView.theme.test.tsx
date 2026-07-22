@@ -48,7 +48,8 @@ const UNSAVED = "# hello, an unsaved edit";
 
 const tab: Tab = {
   id: "t1",
-  path: "/w/notes/a.md",
+  kind: "file",
+  ref: "/w/notes/a.md",
   title: "a.md",
   content: DRAFT,
   meta: {},

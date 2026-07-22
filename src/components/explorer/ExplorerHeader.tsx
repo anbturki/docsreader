@@ -1,10 +1,11 @@
 import { useRef } from "react";
-import { RefreshCw, Search } from "lucide-react";
+import { Maximize2, RefreshCw, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { SidebarHeader } from "@/components/ui/sidebar";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { LENS_VIEW_OPTIONS, type SidebarLens } from "@/lib/storage";
+import { taskCountLabel } from "@/lib/taskFilter";
 import type { SidebarSearch } from "@/hooks/useSidebarSearch";
 import { TASK_VIEWS } from "@/components/tasks/taskViews";
 import { SidebarSearchPanel } from "./SidebarSearchPanel";
@@ -16,12 +17,19 @@ interface Props {
   search: SidebarSearch;
   scanning: boolean;
   onRefresh: () => void;
+  onOpenTasksTab: () => void;
 }
 
 const TASK_PLACEHOLDER = "Search tasks...";
 const DOCUMENT_PLACEHOLDER = "Search names, tags, and contents...";
 
-export function ExplorerHeader({ lens, search, scanning, onRefresh }: Props) {
+export function ExplorerHeader({
+  lens,
+  search,
+  scanning,
+  onRefresh,
+  onOpenTasksTab,
+}: Props) {
   const toggleRef = useRef<HTMLButtonElement>(null);
   const scopesEnabled = lens !== "tasks";
 
@@ -50,7 +58,22 @@ export function ExplorerHeader({ lens, search, scanning, onRefresh }: Props) {
         >
           <Search />
         </Button>
-        {lens === "tasks" && <TaskFilterPopover />}
+        {lens === "tasks" && (
+          <>
+            <TaskFilterPopover />
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="size-7 text-muted-foreground"
+              aria-label="Open tasks in the main area"
+              title="Open tasks in the main area"
+              onClick={onOpenTasksTab}
+            >
+              <Maximize2 />
+            </Button>
+          </>
+        )}
         <Button
           type="button"
           size="icon"
@@ -117,11 +140,9 @@ function ViewSwitch({ lens }: { lens: SidebarLens }) {
 function TaskCountLabel({ active }: { active: boolean }) {
   const { count } = useTaskFilter();
   if (!active || !count) return null;
-  const { shown, total } = count;
-  const tally = shown === total ? `${total}` : `${shown} / ${total}`;
   return (
     <span className="mr-auto truncate text-xs font-medium uppercase tracking-wide text-muted-foreground">
-      {`${tally} task${total === 1 ? "" : "s"}`}
+      {taskCountLabel(count.shown, count.total)}
     </span>
   );
 }

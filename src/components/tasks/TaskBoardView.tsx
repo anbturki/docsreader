@@ -3,20 +3,13 @@ import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { TASK_STATUSES, type Task, type TaskStatus } from "@/lib/tasks";
+import { groupTasksByStatus } from "@/lib/taskFilter";
 import type { AcProgress } from "@/lib/taskDoc";
 import { STATUS_STYLES } from "@/lib/taskStyles";
 import type { TaskViewProps } from "./taskViews";
 import { TaskCard } from "./TaskCard";
 
 const NO_COLLAPSED: ReadonlySet<TaskStatus> = new Set<TaskStatus>();
-
-function groupByStatus(tasks: Task[]): Map<TaskStatus, Task[]> {
-  const columns = new Map<TaskStatus, Task[]>(TASK_STATUSES.map((s) => [s, []]));
-  for (const task of tasks) {
-    columns.get(task.status)?.push(task);
-  }
-  return columns;
-}
 
 export function TaskBoardView({
   tasks,
@@ -32,7 +25,7 @@ export function TaskBoardView({
   onToggleStatus,
 }: TaskViewProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const columns = groupByStatus(tasks);
+  const columns = groupTasksByStatus(tasks);
 
   const handleDrop = (status: TaskStatus) => {
     if (draggingId && onAdvance) onAdvance(draggingId, status);

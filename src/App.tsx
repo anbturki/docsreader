@@ -45,6 +45,7 @@ import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
 import { CHROME_STYLE } from "@/components/layout/chrome";
 import { lensViewFor, type LensViewId, type SplitMode } from "@/lib/storage";
+import { fileTarget, TAB_KIND_SPECS, TASKS_TARGET } from "@/lib/tabKinds";
 import "@/styles/code-theme.css";
 
 // "off" never reaches the split branch, but the map stays total so a new
@@ -80,7 +81,7 @@ function App() {
     roots: library.roots,
     addRoot: library.addRoot,
     selectRoot: library.selectRoot,
-    openFile: panes.openInActivePane,
+    openFile: (path: string) => panes.openInActivePane(fileTarget(path)),
   });
   useTheme(viewSettings.settings.colorScheme, viewSettings.settings.accentColor);
   const deferredSettings = useDeferredValue(viewSettings.settings);
@@ -110,6 +111,23 @@ function App() {
   const handleScrollElChange1 = useCallback((el: HTMLElement | null) => {
     setScrollElByPane(([a, _]) => [a, el]);
   }, []);
+
+  const openInActive = tabs.openInActive;
+  const openInNew = tabs.openInNew;
+  const openInOtherPane = panes.openInOtherPane;
+  const openFile = useCallback(
+    (path: string) => openInActive(fileTarget(path)),
+    [openInActive]
+  );
+  const openFileInNewTab = useCallback(
+    (path: string) => openInNew(fileTarget(path)),
+    [openInNew]
+  );
+  const openFileInOtherPane = useCallback(
+    (path: string) => openInOtherPane(fileTarget(path)),
+    [openInOtherPane]
+  );
+  const openTasksTab = useCallback(() => openInActive(TASKS_TARGET), [openInActive]);
 
   const toggleOutline = useCallback(() => {
     viewSettings.update({
@@ -167,7 +185,7 @@ function App() {
     if (!file) return;
 
     const hasTabInRoot = tabsList.some(
-      (t) => t.path.startsWith(root + "/") || t.path === root
+      (t) => t.ref.startsWith(root + "/") || t.ref === root
     );
     if (hasTabInRoot) {
       autoOpenedHomepageRef.current.add(root);
@@ -175,7 +193,7 @@ function App() {
     }
 
     autoOpenedHomepageRef.current.add(root);
-    tabsOpenInNew(file.path);
+    tabsOpenInNew(fileTarget(file.path));
   }, [tabsHydrated, library.activeRoot, library.activeScan, tabsList, tabsOpenInNew]);
 
   const rawFiles = library.activeScan?.result.files ?? [];
@@ -302,10 +320,16 @@ function App() {
     if (!tree) return;
     sidebar.collapseAll(collectDirKeys(tree, rootKey));
   }, [tree, rootKey, sidebar]);
-  const activeFile = tabs.activeTab
-    ? allFiles.find((f) => f.path === tabs.activeTab?.path)
+  // Only a tab backed by a file has a path to place in the breadcrumb, an
+  // outline to draw, or a row to highlight in the sidebar.
+  const activeTab = tabs.activeTab;
+  const activeFilePath =
+    activeTab && TAB_KIND_SPECS[activeTab.kind].readsFromDisk ? activeTab.ref : undefined;
+  const activeFile = activeFilePath
+    ? allFiles.find((f) => f.path === activeFilePath)
     : undefined;
-  const headerRelPath = activeFile?.relPath ?? (tabs.activeTab && basename(tabs.activeTab.path));
+  const headerRelPath =
+    activeFile?.relPath ?? (activeFilePath ? basename(activeFilePath) : activeTab?.title);
   // Resolve the effective scheme so the toggle reflects what is actually
   // rendered, including when colorScheme is "system".
   const [systemDark, setSystemDark] = useState(
@@ -487,7 +511,7 @@ function App() {
           onCollapseAll={handleCollapseAll}
           split={panes.layout.split}
           onSplitChange={panes.setSplit}
-          canToggleOutline={!!tabs.activeTab}
+          canToggleOutline={!!activeFilePath}
           outlineOpen={viewSettings.settings.outlineOpen}
           onToggleOutline={toggleOutline}
           isDark={isDark}
@@ -561,10 +585,11 @@ function App() {
             setSettingsSection("explorer");
             setSettingsOpen(true);
           }}
-          selectedPath={tabs.activeTab?.path}
-          onSelectFile={tabs.openInActive}
-          onOpenInNewTab={tabs.openInNew}
-          onOpenInOtherPane={panes.openInOtherPane}
+          selectedPath={activeFilePath}
+          onSelectFile={openFile}
+          onOpenInNewTab={openFileInNewTab}
+          onOpenInOtherPane={openFileInOtherPane}
+          onOpenTasksTab={openTasksTab}
         />
 
         {/* The inset variant sets the card's gap with a hardcoded `m-2`, and its
@@ -607,6 +632,7 @@ function App() {
                       autoReloadOnExternalChange: true,
                     })
                   }
+                  onOpenInOtherPane={openFileInOtherPane}
                   hasRoots={library.roots.length > 0}
                 />
               ) : (
@@ -637,6 +663,7 @@ function App() {
                           autoReloadOnExternalChange: true,
                         })
                       }
+                      onOpenInOtherPane={openFileInOtherPane}
                       hasRoots={library.roots.length > 0}
                     />
                   </ResizablePanel>
@@ -660,22 +687,23 @@ function App() {
                           autoReloadOnExternalChange: true,
                         })
                       }
+                      onOpenInOtherPane={openFileInOtherPane}
                       hasRoots={library.roots.length > 0}
                     />
                   </ResizablePanel>
                 </ResizablePanelGroup>
               )}
             </div>
-            {viewSettings.settings.outlineOpen && tabs.activeTab && !tabs.activeTab.loading && (
+            {viewSettings.settings.outlineOpen && activeTab && activeFilePath && !activeTab.loading && (
               <aside className="hidden w-60 shrink-0 overflow-y-auto border-l bg-background px-2 lg:block">
                 <OutlinePanel
-                  content={tabs.activeTab.content}
+                  content={activeTab.content}
                   scrollContainer={activeScrollEl}
                 />
                 <BacklinksPanel
                   files={allFiles}
-                  activePath={tabs.activeTab.path}
-                  onNavigate={tabs.openInActive}
+                  activePath={activeFilePath}
+                  onNavigate={openFile}
                 />
               </aside>
             )}
@@ -688,7 +716,7 @@ function App() {
               onOpenChange={setQuickOpen}
               files={quickOpenFiles}
             roots={library.roots}
-              onSelect={(path) => tabs.openInActive(path)}
+              onSelect={openInActive}
             />
           </Suspense>
         )}

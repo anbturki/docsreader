@@ -14,6 +14,8 @@ import { useContentSearch } from "@/hooks/useContentSearch";
 import { SearchSnippet } from "@/components/explorer/SearchSnippet";
 import { SearchScopeChips } from "@/components/explorer/SearchScopeChips";
 import type { SearchScope } from "@/lib/contentSearch";
+import { fileTarget, TAB_KINDS, type TabTarget } from "@/lib/tabKinds";
+import { TAB_KIND_VIEWS } from "@/components/document/tabKinds";
 
 export interface QuickOpenFile extends MarkdownFile {
   rootPath: string;
@@ -24,7 +26,7 @@ interface Props {
   onOpenChange: (open: boolean) => void;
   files: QuickOpenFile[];
   roots: string[];
-  onSelect: (path: string, openInNew: boolean) => void;
+  onSelect: (target: TabTarget) => void;
 }
 
 export default function QuickOpenDialog({
@@ -83,6 +85,13 @@ export default function QuickOpenDialog({
         </div>
         <CommandList>
           <CommandEmpty>No matches.</CommandEmpty>
+          <StandaloneTabs
+            query={deferredQuery}
+            onSelect={(target) => {
+              onSelect(target);
+              onOpenChange(false);
+            }}
+          />
           {ranked.length > 0 && (
           <CommandGroup heading="Files">
             {ranked.map((file) => (
@@ -90,7 +99,7 @@ export default function QuickOpenDialog({
                 key={file.path}
                 value={file.path}
                 onSelect={() => {
-                  onSelect(file.path, false);
+                  onSelect(fileTarget(file.path));
                   onOpenChange(false);
                 }}
               >
@@ -110,7 +119,7 @@ export default function QuickOpenDialog({
                   key={hit.path}
                   value={`content:${hit.path}`}
                   onSelect={() => {
-                    onSelect(hit.path, false);
+                    onSelect(fileTarget(hit.path));
                     onOpenChange(false);
                   }}
                 >
@@ -158,4 +167,41 @@ function scoreFile(file: QuickOpenFile, tokens: string[]): number {
     total += best;
   }
   return total;
+}
+
+// Views a tab can open without pointing at anything, so a reader who never
+// opens the sidebar can still reach them.
+function StandaloneTabs({
+  query,
+  onSelect,
+}: {
+  query: string;
+  onSelect: (target: TabTarget) => void;
+}) {
+  const q = query.trim().toLowerCase();
+  const entries = TAB_KINDS.flatMap((kind) => {
+    const standalone = TAB_KIND_VIEWS[kind].standalone;
+    if (!standalone) return [];
+    if (q && !standalone.label.toLowerCase().includes(q)) return [];
+    return [{ kind, ...standalone }];
+  });
+  if (entries.length === 0) return null;
+
+  return (
+    <CommandGroup heading="Views">
+      {entries.map(({ kind, label, hint, icon: Icon }) => (
+        <CommandItem
+          key={kind}
+          value={`view:${kind}`}
+          onSelect={() => onSelect({ kind, ref: "" })}
+        >
+          <Icon className="text-muted-foreground" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm">{label}</span>
+            <span className="truncate text-xs text-muted-foreground">{hint}</span>
+          </div>
+        </CommandItem>
+      ))}
+    </CommandGroup>
+  );
 }

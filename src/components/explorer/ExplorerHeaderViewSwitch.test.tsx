@@ -42,7 +42,13 @@ function renderHeader(lens: SidebarLens, onViewChange?: (view: LensViewId) => vo
   return render(
     <SidebarProvider>
       <TaskFilterProvider onViewChange={onViewChange}>
-        <ExplorerHeader lens={lens} search={search} scanning={false} onRefresh={vi.fn()} />
+        <ExplorerHeader
+          lens={lens}
+          search={search}
+          scanning={false}
+          onRefresh={vi.fn()}
+          onOpenTasksTab={vi.fn()}
+        />
         <ViewLabel />
       </TaskFilterProvider>
     </SidebarProvider>

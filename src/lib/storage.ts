@@ -1,5 +1,6 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
 import type { ScanResult } from "./scan";
+import { fileTarget, targetKey, toTabTarget, type TabTarget } from "./tabKinds";
 import { TASK_STATUSES, type TaskStatus } from "./tasks";
 
 const store = new LazyStore("docsreader.settings.json");
@@ -44,11 +45,13 @@ export type DefaultFolderState = "expanded" | "top-level" | "collapsed";
 export const SIDEBAR_LENSES = ["tree", "recent", "tags", "pinned", "tasks"] as const;
 export type SidebarLens = (typeof SIDEBAR_LENSES)[number];
 
-export const LENS_VIEWS = ["board", "list"] as const;
+export const LENS_VIEWS = ["board", "list", "kanban"] as const;
 export type LensViewId = (typeof LENS_VIEWS)[number];
 
 // A view is a property of a lens: each lens declares the views it can be shown
 // in, first one first. A lens with fewer than two offers the reader no choice.
+// Side-by-side columns need width the sidebar does not have, so kanban is
+// offered by the content area rather than by any lens here.
 export const LENS_VIEW_OPTIONS: Record<SidebarLens, readonly LensViewId[]> = {
   tree: [],
   recent: [],
@@ -377,26 +380,55 @@ export async function saveViewSettings(settings: ViewSettings): Promise<void> {
 }
 
 export interface TabsState {
-  paths: string[];
-  activePath?: string;
+  targets: TabTarget[];
+  activeKey?: string;
   scrollByPath: Record<string, number>;
 }
 
-const emptyTabsState: TabsState = { paths: [], scrollByPath: {} };
+const emptyTabsState: TabsState = { targets: [], scrollByPath: {} };
+
+// Written before tabs could be anything but a file: a list of paths, with the
+// active one named by path. Still on disk for anyone upgrading.
+interface LegacyTabsState {
+  paths?: unknown;
+  activePath?: unknown;
+}
+
+function readTargets(v: Partial<TabsState> & LegacyTabsState): TabTarget[] {
+  if (Array.isArray(v.targets)) {
+    const out: TabTarget[] = [];
+    for (const entry of v.targets) {
+      const target = toTabTarget(entry);
+      if (target) out.push(target);
+    }
+    return out;
+  }
+  if (!Array.isArray(v.paths)) return [];
+  return v.paths.filter((p): p is string => typeof p === "string").map(fileTarget);
+}
+
+function readActiveKey(
+  v: Partial<TabsState> & LegacyTabsState,
+  targets: TabTarget[]
+): string | undefined {
+  const keys = new Set(targets.map(targetKey));
+  if (typeof v.activeKey === "string" && keys.has(v.activeKey)) return v.activeKey;
+  if (typeof v.activePath !== "string") return undefined;
+  const legacyKey = targetKey(fileTarget(v.activePath));
+  return keys.has(legacyKey) ? legacyKey : undefined;
+}
 
 export async function loadTabsState(key: string = TABS_STATE_KEY): Promise<TabsState> {
-  const v = await store.get<Partial<TabsState>>(key);
+  const v = await store.get<Partial<TabsState> & LegacyTabsState>(key);
   if (!v || typeof v !== "object") return emptyTabsState;
-  const paths = Array.isArray(v.paths) ? v.paths.filter((p) => typeof p === "string") : [];
-  const activePath =
-    typeof v.activePath === "string" && paths.includes(v.activePath) ? v.activePath : undefined;
+  const targets = readTargets(v);
   const scrollByPath: Record<string, number> = {};
   if (v.scrollByPath && typeof v.scrollByPath === "object") {
     for (const [k, n] of Object.entries(v.scrollByPath)) {
       if (typeof n === "number" && Number.isFinite(n) && n >= 0) scrollByPath[k] = n;
     }
   }
-  return { paths, activePath, scrollByPath };
+  return { targets, activeKey: readActiveKey(v, targets), scrollByPath };
 }
 
 export async function saveTabsState(

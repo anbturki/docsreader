@@ -21,6 +21,8 @@ const {
   loadPaneLayout,
   isSplitMode,
   lensViewFor,
+  loadTabsState,
+  saveTabsState,
   SPLIT_MODES,
 } = await import("./storage");
 
@@ -152,5 +154,69 @@ describe("lens views", () => {
 
   it("offers no view to a lens that declares none", () => {
     expect(lensViewFor({}, "tree")).toBeUndefined();
+  });
+});
+
+describe("tabs state", () => {
+  beforeEach(() => {
+    storeGet.mockReset();
+    storeSet.mockReset();
+    storeSave.mockReset();
+  });
+
+  // The shape every existing install has on disk: a list of paths, with the
+  // active tab named by path.
+  it("keeps the tabs of a state written before tabs could be anything but files", async () => {
+    storeGet.mockResolvedValue({
+      paths: ["/ws/a.md", "/ws/b.md"],
+      activePath: "/ws/b.md",
+      scrollByPath: { "/ws/a.md": 120 },
+    });
+
+    const state = await loadTabsState();
+
+    expect(state.targets).toEqual([
+      { kind: "file", ref: "/ws/a.md" },
+      { kind: "file", ref: "/ws/b.md" },
+    ]);
+    expect(state.activeKey).toBe("file:/ws/b.md");
+    expect(state.scrollByPath).toEqual({ "/ws/a.md": 120 });
+  });
+
+  it("drops a legacy active path that names no open tab", async () => {
+    storeGet.mockResolvedValue({ paths: ["/ws/a.md"], activePath: "/ws/gone.md" });
+
+    const state = await loadTabsState();
+
+    expect(state.targets).toEqual([{ kind: "file", ref: "/ws/a.md" }]);
+    expect(state.activeKey).toBeUndefined();
+  });
+
+  it("round-trips a state holding a tab that is not a file", async () => {
+    await saveTabsState({
+      targets: [{ kind: "file", ref: "/ws/a.md" }, { kind: "tasks", ref: "" }],
+      activeKey: "tasks:",
+      scrollByPath: {},
+    });
+    const [, written] = storeSet.mock.calls[0];
+    storeGet.mockResolvedValue(written);
+
+    const state = await loadTabsState();
+
+    expect(state.targets).toEqual([
+      { kind: "file", ref: "/ws/a.md" },
+      { kind: "tasks", ref: "" },
+    ]);
+    expect(state.activeKey).toBe("tasks:");
+  });
+
+  it("skips entries whose kind is unknown", async () => {
+    storeGet.mockResolvedValue({
+      targets: [{ kind: "calendar", ref: "" }, { kind: "file", ref: "/ws/a.md" }, 7],
+    });
+
+    const state = await loadTabsState();
+
+    expect(state.targets).toEqual([{ kind: "file", ref: "/ws/a.md" }]);
   });
 });

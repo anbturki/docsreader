@@ -1,10 +1,11 @@
 import type { ComponentType } from "react";
-import { Columns3, List, type LucideIcon } from "lucide-react";
+import { Columns3, LayoutDashboard, List, type LucideIcon } from "lucide-react";
 
 import type { Task, TaskStatus } from "@/lib/tasks";
 import type { AcProgress } from "@/lib/taskDoc";
 import type { LensViewId } from "@/lib/storage";
 import { TaskBoardView } from "./TaskBoardView";
+import { TaskKanbanView } from "./TaskKanbanView";
 import { TaskListView } from "./TaskListView";
 
 export interface TaskViewProps {
@@ -31,4 +32,8 @@ export interface TaskViewDef {
 export const TASK_VIEWS: Record<LensViewId, TaskViewDef> = {
   board: { label: "Board", icon: Columns3, component: TaskBoardView },
   list: { label: "List", icon: List, component: TaskListView },
+  kanban: { label: "Columns", icon: LayoutDashboard, component: TaskKanbanView },
 };
+
+// The view a task tab opens in: the one the sidebar has no width for.
+export const TASK_TAB_VIEW: LensViewId = "kanban";

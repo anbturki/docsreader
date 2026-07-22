@@ -2,6 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 
+import { fileTarget, TASKS_TARGET } from "@/lib/tabKinds";
 import QuickOpenDialog, { type QuickOpenFile } from "./QuickOpenDialog";
 import { useContentSearch } from "@/hooks/useContentSearch";
 import type { ContentHit } from "@/lib/contentSearch";
@@ -107,7 +108,7 @@ describe("QuickOpenDialog", () => {
 
     await user.click(screen.getByText("notes/deep.md"));
 
-    expect(onSelect).toHaveBeenCalledWith("/ws/notes/deep.md", false);
+    expect(onSelect).toHaveBeenCalledWith(fileTarget("/ws/notes/deep.md"));
   });
 
   it("searches every open workspace", () => {
@@ -156,5 +157,39 @@ describe("QuickOpenDialog", () => {
     await user.click(screen.getByRole("button", { name: "Tags" }));
 
     expect(screen.getByText("Tagged")).toBeInTheDocument();
+  });
+});
+
+describe("views reachable from quick open", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setHits([]);
+  });
+
+  it("opens the tasks view without a file behind it", async () => {
+    const user = userEvent.setup();
+    renderDialog([file("notes/a.md")]);
+
+    await user.click(screen.getByText("Tasks"));
+
+    expect(onSelect).toHaveBeenCalledWith(TASKS_TARGET);
+  });
+
+  it("keeps the view listed while its name is being typed", async () => {
+    const user = userEvent.setup();
+    renderDialog([file("notes/a.md")]);
+
+    await user.type(screen.getByPlaceholderText("Search files and contents..."), "task");
+
+    expect(screen.getByText("Tasks")).toBeTruthy();
+  });
+
+  it("drops the view once the query cannot match it", async () => {
+    const user = userEvent.setup();
+    renderDialog([file("notes/a.md")]);
+
+    await user.type(screen.getByPlaceholderText("Search files and contents..."), "notes");
+
+    expect(screen.queryByText("Tasks")).toBeNull();
   });
 });

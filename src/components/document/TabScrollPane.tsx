@@ -19,7 +19,7 @@ interface Props {
   rootPath: string | undefined;
   viewSettings: ViewSettings;
   initialScrollTop: number;
-  onScrollChange: (path: string, value: number) => void;
+  onScrollChange: (ref: string, value: number) => void;
   onNavigate: (path: string) => void;
   onActiveRefChange?: (el: HTMLElement | null) => void;
   /** False when a split is showing and the other pane holds focus. */
@@ -93,7 +93,7 @@ export function TabScrollPane({
 
   useEffect(() => {
     restoredRef.current = false;
-  }, [tab.path]);
+  }, [tab.ref]);
 
   useLayoutEffect(() => {
     const el = ref.current;
@@ -155,7 +155,7 @@ export function TabScrollPane({
       aria-hidden={!active}
       onScroll={(e) => {
         if (!restoredRef.current) return;
-        onScrollChange(tab.path, e.currentTarget.scrollTop);
+        onScrollChange(tab.ref, e.currentTarget.scrollTop);
       }}
     >
       {/* Sticky with no height so the bar stays pinned while the document

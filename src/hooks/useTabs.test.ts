@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { vi, describe, it, expect, beforeEach, afterEach } from "vitest";
+import { fileTarget, TASKS_TARGET } from "@/lib/tabKinds";
 import { useTabs, describeReadFailure } from "./useTabs";
 
 type WatchCallback = (event: { type: unknown }) => void;
@@ -31,8 +32,8 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 vi.mock("@/lib/storage", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/storage")>()),
   loadTabsState: vi.fn(async () => ({
-    paths: [],
-    activePath: undefined,
+    targets: [],
+    activeKey: undefined,
     scrollByPath: {},
   })),
   saveTabsState: vi.fn(async () => {}),
@@ -51,7 +52,7 @@ async function openTab(isManagedPath: (path: string) => boolean = () => false) {
     useTabs({ autoReloadOnExternalChange: false, isManagedPath })
   );
   await waitFor(() => expect(hook.result.current.hydrated).toBe(true));
-  act(() => hook.result.current.openInNew("/ws/doc.md"));
+  act(() => hook.result.current.openInNew(fileTarget("/ws/doc.md")));
   await waitFor(() => expect(hook.result.current.activeTab?.loading).toBe(false));
   await waitFor(() => expect(watchCallbacks.length).toBeGreaterThan(0));
   return hook;
@@ -178,10 +179,10 @@ describe("useTabs watchers", () => {
     );
     await waitFor(() => expect(hook.result.current.hydrated).toBe(true));
 
-    act(() => hook.result.current.openInNew(PATH_A));
+    act(() => hook.result.current.openInNew(fileTarget(PATH_A)));
     await waitFor(() => expect(watchStarts.some((w) => w.path === PATH_A)).toBe(true));
 
-    act(() => hook.result.current.openInActive(PATH_B));
+    act(() => hook.result.current.openInActive(fileTarget(PATH_B)));
     await waitFor(() => expect(watchStarts.some((w) => w.path === PATH_B)).toBe(true));
 
     openGateA();
@@ -248,7 +249,7 @@ describe("useTabs load timeout", () => {
   it("turns a read that never settles into a retryable error", async () => {
     vi.mocked(readTextFile).mockReturnValue(new Promise<string>(() => {}));
     const { result } = await renderTabsWithFakeTimers();
-    act(() => result.current.openInNew("/ws/doc.md"));
+    act(() => result.current.openInNew(fileTarget("/ws/doc.md")));
     expect(result.current.activeTab?.loading).toBe(true);
     await act(async () => {
       await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
@@ -261,12 +262,12 @@ describe("useTabs load timeout", () => {
   it("openInActive retries a tab in error state", async () => {
     vi.mocked(readTextFile).mockReturnValueOnce(new Promise<string>(() => {}));
     const { result } = await renderTabsWithFakeTimers();
-    act(() => result.current.openInNew("/ws/doc.md"));
+    act(() => result.current.openInNew(fileTarget("/ws/doc.md")));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
     });
     expect(result.current.activeTab?.error).toBeTruthy();
-    act(() => result.current.openInActive("/ws/doc.md"));
+    act(() => result.current.openInActive(fileTarget("/ws/doc.md")));
     expect(result.current.activeTab?.loading).toBe(true);
     await flushLoads();
     expect(result.current.activeTab?.content).toContain("# hello");
@@ -276,11 +277,11 @@ describe("useTabs load timeout", () => {
 
   it("openInActive does not re-fire the load for a healthy tab", async () => {
     const { result } = await renderTabsWithFakeTimers();
-    act(() => result.current.openInNew("/ws/doc.md"));
+    act(() => result.current.openInNew(fileTarget("/ws/doc.md")));
     await flushLoads();
     expect(result.current.activeTab?.loading).toBe(false);
     const reads = vi.mocked(readTextFile).mock.calls.length;
-    act(() => result.current.openInActive("/ws/doc.md"));
+    act(() => result.current.openInActive(fileTarget("/ws/doc.md")));
     await flushLoads();
     expect(vi.mocked(readTextFile).mock.calls.length).toBe(reads);
     expect(result.current.activeTab?.loading).toBe(false);
@@ -294,13 +295,13 @@ describe("useTabs load timeout", () => {
       })
     );
     const { result } = await renderTabsWithFakeTimers();
-    act(() => result.current.openInNew("/ws/doc.md"));
+    act(() => result.current.openInNew(fileTarget("/ws/doc.md")));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
     });
     expect(result.current.activeTab?.error).toBeTruthy();
     vi.mocked(readTextFile).mockResolvedValue(CHANGED_ON_DISK);
-    act(() => result.current.openInActive("/ws/doc.md"));
+    act(() => result.current.openInActive(fileTarget("/ws/doc.md")));
     await flushLoads();
     expect(result.current.activeTab?.content).toContain("changed by agent");
     resolveA(STALE_RAW);
@@ -318,7 +319,7 @@ describe("useTabs load timeout", () => {
       })
     );
     const { result } = await renderTabsWithFakeTimers();
-    act(() => result.current.openInNew("/ws/doc.md"));
+    act(() => result.current.openInNew(fileTarget("/ws/doc.md")));
     await act(async () => {
       await vi.advanceTimersByTimeAsync(LOAD_TIMEOUT_MS);
     });
@@ -358,7 +359,7 @@ describe("switching tabs", () => {
     readTextFile.mockResolvedValue(RAW);
 
     const hook = await openTab();
-    act(() => hook.result.current.openInNew("/ws/second.md"));
+    act(() => hook.result.current.openInNew(fileTarget("/ws/second.md")));
     await waitFor(() => expect(hook.result.current.tabs).toHaveLength(2));
 
     const before = hook.result.current.openInActive;
@@ -367,5 +368,81 @@ describe("switching tabs", () => {
     await waitFor(() => expect(hook.result.current.activeId).toBe(first.id));
 
     expect(hook.result.current.openInActive).toBe(before);
+  });
+});
+
+describe("a tab that is not a file", () => {
+  it("opens without reading or watching anything on disk", async () => {
+    const hook = renderHook(() =>
+      useTabs({ autoReloadOnExternalChange: false, isManagedPath: () => false })
+    );
+    await waitFor(() => expect(hook.result.current.hydrated).toBe(true));
+    const readsBefore = vi.mocked(readTextFile).mock.calls.length;
+
+    act(() => hook.result.current.openInNew(TASKS_TARGET));
+
+    expect(hook.result.current.activeTab?.kind).toBe("tasks");
+    expect(hook.result.current.activeTab?.title).toBe("Tasks");
+    expect(hook.result.current.activeTab?.loading).toBe(false);
+    expect(vi.mocked(readTextFile).mock.calls.length).toBe(readsBefore);
+    expect(watchStarts).toHaveLength(0);
+  });
+
+  it("activates the open one instead of opening a second", async () => {
+    const hook = renderHook(() =>
+      useTabs({ autoReloadOnExternalChange: false, isManagedPath: () => false })
+    );
+    await waitFor(() => expect(hook.result.current.hydrated).toBe(true));
+
+    act(() => hook.result.current.openInNew(TASKS_TARGET));
+    const firstId = hook.result.current.activeId;
+    act(() => hook.result.current.openInNew(fileTarget("/ws/doc.md")));
+    await waitFor(() => expect(hook.result.current.tabs).toHaveLength(2));
+    act(() => hook.result.current.openInActive(TASKS_TARGET));
+
+    expect(hook.result.current.tabs).toHaveLength(2);
+    expect(hook.result.current.activeId).toBe(firstId);
+  });
+
+  it("persists as a target and comes back on the next launch", async () => {
+    const { loadTabsState, saveTabsState } = await import("@/lib/storage");
+    const hook = renderHook(() =>
+      useTabs({ autoReloadOnExternalChange: false, isManagedPath: () => false })
+    );
+    await waitFor(() => expect(hook.result.current.hydrated).toBe(true));
+    vi.mocked(saveTabsState).mockClear();
+    act(() => hook.result.current.openInNew(TASKS_TARGET));
+    await waitFor(() => expect(vi.mocked(saveTabsState).mock.calls.length).toBeGreaterThan(0));
+
+    const calls = vi.mocked(saveTabsState).mock.calls;
+    const [state] = calls[calls.length - 1];
+    expect(state.targets).toEqual([{ kind: "tasks", ref: "" }]);
+    expect(state.activeKey).toBe("tasks:");
+
+    vi.mocked(loadTabsState).mockResolvedValueOnce({
+      targets: [{ kind: "tasks", ref: "" }],
+      activeKey: "tasks:",
+      scrollByPath: {},
+    });
+    const restored = renderHook(() =>
+      useTabs({ autoReloadOnExternalChange: false, isManagedPath: () => false })
+    );
+    await waitFor(() => expect(restored.result.current.tabs).toHaveLength(1));
+    expect(restored.result.current.activeTab?.kind).toBe("tasks");
+    expect(restored.result.current.activeTab?.loading).toBe(false);
+  });
+
+  it("closes like any other tab", async () => {
+    const hook = renderHook(() =>
+      useTabs({ autoReloadOnExternalChange: false, isManagedPath: () => false })
+    );
+    await waitFor(() => expect(hook.result.current.hydrated).toBe(true));
+    act(() => hook.result.current.openInNew(TASKS_TARGET));
+    const id = hook.result.current.activeId!;
+
+    act(() => hook.result.current.close(id));
+
+    expect(hook.result.current.tabs).toHaveLength(0);
+    expect(hook.result.current.activeId).toBeUndefined();
   });
 });

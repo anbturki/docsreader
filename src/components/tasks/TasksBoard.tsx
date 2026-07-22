@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { readTextFile } from "@tauri-apps/plugin-fs";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import { useTasks } from "@/hooks/useTasks";
@@ -16,6 +17,9 @@ import { TASK_VIEWS } from "./taskViews";
 import { useCollapsedStatuses } from "./useCollapsedStatuses";
 
 interface Props {
+  // The lens fills whatever box it is given: a scrolling sidebar column, or a
+  // pane that hands it the leftover height.
+  className?: string;
   activeRoot: string | undefined;
   query: string;
   refreshSignal: number;
@@ -26,6 +30,7 @@ interface Props {
 }
 
 export function TasksBoard({
+  className,
   activeRoot,
   query,
   refreshSignal,
@@ -45,17 +50,17 @@ export function TasksBoard({
   const View = TASK_VIEWS[view].component;
 
   return (
-    <div className="flex flex-col" data-slot="tasks-lens">
+    <div className={cn("flex flex-col", className)} data-slot="tasks-lens">
       {shownError && <p className="px-3 py-2 text-xs text-destructive">{shownError}</p>}
       {loading && displayTasks.length === 0 ? (
         <TasksSkeleton />
       ) : filtered.length === 0 ? (
-        <Empty className="py-8">
+        <Empty className="my-auto">
           <EmptyHeader>
             <EmptyTitle>{searching ? "No matching tasks" : "No tasks"}</EmptyTitle>
             <EmptyDescription>
               {searching
-                ? "Adjust the search or filters in the sidebar header."
+                ? "Adjust the search or filters above."
                 : "Agents create tasks in tasks/ via MCP."}
             </EmptyDescription>
           </EmptyHeader>

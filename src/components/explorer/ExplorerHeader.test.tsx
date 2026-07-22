@@ -47,7 +47,13 @@ function renderHeader(lens: SidebarLens, count: TaskCount | undefined) {
   return render(
     <SidebarProvider>
       <TaskFilterProvider>
-        <ExplorerHeader lens={lens} search={search} scanning={false} onRefresh={vi.fn()} />
+        <ExplorerHeader
+          lens={lens}
+          search={search}
+          scanning={false}
+          onRefresh={vi.fn()}
+          onOpenTasksTab={vi.fn()}
+        />
         <BoardStub count={count} />
       </TaskFilterProvider>
     </SidebarProvider>
@@ -78,7 +84,13 @@ describe("ExplorerHeader task count", () => {
     rerender(
       <SidebarProvider>
         <TaskFilterProvider>
-          <ExplorerHeader lens="tasks" search={search} scanning={false} onRefresh={vi.fn()} />
+          <ExplorerHeader
+            lens="tasks"
+            search={search}
+            scanning={false}
+            onRefresh={vi.fn()}
+            onOpenTasksTab={vi.fn()}
+          />
           <BoardStub count={{ shown: 78, total: 78 }} />
         </TaskFilterProvider>
       </SidebarProvider>
