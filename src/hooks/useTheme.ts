@@ -6,6 +6,7 @@ import {
   type ColorScheme,
   type ResolvedScheme,
 } from "@/lib/storage";
+import { syncNativeTheme } from "@/lib/nativeTheme";
 
 export const ACCENT_PROPERTIES = {
   lightness: "--primary-fixed-l",
@@ -57,6 +58,10 @@ function applyTheme(scheme: ResolvedScheme, accent: AccentColor): void {
 
 export function useTheme(colorScheme: ColorScheme, accentColor: AccentColor): void {
   useEffect(() => {
+    // The OS draws the window controls, so it has to be told the same thing the
+    // stylesheet was; "system" means handing that choice back to it.
+    void syncNativeTheme(colorScheme === "system" ? null : colorScheme);
+
     if (colorScheme !== "system") {
       applyTheme(colorScheme, accentColor);
       return;
