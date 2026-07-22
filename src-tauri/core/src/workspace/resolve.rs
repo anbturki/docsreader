@@ -7,12 +7,24 @@ use crate::error::{CoreError, ErrorCode};
 pub const DEFAULT_WORKSPACE_DIR: &str = "notes";
 pub const DEFAULT_USER_SLUG: &str = "notes";
 
+/// Whether the answer names a workspace that exists, or the user default
+/// handed back because the search found nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceOrigin {
+    Found,
+    Fallback,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 pub struct ResolvedWorkspace {
     pub root: PathBuf,
     pub slug: String,
     pub scope: WorkspaceScope,
+    // Kept out of the wire format: no tool reports it yet, and adding it would
+    // change every tool result that carries a workspace.
+    #[serde(skip)]
+    pub origin: WorkspaceOrigin,
 }
 
 /// Resolution order mirrors Claude Code's user+project hierarchy:
@@ -89,6 +101,7 @@ fn workspaces_with_slug(
             root: entry.path.clone(),
             slug: entry.slug.clone(),
             scope: entry.scope,
+            origin: WorkspaceOrigin::Found,
         });
     }
     add(ambient.clone());
@@ -155,6 +168,7 @@ fn project_workspace_at(base: &Path) -> Result<Option<ResolvedWorkspace>, CoreEr
             root: candidate,
             slug: marker.slug,
             scope: WorkspaceScope::Project,
+            origin: WorkspaceOrigin::Found,
         })),
         None => Ok(None),
     }
@@ -162,14 +176,15 @@ fn project_workspace_at(base: &Path) -> Result<Option<ResolvedWorkspace>, CoreEr
 
 fn user_default(home: &Path) -> Result<ResolvedWorkspace, CoreError> {
     let root = home.join(DEFAULT_WORKSPACE_DIR);
-    let slug = match load_marker(&root)? {
-        Some(marker) => marker.slug,
-        None => DEFAULT_USER_SLUG.to_string(),
+    let (slug, origin) = match load_marker(&root)? {
+        Some(marker) => (marker.slug, WorkspaceOrigin::Found),
+        None => (DEFAULT_USER_SLUG.to_string(), WorkspaceOrigin::Fallback),
     };
     Ok(ResolvedWorkspace {
         root,
         slug,
         scope: WorkspaceScope::User,
+        origin,
     })
 }
 
@@ -261,6 +276,57 @@ mod tests {
         let resolved = resolve_workspace(None, &[], &dir, &home, &[]).unwrap();
         assert_eq!(resolved.slug, "ali-notes");
         assert_eq!(resolved.scope, WorkspaceScope::User);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn project_workspace_is_a_real_resolution() {
+        let dir = test_dir("res_origin_project");
+        let project = dir.join("repo");
+        save_marker(&project.join("notes"), &marker("repo-notes")).unwrap();
+
+        let resolved = resolve_workspace(None, &[], &project, &dir.join("home"), &[]).unwrap();
+        assert_eq!(resolved.origin, WorkspaceOrigin::Found);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn existing_user_workspace_is_a_real_resolution() {
+        let dir = test_dir("res_origin_user");
+        let home = dir.join("home");
+        save_marker(&home.join("notes"), &marker("ali-notes")).unwrap();
+        let cwd = home.join("projects/some-repo");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let resolved = resolve_workspace(None, &[], &cwd, &home, &[]).unwrap();
+        assert_eq!(resolved.slug, "ali-notes");
+        assert_eq!(resolved.origin, WorkspaceOrigin::Found);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn nothing_found_anywhere_is_a_fallback() {
+        let dir = test_dir("res_origin_fallback");
+        let home = dir.join("home");
+        let cwd = dir.join("elsewhere");
+        std::fs::create_dir_all(&cwd).unwrap();
+
+        let resolved = resolve_workspace(None, &[], &cwd, &home, &[]).unwrap();
+        assert_eq!(resolved.root, home.join("notes"));
+        assert_eq!(resolved.origin, WorkspaceOrigin::Fallback);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn origin_stays_out_of_the_serialized_shape() {
+        let dir = test_dir("res_origin_serde");
+        let home = dir.join("home");
+        let resolved = resolve_workspace(None, &[], &dir, &home, &[]).unwrap();
+
+        let json = serde_json::to_value(&resolved).unwrap();
+        let mut keys: Vec<&String> = json.as_object().unwrap().keys().collect();
+        keys.sort();
+        assert_eq!(keys, ["root", "scope", "slug"]);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
