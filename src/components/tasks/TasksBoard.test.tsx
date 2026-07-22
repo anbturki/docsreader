@@ -66,7 +66,7 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
     });
 
     render(
-      <TasksBoard activeRoot={ROOT} selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+      <TasksBoard activeRoot={ROOT} query="" selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
     );
     await waitFor(() => expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy());
 
@@ -90,7 +90,7 @@ describe("Smoke C4: drag writes status + MCP reflects", () => {
     });
 
     render(
-      <TasksBoard activeRoot={ROOT} selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
+      <TasksBoard activeRoot={ROOT} query="" selectedPath={undefined} onOpen={() => {}} onOpenInNewTab={() => {}} />
     );
     await waitFor(() => expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy());
 

@@ -30,7 +30,7 @@ window.matchMedia ??= (query: string): MediaQueryList => ({
   dispatchEvent: () => false,
 });
 
-const LENS_LABELS = ["Tree", "Recent", "Tags", "Pinned", "Tasks", "Search"];
+const LENS_LABELS = ["Tree", "Recent", "Tags", "Pinned", "Tasks"];
 
 function renderRail(active: SidebarLens, onChange: (lens: SidebarLens) => void = () => {}) {
   return render(
@@ -76,14 +76,22 @@ describe("Smoke C1: tasks lens selectable + persists", () => {
     const settings = await loadViewSettings();
     expect(settings.sidebarLens).toBe("tree");
   });
+
+  it("loads a valid lens for a build that persisted the removed search lens", async () => {
+    const { loadViewSettings } = await import("@/lib/storage");
+    storeGet.mockResolvedValue({ sidebarLens: "search" });
+    const settings = await loadViewSettings();
+    expect(SIDEBAR_LENSES).toContain(settings.sidebarLens);
+    expect(settings.sidebarLens).toBe("tree");
+  });
 });
 
 describe("lens rail", () => {
   it("renders the last lens in SIDEBAR_LENSES, so none is clipped", () => {
-    renderRail("search");
+    renderRail("tree");
     const last = SIDEBAR_LENSES[SIDEBAR_LENSES.length - 1];
-    expect(last).toBe("search");
-    expect(screen.getByRole("tab", { name: "Search" })).toBeTruthy();
+    expect(last).toBe("tasks");
+    expect(screen.getByRole("tab", { name: "Tasks" })).toBeTruthy();
   });
 
   it("renders one labelled entry per lens in SIDEBAR_LENSES", () => {
@@ -124,10 +132,8 @@ describe("lens rail", () => {
     }
   });
 
-  it("selects the search lens on click", () => {
-    const onChange = vi.fn();
-    renderRail("tree", onChange);
-    screen.getByRole("tab", { name: "Search" }).click();
-    expect(onChange).toHaveBeenCalledWith("search");
+  it("no longer offers search as a place to navigate to", () => {
+    renderRail("tree");
+    expect(screen.queryByRole("tab", { name: "Search" })).toBeNull();
   });
 });

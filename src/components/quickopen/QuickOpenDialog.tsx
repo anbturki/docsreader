@@ -12,7 +12,7 @@ import {
 import type { MarkdownFile } from "@/lib/scan";
 import { useContentSearch } from "@/hooks/useContentSearch";
 import { SearchSnippet } from "@/components/explorer/SearchSnippet";
-import { SearchScopeTabs } from "@/components/explorer/SearchScopeTabs";
+import { SearchScopeChips } from "@/components/explorer/SearchScopeChips";
 import type { SearchScope } from "@/lib/contentSearch";
 
 export interface QuickOpenFile extends MarkdownFile {
@@ -78,7 +78,9 @@ export default function QuickOpenDialog({
           value={query}
           onValueChange={setQuery}
         />
-        <SearchScopeTabs active={scope} onChange={setScope} />
+        <div className="px-2 pb-2">
+          <SearchScopeChips active={scope} onChange={setScope} />
+        </div>
         <CommandList>
           <CommandEmpty>No matches.</CommandEmpty>
           {ranked.length > 0 && (

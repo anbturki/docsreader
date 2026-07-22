@@ -7,6 +7,7 @@ import { TaskBoardView } from "./TaskBoardView";
 
 interface Props {
   activeRoot: string | undefined;
+  query: string;
   selectedPath: string | undefined;
   onOpen: (path: string) => void;
   onOpenInNewTab: (path: string) => void;
@@ -15,6 +16,7 @@ interface Props {
 
 export function TasksBoard({
   activeRoot,
+  query,
   selectedPath,
   onOpen,
   onOpenInNewTab,
@@ -27,6 +29,7 @@ export function TasksBoard({
   return (
     <TaskBoardView
       tasks={displayTasks}
+      query={query}
       progress={progress}
       loading={loading}
       error={advanceError ?? error}

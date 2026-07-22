@@ -1,5 +1,3 @@
-import { Clock, FolderTree, ListChecks, Pin, Search, Tag, type LucideIcon } from "lucide-react";
-
 import {
   Sidebar,
   SidebarContent,
@@ -10,15 +8,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { SIDEBAR_LENSES, type SidebarLens } from "@/lib/storage";
-
-const LENSES: Record<SidebarLens, { label: string; icon: LucideIcon }> = {
-  tree: { label: "Tree", icon: FolderTree },
-  recent: { label: "Recent", icon: Clock },
-  tags: { label: "Tags", icon: Tag },
-  pinned: { label: "Pinned", icon: Pin },
-  tasks: { label: "Tasks", icon: ListChecks },
-  search: { label: "Search", icon: Search },
-};
+import { LENS_META } from "./lenses";
 
 interface Props {
   active: SidebarLens;
@@ -41,7 +31,7 @@ export function LensRail({ active, onChange }: Props) {
               className="gap-1"
             >
               {SIDEBAR_LENSES.map((lens) => {
-                const { label, icon: Icon } = LENSES[lens];
+                const { label, icon: Icon } = LENS_META[lens];
                 const isActive = lens === active;
                 return (
                   <SidebarMenuItem key={lens} role="presentation">

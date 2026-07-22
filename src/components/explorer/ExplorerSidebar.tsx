@@ -4,7 +4,6 @@ import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar";
 import type { MarkdownFile } from "@/lib/scan";
@@ -12,16 +11,16 @@ import type { TreeNode } from "@/lib/tree";
 import type { SidebarLens } from "@/lib/storage";
 import type { RootScan } from "@/hooks/useLibrary";
 import type { GitFileStatusKind } from "@/lib/git";
+import { ExplorerHeader } from "./ExplorerHeader";
 import { FileTree } from "./FileTree";
 import { LensRail } from "./LensRail";
 import { PinnedList } from "./PinnedList";
 import { RecentList } from "./RecentList";
 import { ScanProgressView } from "./ScanProgressView";
-import { SearchInput } from "./SearchInput";
 import { SearchResults } from "./SearchResults";
 import { TagsList } from "./TagsList";
 import type { SearchEntry } from "@/lib/searchEntries";
-import type { SearchScope } from "@/lib/contentSearch";
+import type { SidebarSearch } from "@/hooks/useSidebarSearch";
 import { TasksBoard } from "@/components/tasks/TasksBoard";
 
 interface Props {
@@ -37,11 +36,8 @@ interface Props {
   onLensChange: (lens: SidebarLens) => void;
 
   // search
-  search: string;
-  onSearchChange: (value: string) => void;
+  search: SidebarSearch;
   searchEntries: SearchEntry[];
-  searchScope: SearchScope;
-  onSearchScopeChange: (scope: SearchScope) => void;
   searchingContents: boolean;
   searchError: string | undefined;
   searchTruncated: boolean;
@@ -83,10 +79,7 @@ export function ExplorerSidebar({
   lens,
   onLensChange,
   search,
-  onSearchChange,
   searchEntries,
-  searchScope,
-  onSearchScopeChange,
   searchingContents,
   searchError,
   searchTruncated,
@@ -108,6 +101,8 @@ export function ExplorerSidebar({
   gitStatusByPath,
   onShowGitDiff,
 }: Props) {
+  const showingResults = search.query.trim() !== "" && lens !== "tasks";
+
   return (
     <Sidebar
       collapsible="offcanvas"
@@ -116,13 +111,7 @@ export function ExplorerSidebar({
       {roots.length > 0 && <LensRail active={lens} onChange={onLensChange} />}
 
       <Sidebar collapsible="none" className="min-w-0 flex-1">
-        <SidebarHeader className="gap-0 p-0">
-          {roots.length > 0 && (
-            <div className="px-2 pt-2 pb-2">
-              <SearchInput value={search} onChange={onSearchChange} />
-            </div>
-          )}
-        </SidebarHeader>
+        {roots.length > 0 && <ExplorerHeader lens={lens} search={search} />}
 
         <SidebarContent className="overflow-x-hidden">
           {roots.length === 0 ? (
@@ -147,12 +136,11 @@ export function ExplorerSidebar({
               progress={activeScan.progress}
               startedAt={activeScan.startedAt}
             />
-          ) : lens === "search" ? (
+          ) : showingResults ? (
             <SearchResults
-              query={search}
+              query={search.query}
               entries={searchEntries}
-              scope={searchScope}
-              onScopeChange={onSearchScopeChange}
+              scope={search.scope}
               searching={searchingContents}
               error={searchError}
               truncated={searchTruncated}
@@ -167,6 +155,7 @@ export function ExplorerSidebar({
             <LensView
               lens={lens}
               activeRoot={activeRoot}
+              taskQuery={search.query}
               tree={tree}
               rootKey={rootKey}
               filteredFiles={filteredFiles}
@@ -189,7 +178,7 @@ export function ExplorerSidebar({
         <SidebarFooter className="gap-2 text-xs text-muted-foreground">
           <ExplorerFooter
             activeScan={activeScan}
-            matchCount={lens === "search" ? searchEntries.length : filteredFiles.length}
+            matchCount={showingResults ? searchEntries.length : filteredFiles.length}
             hiddenCount={hiddenCount}
             onOpenSettings={onOpenSettings}
           />
@@ -204,6 +193,7 @@ export function ExplorerSidebar({
 interface LensViewProps {
   lens: SidebarLens;
   activeRoot: string | undefined;
+  taskQuery: string;
   tree: TreeNode | undefined;
   rootKey: string;
   filteredFiles: MarkdownFile[];
@@ -224,6 +214,7 @@ interface LensViewProps {
 function LensView({
   lens,
   activeRoot,
+  taskQuery,
   tree,
   rootKey,
   filteredFiles,
@@ -283,6 +274,7 @@ function LensView({
     return (
       <TasksBoard
         activeRoot={activeRoot}
+        query={taskQuery}
         selectedPath={selectedPath}
         onOpen={onSelect}
         onOpenInNewTab={onOpenInNewTab}

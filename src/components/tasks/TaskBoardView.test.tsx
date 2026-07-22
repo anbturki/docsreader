@@ -39,10 +39,11 @@ describe("Smoke C2: board groups real tasks correctly", () => {
   ];
   const progress = new Map<string, AcProgress>([["/ws/tasks/task-2.md", { done: 1, total: 3 }]]);
 
-  function renderBoard() {
-    return render(
+  function board({ query = "" }: { query?: string } = {}) {
+    return (
       <TaskBoardView
         tasks={tasks}
+        query={query}
         progress={progress}
         loading={false}
         error={undefined}
@@ -52,6 +53,10 @@ describe("Smoke C2: board groups real tasks correctly", () => {
         onOpenInNewTab={noop}
       />
     );
+  }
+
+  function renderBoard() {
+    return render(board());
   }
 
   it("renders three columns in TASK_STATUSES order", () => {
@@ -135,21 +140,30 @@ describe("Smoke C2: board groups real tasks correctly", () => {
     expect(onAdvance).toHaveBeenCalledWith("task-1", "In Progress");
   });
 
-  it("narrows to matching cards as the text filter is typed, then restores on clear", () => {
-    renderBoard();
+  it("narrows to matching cards as the shared query changes, then restores on clear", () => {
+    const { rerender } = renderBoard();
     expect(screen.getByText("Title task-1")).toBeTruthy();
-    const input = screen.getByPlaceholderText("Filter tasks by title...");
 
-    fireEvent.change(input, { target: { value: "Title task-2" } });
+    rerender(board({ query: "Title task-2" }));
     expect(screen.getByText("Title task-2")).toBeTruthy();
     expect(screen.queryByText("Title task-1")).toBeNull();
 
-    fireEvent.change(input, { target: { value: "nothing matches this" } });
+    rerender(board({ query: "nothing matches this" }));
     expect(screen.getByText("No matching tasks")).toBeTruthy();
 
-    fireEvent.change(input, { target: { value: "" } });
+    rerender(board({ query: "" }));
     expect(screen.getByText("Title task-1")).toBeTruthy();
     expect(screen.getByText("Title task-4")).toBeTruthy();
+  });
+
+  it("carries no filter field of its own", () => {
+    renderBoard();
+    expect(screen.queryByPlaceholderText(/filter tasks/i)).toBeNull();
+  });
+
+  it("keeps the priority filter, which the shared query does not cover", () => {
+    renderBoard();
+    expect(screen.getByLabelText("Filter by priority")).toBeTruthy();
   });
 
   it("shows the empty state when there are no tasks", () => {

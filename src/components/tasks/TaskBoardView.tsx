@@ -20,6 +20,8 @@ import { TaskCard } from "./TaskCard";
 
 interface Props {
   tasks: Task[];
+  /** The shared sidebar query, matched against task titles and ids. */
+  query?: string;
   progress: Map<string, AcProgress>;
   loading: boolean;
   error: string | undefined;
@@ -42,6 +44,7 @@ function groupByStatus(tasks: Task[]): Map<TaskStatus, Task[]> {
 
 export function TaskBoardView({
   tasks,
+  query = "",
   progress,
   loading,
   error,
@@ -57,7 +60,8 @@ export function TaskBoardView({
   const [filter, setFilter] = useState<TaskFilter>(EMPTY_TASK_FILTER);
 
   const labels = useMemo(() => availableLabels(tasks), [tasks]);
-  const filtered = useMemo(() => filterTasks(tasks, filter), [tasks, filter]);
+  const activeFilter = useMemo<TaskFilter>(() => ({ ...filter, text: query }), [filter, query]);
+  const filtered = useMemo(() => filterTasks(tasks, activeFilter), [tasks, activeFilter]);
   const columns = groupByStatus(filtered);
   const hasTasks = tasks.length > 0;
 
@@ -71,7 +75,7 @@ export function TaskBoardView({
       <div className="flex items-center justify-between px-1">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           {filtered.length}
-          {isFilterActive(filter) && ` / ${tasks.length}`} task
+          {isFilterActive(activeFilter) && ` / ${tasks.length}`} task
           {tasks.length === 1 ? "" : "s"}
         </span>
         <Button
@@ -96,10 +100,10 @@ export function TaskBoardView({
       ) : filtered.length === 0 ? (
         <Empty className="py-8">
           <EmptyHeader>
-            <EmptyTitle>{isFilterActive(filter) ? "No matching tasks" : "No tasks"}</EmptyTitle>
+            <EmptyTitle>{isFilterActive(activeFilter) ? "No matching tasks" : "No tasks"}</EmptyTitle>
             <EmptyDescription>
-              {isFilterActive(filter)
-                ? "Adjust or clear the filters above."
+              {isFilterActive(activeFilter)
+                ? "Adjust the search or filters above."
                 : "Agents create tasks in tasks/ via MCP."}
             </EmptyDescription>
           </EmptyHeader>

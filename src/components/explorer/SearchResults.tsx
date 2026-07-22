@@ -4,13 +4,11 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import type { SearchScope } from "@/lib/contentSearch";
 import type { SearchEntry } from "@/lib/searchEntries";
 import { SearchResultGroup } from "./SearchResultGroup";
-import { SearchScopeTabs } from "./SearchScopeTabs";
 
 interface Props {
   query: string;
   entries: SearchEntry[];
   scope: SearchScope;
-  onScopeChange: (scope: SearchScope) => void;
   searching: boolean;
   error: string | undefined;
   truncated: boolean;
@@ -26,7 +24,6 @@ export function SearchResults({
   query,
   entries,
   scope,
-  onScopeChange,
   searching,
   error,
   truncated,
@@ -56,7 +53,6 @@ export function SearchResults({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SearchScopeTabs active={scope} onChange={onScopeChange} />
       <Body
         query={query}
         entries={entries}
@@ -76,7 +72,7 @@ export function SearchResults({
   );
 }
 
-interface BodyProps extends Omit<Props, "scope" | "onScopeChange"> {
+interface BodyProps extends Omit<Props, "scope"> {
   collapsed: ReadonlySet<string>;
   onToggle: (path: string) => void;
 }

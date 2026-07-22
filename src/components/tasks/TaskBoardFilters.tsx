@@ -1,4 +1,3 @@
-import { SearchInput } from "@/components/explorer/SearchInput";
 import {
   Select,
   SelectContent,
@@ -21,11 +20,6 @@ interface Props {
 export function TaskBoardFilters({ filter, labels, onChange }: Props) {
   return (
     <div className="flex flex-col gap-2 px-1">
-      <SearchInput
-        value={filter.text}
-        onChange={(text) => onChange({ ...filter, text })}
-        placeholder="Filter tasks by title..."
-      />
       <div className="flex gap-2">
         <Select
           value={filter.priority ?? ANY}

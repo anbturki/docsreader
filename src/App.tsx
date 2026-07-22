@@ -25,8 +25,8 @@ import { UpdateToast } from "@/components/document/UpdateToast";
 const SettingsDialog = lazy(() => import("@/components/settings/SettingsDialog"));
 import { useLibrary } from "@/hooks/useLibrary";
 import { useContentSearch } from "@/hooks/useContentSearch";
+import { useSidebarSearch } from "@/hooks/useSidebarSearch";
 import { mergeSearchEntries } from "@/lib/searchEntries";
-import type { SearchScope } from "@/lib/contentSearch";
 import { useConvertPrompt } from "@/hooks/useConvertPrompt";
 import { usePanes } from "@/hooks/usePanes";
 import { useTheme } from "@/hooks/useTheme";
@@ -75,7 +75,15 @@ function App() {
   });
   useTheme(viewSettings.settings.colorScheme, viewSettings.settings.accentColor);
   const deferredSettings = useDeferredValue(viewSettings.settings);
-  const [search, setSearch] = useState("");
+  const setSidebarOpen = sidebar.setOpen;
+  const revealSidebar = useCallback(() => setSidebarOpen(true), [setSidebarOpen]);
+  // Mirrors the split every editor uses: Cmd+F searches the open document,
+  // Shift+Cmd+F searches the sidebar. Find-in-document owns Cmd+F in
+  // TabScrollPane, so the two never contend for the same chord.
+  const search = useSidebarSearch({
+    shortcut: viewSettings.settings.workspaceSearchShortcut,
+    onReveal: revealSidebar,
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsMounted, setSettingsMounted] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
@@ -258,22 +266,23 @@ function App() {
       if (typeof id === "number") clearTimeout(id);
     };
   }, [quickOpenMounted]);
-  const filteredFiles = useFilteredFiles(allFiles, search);
-  const [searchScope, setSearchScope] = useState<SearchScope>("all");
-  const searchLensActive = viewSettings.settings.sidebarLens === "search";
+  const filteredFiles = useFilteredFiles(allFiles, search.query);
   const activeRoots = useMemo(
     () => (library.activeRoot ? [library.activeRoot] : []),
     [library.activeRoot]
   );
+  // The tasks lens filters its own board, so it needs no content search.
+  const contentSearchEnabled =
+    search.open && viewSettings.settings.sidebarLens !== "tasks";
   const contentSearch = useContentSearch(
     activeRoots,
-    search,
-    searchLensActive,
-    searchScope
+    search.query,
+    contentSearchEnabled,
+    search.scope
   );
   const searchEntries = useMemo(
-    () => mergeSearchEntries(filteredFiles, contentSearch.hits, searchScope),
-    [filteredFiles, contentSearch.hits, searchScope]
+    () => mergeSearchEntries(filteredFiles, contentSearch.hits, search.scope),
+    [filteredFiles, contentSearch.hits, search.scope]
   );
   const tree = useMemo(() => {
     if (!library.activeRoot) return undefined;
@@ -346,29 +355,6 @@ function App() {
     },
     [viewSettings]
   );
-
-  // Mirrors the split every editor uses: Cmd+F searches the open document,
-  // Shift+Cmd+F searches the whole workspace. Find-in-document owns Cmd+F in
-  // TabScrollPane, so the two never contend for the same chord.
-  const workspaceSearchShortcut = useMemo(
-    () => parseShortcut(viewSettings.settings.workspaceSearchShortcut),
-    [viewSettings.settings.workspaceSearchShortcut]
-  );
-  const setSidebarOpen = sidebar.setOpen;
-  useEffect(() => {
-    if (!workspaceSearchShortcut) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (!matchShortcut(e, workspaceSearchShortcut)) return;
-      e.preventDefault();
-      setSidebarOpen(true);
-      handleLensChange("search");
-      requestAnimationFrame(() => {
-        document.querySelector<HTMLInputElement>("[data-search-input]")?.focus();
-      });
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [workspaceSearchShortcut, setSidebarOpen, handleLensChange]);
 
   const activeGitStatus = library.activeScan?.gitStatus;
   const gitStatusByPath = useMemo(() => {
@@ -458,7 +444,7 @@ function App() {
           sidebarOpen={sidebar.open}
           onSidebarOpenChange={sidebar.setOpen}
           breadcrumbPath={headerRelPath || undefined}
-          onBreadcrumbSegmentClick={setSearch}
+          onBreadcrumbSegmentClick={search.reveal}
           quickOpenShortcut={viewSettings.settings.quickOpenShortcut}
           onOpenQuickOpen={() => {
             setQuickOpenMounted(true);
@@ -519,10 +505,7 @@ function App() {
           lens={viewSettings.settings.sidebarLens}
           onLensChange={handleLensChange}
           search={search}
-          onSearchChange={setSearch}
           searchEntries={searchEntries}
-          searchScope={searchScope}
-          onSearchScopeChange={setSearchScope}
           searchingContents={contentSearch.searching}
           searchError={contentSearch.error}
           searchTruncated={contentSearch.truncated}

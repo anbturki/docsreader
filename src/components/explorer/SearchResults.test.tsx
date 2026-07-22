@@ -8,7 +8,6 @@ import type { SearchEntry } from "@/lib/searchEntries";
 vi.mock("@tauri-apps/plugin-opener", () => ({ revealItemInDir: vi.fn() }));
 
 const handlers = {
-  onScopeChange: vi.fn(),
   onSelect: vi.fn(),
   onOpenInNewTab: vi.fn(),
   onTogglePin: vi.fn(),
@@ -152,21 +151,10 @@ describe("SearchResults", () => {
     expect(screen.getByText("coturn")).toBeInTheDocument();
   });
 
-  it("switches scope", async () => {
-    const user = userEvent.setup();
+  it("leaves the scope chips to the sidebar header", () => {
     renderResults();
 
-    await user.click(screen.getByRole("tab", { name: "Tags" }));
-
-    expect(handlers.onScopeChange).toHaveBeenCalledWith("tags");
-  });
-
-  it("offers every scope", () => {
-    renderResults();
-
-    for (const label of ["All", "Files", "Contents", "Tags"]) {
-      expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
-    }
+    expect(screen.queryByRole("group", { name: "Search in" })).not.toBeInTheDocument();
   });
 
   it("says it is still searching before results arrive", () => {

@@ -120,7 +120,7 @@ describe("QuickOpenDialog", () => {
     renderDialog([]);
 
     for (const label of ["All", "Files", "Contents", "Tags"]) {
-      expect(screen.getByRole("tab", { name: label })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
     }
   });
 
@@ -130,7 +130,7 @@ describe("QuickOpenDialog", () => {
     renderDialog([file("notes/alpha.md")]);
     expect(screen.getByText("alpha.md")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("tab", { name: "Contents" }));
+    await user.click(screen.getByRole("button", { name: "Contents" }));
 
     expect(screen.queryByText("alpha.md")).not.toBeInTheDocument();
     expect(screen.getByText("notes/deep.md")).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("QuickOpenDialog", () => {
     setHits([hit("notes/deep.md")]);
     renderDialog([file("notes/alpha.md")]);
 
-    await user.click(screen.getByRole("tab", { name: "Files" }));
+    await user.click(screen.getByRole("button", { name: "Files" }));
 
     expect(screen.getByText("alpha.md")).toBeInTheDocument();
     expect(screen.queryByText("In documents")).not.toBeInTheDocument();
@@ -153,7 +153,7 @@ describe("QuickOpenDialog", () => {
     setHits([tagged]);
     renderDialog([]);
 
-    await user.click(screen.getByRole("tab", { name: "Tags" }));
+    await user.click(screen.getByRole("button", { name: "Tags" }));
 
     expect(screen.getByText("Tagged")).toBeInTheDocument();
   });
