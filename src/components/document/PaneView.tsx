@@ -81,6 +81,7 @@ export function PaneView({
                 onScrollChange={pane.setScrollTop}
                 onNavigate={pane.openInActive}
                 onActiveRefChange={onActiveScrollElChange}
+                paneFocused={!splitActive || isActivePane}
                 onAcceptPending={pane.acceptPending}
                 onDismissPending={pane.dismissPending}
                 onDiffViewModeChange={onDiffViewModeChange}

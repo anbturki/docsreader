@@ -199,3 +199,34 @@
 .prose li::marker {
   color: var(--muted-foreground);
 }
+/* Find-in-document. Two painters render the same matches: the CSS Custom
+   Highlight API where the webview supports it, and positioned rects on older
+   macOS webviews. Keep the two visually identical. */
+::highlight(docsreader-find-all) {
+    background-color: color-mix(in oklch, var(--primary) 28%, transparent);
+    color: var(--foreground);
+}
+
+::highlight(docsreader-find-current) {
+    background-color: color-mix(in oklch, var(--primary) 60%, transparent);
+    color: var(--foreground);
+}
+
+.find-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.find-overlay-mark {
+    position: absolute;
+    border-radius: var(--radius-sm);
+    background-color: color-mix(in oklch, var(--primary) 28%, transparent);
+}
+
+.find-overlay-mark.is-current {
+    background-color: color-mix(in oklch, var(--primary) 60%, transparent);
+    outline: 1px solid var(--primary);
+}

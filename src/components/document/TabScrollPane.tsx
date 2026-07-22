@@ -1,11 +1,16 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { MarkdownFile } from "@/lib/scan";
 import type { ViewSettings } from "@/lib/storage";
 import type { Tab } from "@/hooks/useTabs";
 import { parseFrontmatter } from "@/lib/scan";
+import { useFindInDocument } from "@/hooks/useFindInDocument";
+import { matchShortcut, parseShortcut } from "@/lib/shortcuts";
 import { DocumentView } from "./DocumentView";
 import { ExternalChangeBanner } from "./ExternalChangeBanner";
+import { FindBar } from "./FindBar";
+
+const FIND_SHORTCUT = parseShortcut("Mod+F");
 
 interface Props {
   tab: Tab;
@@ -17,6 +22,8 @@ interface Props {
   onScrollChange: (path: string, value: number) => void;
   onNavigate: (path: string) => void;
   onActiveRefChange?: (el: HTMLElement | null) => void;
+  /** False when a split is showing and the other pane holds focus. */
+  paneFocused: boolean;
   onAcceptPending: (id: string) => void;
   onDismissPending: (id: string) => void;
   onDiffViewModeChange: (mode: ViewSettings["diffViewMode"]) => void;
@@ -37,6 +44,7 @@ export function TabScrollPane({
   onScrollChange,
   onNavigate,
   onActiveRefChange,
+  paneFocused,
   onAcceptPending,
   onDismissPending,
   onDiffViewModeChange,
@@ -52,6 +60,25 @@ export function TabScrollPane({
   );
   const ref = useRef<HTMLDivElement>(null);
   const restoredRef = useRef(false);
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
+
+  useEffect(() => setScrollEl(ref.current), []);
+
+  // Find applies to the rendered view only; the editor brings its own.
+  const findable = active && paneFocused && tab.draft === undefined;
+  const find = useFindInDocument(findable ? scrollEl : null, findable);
+  const showFind = find.show;
+
+  useEffect(() => {
+    if (!findable || !FIND_SHORTCUT) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!matchShortcut(e, FIND_SHORTCUT)) return;
+      e.preventDefault();
+      showFind();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [findable, showFind]);
 
   useEffect(() => {
     restoredRef.current = false;
@@ -120,6 +147,15 @@ export function TabScrollPane({
         onScrollChange(tab.path, e.currentTarget.scrollTop);
       }}
     >
+      {/* Sticky with no height so the bar stays pinned while the document
+          scrolls beneath it without displacing the content. */}
+      {find.open && (
+        <div className="pointer-events-none sticky top-0 z-10 h-0">
+          <div className="pointer-events-auto flex justify-end p-3">
+            <FindBar find={find} />
+          </div>
+        </div>
+      )}
       {tab.pendingContent && pendingBody !== undefined && (
         <ExternalChangeBanner
           before={tab.content}
