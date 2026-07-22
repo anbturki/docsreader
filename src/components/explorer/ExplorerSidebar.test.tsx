@@ -3,6 +3,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeAll } from "vitest";
 
+import { CHROME_STYLE } from "@/components/layout/chrome";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useSidebarSearch } from "@/hooks/useSidebarSearch";
@@ -161,6 +162,31 @@ describe("ExplorerSidebar", () => {
     const panel = container.querySelector('[data-slot="sidebar-container"]');
     expect(panel?.className).toContain("top-(--toolbar-height)");
     expect(panel?.className).not.toContain("h-svh");
+  });
+
+  it("insets the panel so the content area reads as a card", () => {
+    const { container } = render(<Harness />);
+    const sidebar = container.querySelector('[data-slot="sidebar"][data-variant]');
+    expect(sidebar?.getAttribute("data-variant")).toBe("inset");
+    expect(sidebar?.getAttribute("data-collapsible")).toBe("");
+  });
+
+  it("takes the inset gap from the shared chrome token, not the variant", () => {
+    const { container } = render(<Harness />);
+    const panel = container.querySelector('[data-slot="sidebar-container"]');
+    expect(panel?.className).toContain("p-(--chrome-inset)");
+    expect(panel?.className).not.toMatch(/(^| )p-2( |$)/);
+    expect(panel?.className).toContain("var(--sidebar-width-icon)+var(--chrome-inset)");
+    expect(CHROME_STYLE["--chrome-inset"]).toMatch(/rem$/);
+  });
+
+  it("draws one edge per panel, with nothing doubled at the seam", () => {
+    const { container } = render(<Harness />);
+    const [rail, column] = container.querySelectorAll('[data-slot="sidebar-inner"] > *');
+    expect(rail.className).not.toContain("border");
+    expect(column.className).toContain("border border-r-0 border-sidebar-border");
+    // The gap is what keeps the column's left edge off the rail card.
+    expect(column.className).toContain("ml-(--chrome-inset)");
   });
 
   it("leaves the workspace switcher to the toolbar", () => {

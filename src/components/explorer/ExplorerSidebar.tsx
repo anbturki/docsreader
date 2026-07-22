@@ -114,8 +114,13 @@ export function ExplorerSidebar({
 
   return (
     <Sidebar
+      variant="inset"
       collapsible="icon"
-      className="top-(--toolbar-height) h-auto overflow-hidden *:data-[sidebar=sidebar]:flex-row"
+      // The variant's own gap is a hardcoded `p-2`, so both the inset and the
+      // collapsed width it derives from that gap are restated off the shared
+      // token; left alone, the collapsed panel is wider than the rail it holds.
+      // No padding on the right: that edge meets the content card, not the window.
+      className="top-(--toolbar-height) h-auto overflow-hidden p-(--chrome-inset) pr-0 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+var(--chrome-inset))] *:data-[sidebar=sidebar]:flex-row"
     >
       {roots.length > 0 ? (
         <LensRail active={lens} onChange={selectLens} />
@@ -128,7 +133,13 @@ export function ExplorerSidebar({
       )}
 
       {!collapsed && (
-        <Sidebar collapsible="none" className="min-w-0 flex-1">
+        <Sidebar
+          collapsible="none"
+          // Its own panel rather than an area bleeding into the window, gapped
+          // from the rail but flush with the content card: the right edge is
+          // left open so the seam between them is the card's border alone.
+          className="ml-(--chrome-inset) min-w-0 flex-1 rounded-l-md border border-r-0 border-sidebar-border"
+        >
           {roots.length > 0 && <ExplorerHeader lens={lens} search={search} />}
 
           <SidebarContent className="overflow-x-hidden">

@@ -65,4 +65,10 @@ describe("Smoke C3: card opens correct doc", () => {
     expect(screen.getByText("claude-code")).toBeTruthy();
     expect(screen.getByText("2/5")).toBeTruthy();
   });
+
+  it("is rounded like every other surface in the app, corners included", () => {
+    const { card } = renderCard();
+    expect(card.className).toContain("rounded-md");
+    expect(card.className).not.toMatch(/rounded-(l|r|t|b|tl|tr|bl|br)/);
+  });
 });

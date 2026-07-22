@@ -22,6 +22,9 @@ function applyTheme(scheme: "light" | "dark", accent: AccentColor): void {
   const primary = scheme === "dark" ? DARK_PRIMARY(hue) : LIGHT_PRIMARY(hue);
   root.style.setProperty("--primary", primary);
   root.style.setProperty("--ring", primary);
+  // Same accent in both schemes, for surfaces that stay put while the rest of
+  // the UI inverts around them.
+  root.style.setProperty("--primary-fixed", LIGHT_PRIMARY(hue));
   root.style.colorScheme = scheme;
 
   void root.offsetHeight;

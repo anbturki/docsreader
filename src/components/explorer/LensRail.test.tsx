@@ -123,8 +123,70 @@ describe("lens rail", () => {
     expect(rail?.className).not.toMatch(/w-\[\d+(px|rem)/);
   });
 
+  it("takes the selected accent at full strength, with its own foreground", () => {
+    const { container } = renderRail("tree");
+    const rail = container.querySelector('[data-slot="sidebar"]');
+    expect(rail?.className).toContain("bg-primary-fixed");
+    expect(rail?.className).toContain("text-primary-fixed-foreground");
+    // No tint, blend or fade: the fill is the swatch colour itself.
+    expect(rail?.className).not.toMatch(/bg-primary-fixed\//);
+    expect(rail?.className).not.toContain("color-mix");
+  });
+
+  it("is one shape: a card rounded on every corner, one width in both states", () => {
+    const { container } = renderRail("tree");
+    const rail = container.querySelector('[data-slot="sidebar"]');
+    expect(rail?.className).toContain("rounded-md");
+    expect(rail?.className).not.toMatch(/rounded-(l|r|t|b|tl|tr|bl|br)/);
+    expect(rail?.className).not.toContain("border-r");
+    expect(rail?.className).not.toContain("group-data-[collapsible=icon]:w-");
+  });
+
+  it("carries the item states on the items, never on the rail fill", () => {
+    const { container } = renderRail("tree");
+    const rail = container.querySelector('[data-slot="sidebar"]');
+    const tab = screen.getByRole("tab", { name: "Tree" });
+    for (const state of ["hover:", "active:", "data-active:"]) {
+      expect(rail?.className).not.toContain(state);
+      expect(tab.className).toContain(`${state}bg-`);
+    }
+    // The menu button's own press fill is an opaque neutral, which flashes
+    // white over the accent for as long as the button is held.
+    expect(tab.className).not.toMatch(/(^| )active:bg-sidebar-accent($| )/);
+    expect(tab.className).not.toMatch(/(^| )hover:bg-sidebar-accent($| )/);
+  });
+
+  it("marks the selected item by colour alone: no box, no weight, no ring", () => {
+    renderRail("tree");
+    const tab = screen.getByRole("tab", { name: "Tree" });
+    expect(tab.className).not.toMatch(/(^| )data-active:(ring|border|outline|text-(base|sm|lg))/);
+    expect(tab.className).toContain("data-active:bg-transparent");
+    expect(tab.className).toContain("data-active:text-primary-fixed-foreground");
+    // The menu button's own selected state is a fill plus a weight change.
+    expect(tab.className).not.toMatch(/(^| )data-active:font-medium($| )/);
+    expect(tab.className).toContain("data-active:font-light");
+  });
+
+  it("keeps a keyboard focus ring, since colour alone is not focus", () => {
+    renderRail("tree");
+    const tab = screen.getByRole("tab", { name: "Tree" });
+    expect(tab.className).toContain("focus-visible:ring-2");
+    expect(tab.className).toContain("focus-visible:ring-primary-fixed-foreground");
+  });
+
+  it("paints no background in any state, only a brighter foreground", () => {
+    renderRail("tree");
+    for (const tab of screen.getAllByRole("tab")) {
+      for (const state of ["hover:", "active:", "data-active:"]) {
+        expect(tab.className).toContain(`${state}bg-transparent`);
+        expect(tab.className).toContain(`${state}text-primary-fixed-foreground`);
+        expect(tab.className).not.toMatch(new RegExp(`(^| )${state}bg-sidebar-accent($| )`));
+      }
+    }
+  });
+
   it("gets a token wide enough for a label under each icon", () => {
-    expect(parseFloat(CHROME_STYLE["--sidebar-width-icon"])).toBeGreaterThan(3);
+    expect(parseFloat(CHROME_STYLE["--sidebar-width-icon"])).toBeGreaterThan(2.5);
     expect(CHROME_STYLE["--sidebar-width-icon"]).toMatch(/rem$/);
   });
 
@@ -163,7 +225,7 @@ describe("lens rail", () => {
 
     expect(toggle.className).toContain("w-full");
     expect(toggle.className).not.toContain("size-7");
-    for (const shared of ["h-auto", "p-1.5"]) {
+    for (const shared of ["h-auto", "p-1"]) {
       expect(toggle.className).toContain(shared);
       expect(tab.className).toContain(shared);
     }

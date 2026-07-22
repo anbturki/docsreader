@@ -9,6 +9,10 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    /* One step below text-xs, so chrome that has to fit a fixed width has a
+       scale step to reach for instead of a one-off pixel size. */
+    --text-2xs: 0.625rem;
+    --text-2xs--line-height: 0.875rem;
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
     --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -35,6 +39,8 @@
     --color-muted: var(--muted);
     --color-secondary-foreground: var(--secondary-foreground);
     --color-secondary: var(--secondary);
+    --color-primary-fixed-foreground: var(--primary-fixed-foreground);
+    --color-primary-fixed: var(--primary-fixed);
     --color-primary-foreground: var(--primary-foreground);
     --color-primary: var(--primary);
     --color-popover-foreground: var(--popover-foreground);
@@ -61,6 +67,10 @@
     --popover-foreground: oklch(0.145 0 0);
     --primary: oklch(0.55 0.22 280);
     --primary-foreground: oklch(0.985 0 0);
+    /* The accent held at one value for both schemes; useTheme rewrites it from
+       the chosen hue. Deliberately absent from .dark: that is the point. */
+    --primary-fixed: oklch(0.55 0.22 280);
+    --primary-fixed-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
     --muted: oklch(0.97 0 0);

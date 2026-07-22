@@ -22,28 +22,29 @@ export function LensRail({ active, onChange }: Props) {
   return (
     <Sidebar
       collapsible="none"
-      // Overlap the container's own right border, which the collapsed panel
-      // would otherwise show as a second line beside this one.
-      className="w-[calc(var(--sidebar-width-icon)+1px)]! shrink-0 border-r border-sidebar-border"
+      // A card in its own right: one width and every corner rounded, in both
+      // sidebar states, filled with the accent at one value that both schemes
+      // share. Item states live on the items, never on this fill.
+      className="w-(--sidebar-width-icon) shrink-0 rounded-md bg-primary-fixed text-primary-fixed-foreground"
     >
       <SidebarContent>
-        <SidebarGroup className="gap-1 p-1">
+        <SidebarGroup className="gap-0.5 p-0.5">
           {/* Present in both states: appearing only when collapsed shifted every
               lens item down the rail. */}
-          <SidebarGroupContent className="flex flex-col gap-1">
+          <SidebarGroupContent className="flex flex-col gap-0.5">
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarToggle className={RAIL_ITEM} />
               </SidebarMenuItem>
             </SidebarMenu>
-            <SidebarSeparator className="mx-1" />
+            <SidebarSeparator className="mx-0.5 bg-primary-fixed-foreground/25" />
           </SidebarGroupContent>
           <SidebarGroupContent>
             <SidebarMenu
               role="tablist"
               aria-orientation="vertical"
               aria-label="Sidebar lens"
-              className="gap-1"
+              className="gap-0.5"
             >
               {SIDEBAR_LENSES.map((lens) => {
                 const { label, icon: Icon } = LENS_META[lens];

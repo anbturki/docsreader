@@ -19,13 +19,19 @@ export const CHROME_STYLE: CSSProperties &
     | "--sidebar-width"
     | "--sidebar-width-icon"
     | "--toolbar-height"
-    | "--window-controls-inset",
+    | "--window-controls-inset"
+    | "--chrome-inset",
     string
   > = {
   "--sidebar-width": "20rem",
-  // Collapsed width: the lens rail stacks a label under each icon, so the
-  // shadcn default of 3rem would clip them.
-  "--sidebar-width-icon": "4rem",
+  // Collapsed width: the lens rail stacks a label under each icon, so it is
+  // sized to the widest label ("Recent", 33.2px measured in Geist at text-2xs)
+  // plus the rail's item and group padding.
+  "--sidebar-width-icon": "3rem",
   "--toolbar-height": "2.25rem",
   "--window-controls-inset": `${windowControlsInset}px`,
+  // Gap between the window edge and the floating surfaces (sidebar panel and
+  // content card). shadcn's inset variant hardcodes this as `p-2`/`m-2`, which
+  // reads as a wide margin at this window size.
+  "--chrome-inset": "0.25rem",
 };

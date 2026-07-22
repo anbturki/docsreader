@@ -433,7 +433,15 @@ function App() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen} style={CHROME_STYLE}>
+      {/* The toolbar is fixed, so the wrapper's padding is what reserves its
+          row; both the inset panel and the content card then start at the
+          same y without either restating the offset. */}
+      <SidebarProvider
+        open={sidebar.open}
+        onOpenChange={sidebar.setOpen}
+        style={CHROME_STYLE}
+        className="pt-(--toolbar-height)"
+      >
         <AppToolbar
           roots={library.roots}
           activeRoot={library.activeRoot}
@@ -530,7 +538,14 @@ function App() {
           onOpenInOtherPane={panes.openInOtherPane}
         />
 
-        <SidebarInset className="flex h-svh flex-col pt-(--toolbar-height)">
+        {/* The inset variant sets the card's gap with a hardcoded `m-2`, and its
+            flow position comes from a spacer the sidebar reserves at the same
+            hardcoded size; both are restated from the shared token, the second
+            as a pull-back so the card stays flush against the sidebar in either
+            state. Radius and drop shadow are restated at the same modifiers,
+            which is what lets tailwind-merge drop them rather than leaving two
+            rules to race: the seam is one hairline, not a line plus a halo. */}
+        <SidebarInset className="flex flex-col overflow-hidden md:peer-data-[variant=inset]:m-(--chrome-inset) md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-[calc(var(--chrome-inset)-var(--spacing)*4)] md:peer-data-[variant=inset]:rounded-none md:peer-data-[variant=inset]:rounded-r-md md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:shadow-none">
 
           <UpdateToast
             phase={updater.phase}
