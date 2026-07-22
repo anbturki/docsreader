@@ -58,7 +58,7 @@ Needs `docsreader-mcp` on your PATH and `jq`. Full setup in the [plugin README](
 | **Interactive checklists** | Toggle any checkbox from the rendered view; the change writes back to the file |
 | **Five lenses** | Tree, Recent, Tags, Pinned, and a Tasks kanban board over one library |
 | **Split view** | Two docs side-by-side or stacked, each with its own tabs and scroll |
-| **Full-text search** | Search names, tags, and document contents; Cmd+F finds within the open doc |
+| **Full-text search** | Search names, tags, and the text inside documents, from the file switcher or a sidebar Search tab; narrow to names, contents, or tags |
 | **Open with** | Double-click a `.md` in Finder or "Open With DocsReader" to jump straight to a file or folder |
 | **Task board** | To Do / In Progress / Done with drag-to-advance and acceptance-criteria progress, consistent with the MCP |
 | **Agent-aware** | Open docs reload live as agents write; on-disk changes surface a diff; git status shows in the tree |
