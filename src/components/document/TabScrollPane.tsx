@@ -10,7 +10,6 @@ import { DocumentView } from "./DocumentView";
 import { ExternalChangeBanner } from "./ExternalChangeBanner";
 import { FindBar } from "./FindBar";
 
-const FIND_SHORTCUT = parseShortcut("Mod+F");
 
 interface Props {
   tab: Tab;
@@ -65,20 +64,24 @@ export function TabScrollPane({
   useEffect(() => setScrollEl(ref.current), []);
 
   // Find applies to the rendered view only; the editor brings its own.
+  const findShortcut = useMemo(
+    () => parseShortcut(viewSettings.findInDocumentShortcut),
+    [viewSettings.findInDocumentShortcut]
+  );
   const findable = active && paneFocused && tab.draft === undefined;
   const find = useFindInDocument(findable ? scrollEl : null, findable);
   const showFind = find.show;
 
   useEffect(() => {
-    if (!findable || !FIND_SHORTCUT) return;
+    if (!findable || !findShortcut) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!matchShortcut(e, FIND_SHORTCUT)) return;
+      if (!matchShortcut(e, findShortcut)) return;
       e.preventDefault();
       showFind();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [findable, showFind]);
+  }, [findable, findShortcut, showFind]);
 
   useEffect(() => {
     restoredRef.current = false;

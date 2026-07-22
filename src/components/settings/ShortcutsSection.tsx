@@ -19,6 +19,20 @@ export function ShortcutsSection({ settings, onChange }: Props) {
           onChange={(v) => onChange({ ...settings, quickOpenShortcut: v })}
         />
       </Field>
+      <Field label="Find in document" hint="Search the document you are reading.">
+        <ShortcutRecorder
+          value={settings.findInDocumentShortcut}
+          defaultValue={defaultViewSettings.findInDocumentShortcut}
+          onChange={(v) => onChange({ ...settings, findInDocumentShortcut: v })}
+        />
+      </Field>
+      <Field label="Search workspace" hint="Search names, tags and document contents.">
+        <ShortcutRecorder
+          value={settings.workspaceSearchShortcut}
+          defaultValue={defaultViewSettings.workspaceSearchShortcut}
+          onChange={(v) => onChange({ ...settings, workspaceSearchShortcut: v })}
+        />
+      </Field>
     </div>
   );
 }

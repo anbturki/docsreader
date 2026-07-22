@@ -72,6 +72,8 @@ export interface ViewSettings {
   codeThemeDark: DarkCodeTheme;
   outlineOpen: boolean;
   quickOpenShortcut: string;
+  findInDocumentShortcut: string;
+  workspaceSearchShortcut: string;
   defaultFolderState: DefaultFolderState;
   hidePatterns: string[];
   sidebarLens: SidebarLens;
@@ -90,6 +92,8 @@ export const defaultViewSettings: ViewSettings = {
   codeThemeDark: "github-dark",
   outlineOpen: true,
   quickOpenShortcut: "Mod+P",
+  findInDocumentShortcut: "Mod+F",
+  workspaceSearchShortcut: "Mod+Shift+F",
   defaultFolderState: "top-level",
   hidePatterns: [],
   sidebarLens: "tree",
@@ -224,10 +228,18 @@ export async function loadViewSettings(): Promise<ViewSettings> {
       ? (v.codeThemeDark as DarkCodeTheme)
       : defaultViewSettings.codeThemeDark,
     outlineOpen: typeof v.outlineOpen === "boolean" ? v.outlineOpen : defaultViewSettings.outlineOpen,
-    quickOpenShortcut:
-      typeof v.quickOpenShortcut === "string" && v.quickOpenShortcut.length > 0
-        ? v.quickOpenShortcut
-        : defaultViewSettings.quickOpenShortcut,
+    quickOpenShortcut: normalizeShortcut(
+      v.quickOpenShortcut,
+      defaultViewSettings.quickOpenShortcut
+    ),
+    findInDocumentShortcut: normalizeShortcut(
+      v.findInDocumentShortcut,
+      defaultViewSettings.findInDocumentShortcut
+    ),
+    workspaceSearchShortcut: normalizeShortcut(
+      v.workspaceSearchShortcut,
+      defaultViewSettings.workspaceSearchShortcut
+    ),
     defaultFolderState: normalizeDefaultFolderState(v.defaultFolderState),
     hidePatterns: normalizeHidePatterns(v.hidePatterns),
     sidebarLens: normalizeSidebarLens(v.sidebarLens),
@@ -251,6 +263,14 @@ function normalizeHidePatterns(value: unknown): string[] {
     }
   }
   return out;
+}
+
+// A cleared or malformed binding falls back to the default rather than
+// leaving the action unreachable.
+function normalizeShortcut(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
 }
 
 function normalizeSidebarLens(value: unknown): SidebarLens {

@@ -355,7 +355,10 @@ function App() {
   // Mirrors the split every editor uses: Cmd+F searches the open document,
   // Shift+Cmd+F searches the whole workspace. Find-in-document owns Cmd+F in
   // TabScrollPane, so the two never contend for the same chord.
-  const workspaceSearchShortcut = useMemo(() => parseShortcut("Mod+Shift+F"), []);
+  const workspaceSearchShortcut = useMemo(
+    () => parseShortcut(viewSettings.settings.workspaceSearchShortcut),
+    [viewSettings.settings.workspaceSearchShortcut]
+  );
   const setSidebarOpen = sidebar.setOpen;
   useEffect(() => {
     if (!workspaceSearchShortcut) return;
