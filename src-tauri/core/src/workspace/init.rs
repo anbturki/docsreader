@@ -49,7 +49,9 @@ fn ensure_target_is_fresh(root: &Path) -> Result<(), CoreError> {
                 root.display()
             ),
         )
-        .with_recovery("pick an empty or new directory, or convert it in the DocsReader app"));
+        .with_recovery(
+            "only pre-existing files block init; where the folder lives does not, and a git repository is a valid home. Point path at a folder whose notes/ is empty or missing, or convert this one in the DocsReader app",
+        ));
     }
     Ok(())
 }

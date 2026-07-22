@@ -28,19 +28,21 @@ Homebrew users from before v0.6.0: run `brew upgrade --cask docsreader` once so 
 
 Every tool takes an optional `workspace` slug - omit it to use the resolved default (a project `./notes` if present, else `~/notes`). Tool errors carry recovery hints, so agents self-correct instead of stalling.
 
+Give each project its own workspace: labels group work inside a workspace, they do not separate projects. In order of preference, an agent starting on a project with no workspace should `init_workspace {path: "<project root>"}` (a git repository is fine - only the `notes` folder is written, and files there are staged, never committed); failing that, use a sibling folder such as `<parent>/<project>-notes` and pass its slug explicitly; `~/notes` is for work that belongs to no project.
+
 ### Workspaces
 
 | Tool | What it does |
 | --- | --- |
 | `list_workspaces` | List all known workspaces: registered projects plus the default `~/notes`. Call before choosing where to write. |
-| `init_workspace` | Create and register a workspace (`~/notes`, or `<path>/notes` for a project). Fails if the target already has content. |
+| `init_workspace` | Create and register a workspace (`~/notes`, or `<path>/notes` for a project). Fails only if `<path>/notes` already holds files. |
 | `ping` | Health check; returns `pong`. |
 
 ### Docs
 
 | Tool | What it does |
 | --- | --- |
-| `write_doc` | Create a doc in the folder matching its status (`research` / `in-progress` / `done` / `archived`), with generated frontmatter. Handles slugs, collisions, and git staging. |
+| `write_doc` | Create a doc in the folder matching its status (`research` / `in-progress` / `done` / `archived`), with generated frontmatter. Handles slugs, collisions, and git staging (adds the file, never commits). |
 | `read_doc` | Read a doc by slug or status-relative path. Concise (frontmatter + snippet) by default, or `detailed` for the full body. |
 | `list_docs` | List docs newest first; filter by status, phase, or tag (filters AND together). |
 | `search_docs` | Rank matches across title, tags, slug, and content; returns snippets and `docsreader://` resource URIs. |

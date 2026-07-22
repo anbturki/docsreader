@@ -112,7 +112,7 @@ fn task_change(ws: ResolvedWorkspace, task: TaskSummary) -> Json<TaskChangeResul
 #[tool_router(router = task_tool_router, vis = "pub(crate)")]
 impl DocsServer {
     #[tool(
-        description = "Create a task in the workspace's tasks/ folder using the Backlog.md file shape (task-N id, frontmatter status, Description + Acceptance Criteria checklist). Unlike docs, task status lives in frontmatter, not folders.",
+        description = "Create a task in the workspace's tasks/ folder using the Backlog.md file shape (task-N id, frontmatter status, Description + Acceptance Criteria checklist). Unlike docs, task status lives in frontmatter, not folders. Write a project's tasks to that project's own workspace; a label is not a substitute for one.",
         annotations(destructive_hint = false)
     )]
     async fn write_task(
@@ -145,7 +145,7 @@ impl DocsServer {
     }
 
     #[tool(
-        description = "List tasks in the workspace, ordered by id. Filter by status (\"To Do\" | \"In Progress\" | \"Done\") or label.",
+        description = "List tasks in the workspace, ordered by id. Filter by status (\"To Do\" | \"In Progress\" | \"Done\") or label. Labels group work inside one workspace; unfiltered results include every project sharing it.",
         annotations(read_only_hint = true)
     )]
     async fn list_tasks(

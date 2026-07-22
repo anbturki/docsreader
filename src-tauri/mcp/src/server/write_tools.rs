@@ -147,7 +147,7 @@ async fn located(
 #[tool_router(router = write_tool_router, vis = "pub(crate)")]
 impl DocsServer {
     #[tool(
-        description = "Create a markdown doc in a DocsReader workspace. The doc lands in the folder matching its status (research | in-progress | done | archived), optionally inside a phase subfolder, with generated frontmatter. Prefer this over writing files directly: it handles slugs, collisions, metadata, and git staging.",
+        description = "Create a markdown doc in a DocsReader workspace. The doc lands in the folder matching its status (research | in-progress | done | archived), optionally inside a phase subfolder, with generated frontmatter. Prefer this over writing files directly: it handles slugs, collisions, metadata, and git staging (the written file is added when the workspace is inside a repository, never committed).",
         annotations(destructive_hint = false)
     )]
     async fn write_doc(

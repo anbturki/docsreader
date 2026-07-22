@@ -38,7 +38,7 @@ impl DocsServer {
     }
 
     #[tool(
-        description = "List all known DocsReader workspaces: registered project workspaces plus the default user workspace (~/notes). Call this when a workspace slug is unknown or before choosing where to write.",
+        description = "List all known DocsReader workspaces: registered project workspaces plus the default user workspace (~/notes). Call this when a workspace slug is unknown or before choosing where to write. If none of them belongs to the project at hand, create one with init_workspace instead of writing into an unrelated workspace.",
         annotations(read_only_hint = true)
     )]
     async fn list_workspaces(&self) -> CallToolResult {
@@ -49,7 +49,7 @@ impl DocsServer {
     }
 
     #[tool(
-        description = "Create a new DocsReader workspace and register it. No args: creates the user workspace at ~/notes. With path: creates a project workspace at <path>/notes. Fails if the target already has content.",
+        description = "Create a new DocsReader workspace and register it. No args: creates the user workspace at ~/notes. With path: creates a project workspace at <path>/notes. Give every project its own workspace rather than sharing ~/notes. A git repository is a valid location: only the notes folder is written. Fails only if <path>/notes already holds files; then either point path at a sibling folder such as <parent>/<project>-notes, or convert the folder in the DocsReader app.",
         annotations(destructive_hint = false, idempotent_hint = true)
     )]
     async fn init_workspace(
