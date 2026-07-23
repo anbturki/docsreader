@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Merged over the generated Info.plist at bundle time, and a user key replaces
+  the generated one wholesale (the CLI inserts user keys last). tauri.conf.json
+  > bundle.fileAssociations already generates this same CFBundleDocumentTypes,
+  but with no icon, so we restate it verbatim and add only
+  CFBundleTypeIconSystemGenerated: on macOS 11+ that tells Finder to draw a
+  document icon from the app icon, so a .md shows the DocsReader mark.
+
+  This is build-time metadata only: it never runs and cannot affect app
+  performance or behaviour. The icon appears only for users who make DocsReader
+  their default app for the type; it is a cue, not a takeover.
+
+  Keep these two entries in exact sync with bundle.fileAssociations. If that
+  list changes, update this file too, or the associations drift on macOS.
+-->
+<plist version="1.0">
+<dict>
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>md</string>
+        <string>markdown</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>Markdown</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Default</string>
+      <key>CFBundleTypeIconSystemGenerated</key>
+      <true/>
+    </dict>
+    <dict>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>mdx</string>
+      </array>
+      <key>CFBundleTypeName</key>
+      <string>MDX</string>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>LSHandlerRank</key>
+      <string>Default</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>com.docsreader.app.mdx</string>
+      </array>
+      <key>CFBundleTypeIconSystemGenerated</key>
+      <true/>
+    </dict>
+  </array>
+</dict>
+</plist>
