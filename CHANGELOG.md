@@ -9,6 +9,15 @@ and DocsReader adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 Nothing yet.
 
+## [0.11.1] - 2026-07-23
+
+### Changed
+
+- **Markdown files carry a DocsReader icon in Finder.** A `.md`, `.markdown` or
+  `.mdx` file now shows an app-branded document icon on macOS, drawn from the app
+  icon, for anyone who sets DocsReader as their default app for the type. This is
+  build-time metadata only and does not change how the app runs.
+
 ## [0.11.0] - 2026-07-23
 
 ### Added
@@ -193,6 +202,7 @@ Nothing yet.
   workspaces all live in a folder of that name. They are now labelled by the
   project that contains them.
 
-[Unreleased]: https://github.com/anbturki/docsreader/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/anbturki/docsreader/compare/v0.11.1...HEAD
+[0.11.1]: https://github.com/anbturki/docsreader/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/anbturki/docsreader/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/anbturki/docsreader/compare/v0.9.2...v0.10.0
