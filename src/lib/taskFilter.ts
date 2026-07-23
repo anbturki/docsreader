@@ -1,4 +1,4 @@
-import type { Task, TaskPriority } from "./tasks";
+import { TASK_STATUSES, type Task, type TaskPriority, type TaskStatus } from "./tasks";
 
 export interface TaskFilter {
   text: string;
@@ -26,4 +26,15 @@ export function availableLabels(tasks: Task[]): string[] {
 
 export function isFilterActive(filter: TaskFilter): boolean {
   return filter.text.trim() !== "" || filter.label !== null || filter.priority !== null;
+}
+
+export function groupTasksByStatus(tasks: Task[]): Map<TaskStatus, Task[]> {
+  const columns = new Map<TaskStatus, Task[]>(TASK_STATUSES.map((s) => [s, []]));
+  for (const task of tasks) columns.get(task.status)?.push(task);
+  return columns;
+}
+
+export function taskCountLabel(shown: number, total: number): string {
+  const tally = shown === total ? `${total}` : `${shown} / ${total}`;
+  return `${tally} task${total === 1 ? "" : "s"}`;
 }

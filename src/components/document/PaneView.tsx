@@ -5,7 +5,7 @@ import type { ViewSettings } from "@/lib/storage";
 import type { Tabs } from "@/hooks/useTabs";
 import { EmptyDocument } from "./EmptyDocument";
 import { TabBar } from "./TabBar";
-import { TabScrollPane } from "./TabScrollPane";
+import { TAB_KIND_VIEWS } from "./tabKinds";
 
 interface Props {
   pane: Tabs;
@@ -21,6 +21,7 @@ interface Props {
   onActiveScrollElChange: (el: HTMLElement | null) => void;
   onDiffViewModeChange: (mode: ViewSettings["diffViewMode"]) => void;
   onAlwaysAutoReload: () => void;
+  onOpenInOtherPane?: (path: string) => void;
   // hasRoots controls the empty-state message inside EmptyDocument.
   hasRoots: boolean;
 }
@@ -36,6 +37,7 @@ export function PaneView({
   onActiveScrollElChange,
   onDiffViewModeChange,
   onAlwaysAutoReload,
+  onOpenInOtherPane,
   hasRoots,
 }: Props) {
   // Capture mousedown so that clicking inside an unfocused pane focuses
@@ -67,28 +69,21 @@ export function PaneView({
           </div>
         ) : (
           pane.tabs.map((tab) => {
-            const file = files.find((f) => f.path === tab.path);
-            const active = tab.id === pane.activeId;
+            const Content = TAB_KIND_VIEWS[tab.kind].content;
             return (
-              <TabScrollPane
+              <Content
                 key={tab.id}
                 tab={tab}
-                file={file}
-                active={active}
+                pane={pane}
+                active={tab.id === pane.activeId}
+                files={files}
                 rootPath={rootPath}
                 viewSettings={viewSettings}
-                initialScrollTop={pane.getScrollTop(tab.path)}
-                onScrollChange={pane.setScrollTop}
-                onNavigate={pane.openInActive}
-                onActiveRefChange={onActiveScrollElChange}
-                onAcceptPending={pane.acceptPending}
-                onDismissPending={pane.dismissPending}
+                paneFocused={!splitActive || isActivePane}
+                onActiveScrollElChange={onActiveScrollElChange}
                 onDiffViewModeChange={onDiffViewModeChange}
                 onAlwaysAutoReload={onAlwaysAutoReload}
-                onBeginEdit={pane.beginEdit}
-                onCancelEdit={pane.cancelEdit}
-                onSaveEdit={pane.saveEdit}
-                onToggleTask={pane.toggleTaskItem}
+                onOpenInOtherPane={onOpenInOtherPane}
               />
             );
           })

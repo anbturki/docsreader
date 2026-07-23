@@ -83,7 +83,14 @@ fn extract_first_heading(content: &str) -> Option<String> {
     None
 }
 
-fn parse_meta(content: &str) -> (Option<String>, Vec<String>) {
+pub(crate) fn relative_path(root: &Path, path: &Path) -> String {
+    path.strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .to_string()
+}
+
+pub(crate) fn parse_meta(content: &str) -> (Option<String>, Vec<String>) {
     let (fm, _) = split_frontmatter(content);
     let meta = fm.map(parse_doc_meta).unwrap_or_default();
     let title = meta.title.or_else(|| extract_first_heading(content));
@@ -149,20 +156,30 @@ fn read_partial(path: &Path) -> std::io::Result<String> {
     Ok(String::from_utf8_lossy(&buf).into_owned())
 }
 
-pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanResult, String> {
-    let root_path = Path::new(&path);
-    if !root_path.exists() {
-        return Err(format!("Path does not exist: {}", path));
-    }
+pub(crate) struct MarkdownWalk {
+    pub entries: Vec<DirEntry>,
+    pub truncated: bool,
+    pub skipped: usize,
+}
 
-    let dirs_visited = Arc::new(AtomicU64::new(0));
-    let last_emit = Arc::new(Mutex::new(Instant::now()));
+/// The one traversal every library feature goes through, so the file tree and
+/// content search can never disagree about which files a folder contains.
+pub(crate) fn collect_markdown_entries(root: &Path, on_dir: impl FnMut(&Path)) -> MarkdownWalk {
+    collect_markdown_entries_until(root, on_dir, || false)
+}
 
+/// The walk dominates a search on a large tree, so a superseded query has to be
+/// able to leave it early rather than only between files.
+pub(crate) fn collect_markdown_entries_until(
+    root: &Path,
+    mut on_dir: impl FnMut(&Path),
+    should_stop: impl Fn() -> bool,
+) -> MarkdownWalk {
     let mut entries: Vec<DirEntry> = Vec::new();
     let mut truncated = false;
-    let skipped = AtomicUsize::new(0);
+    let mut skipped = 0usize;
 
-    let walker = WalkDir::new(root_path)
+    let walker = WalkDir::new(root)
         .follow_links(true)
         .into_iter()
         .filter_entry(|e| {
@@ -178,27 +195,20 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
         });
 
     for entry in walker {
+        if should_stop() {
+            break;
+        }
         let entry = match entry {
             Ok(e) => e,
             // Permission-denied subtrees and symlink loops arrive as error
             // entries; count them so the GUI can say files were left out.
             Err(_) => {
-                skipped.fetch_add(1, Ordering::Relaxed);
+                skipped += 1;
                 continue;
             }
         };
         if entry.file_type().is_dir() {
-            dirs_visited.fetch_add(1, Ordering::Relaxed);
-            maybe_emit_walk_progress(
-                progress,
-                &path,
-                entry.path(),
-                root_path,
-                &dirs_visited,
-                0,
-                None,
-                &last_emit,
-            );
+            on_dir(entry.path());
             continue;
         }
 
@@ -206,14 +216,13 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
             continue;
         }
 
-        let name = entry.file_name().to_string_lossy().to_string();
-        if !is_markdown(&name) {
+        if !is_markdown(&entry.file_name().to_string_lossy()) {
             continue;
         }
 
         if let Ok(meta) = entry.metadata() {
             if meta.len() > MAX_FILE_BYTES {
-                skipped.fetch_add(1, Ordering::Relaxed);
+                skipped += 1;
                 continue;
             }
         }
@@ -224,6 +233,39 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
         }
         entries.push(entry);
     }
+
+    MarkdownWalk {
+        entries,
+        truncated,
+        skipped,
+    }
+}
+
+pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanResult, String> {
+    let root_path = Path::new(&path);
+    if !root_path.exists() {
+        return Err(format!("Path does not exist: {}", path));
+    }
+
+    let dirs_visited = Arc::new(AtomicU64::new(0));
+    let last_emit = Arc::new(Mutex::new(Instant::now()));
+
+    let walk = collect_markdown_entries(root_path, |dir| {
+        dirs_visited.fetch_add(1, Ordering::Relaxed);
+        maybe_emit_walk_progress(
+            progress,
+            &path,
+            dir,
+            root_path,
+            &dirs_visited,
+            0,
+            None,
+            &last_emit,
+        );
+    });
+    let entries = walk.entries;
+    let truncated = walk.truncated;
+    let skipped = AtomicUsize::new(walk.skipped);
 
     let total_to_read = entries.len() as u64;
     let files_processed = Arc::new(AtomicU64::new(0));
@@ -248,12 +290,7 @@ pub fn run_scan(progress: &dyn ScanProgressSink, path: String) -> Result<ScanRes
             };
             let (title, tags) = parse_meta(&content);
 
-            let rel_path = entry
-                .path()
-                .strip_prefix(root_path)
-                .unwrap_or(entry.path())
-                .to_string_lossy()
-                .to_string();
+            let rel_path = relative_path(root_path, entry.path());
 
             let links = crate::links::links_from(&content, &rel_path);
 

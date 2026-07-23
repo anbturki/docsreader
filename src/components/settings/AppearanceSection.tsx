@@ -1,5 +1,3 @@
-import { Monitor, Moon, Sun } from "lucide-react";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Select,
   SelectContent,
@@ -8,35 +6,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  ACCENT_HUE,
   DARK_CODE_THEMES,
   LIGHT_CODE_THEMES,
-  type AccentColor,
-  type ColorScheme,
   type DarkCodeTheme,
   type LightCodeTheme,
   type ViewSettings,
 } from "@/lib/storage";
+import { AccentPicker } from "./AccentPicker";
+import { SchemePicker } from "./SchemePicker";
 
 interface Props {
   settings: ViewSettings;
   onChange: (next: ViewSettings) => void;
 }
-
-const SCHEMES: { value: ColorScheme; label: string; icon: typeof Sun }[] = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System", icon: Monitor },
-];
-
-const ACCENTS: { value: AccentColor; label: string }[] = [
-  { value: "violet", label: "Violet" },
-  { value: "blue", label: "Blue" },
-  { value: "green", label: "Green" },
-  { value: "orange", label: "Orange" },
-  { value: "rose", label: "Rose" },
-  { value: "slate", label: "Slate" },
-];
 
 interface CodeThemePreview {
   bg: string;
@@ -62,53 +44,21 @@ const DARK_PREVIEWS: Record<DarkCodeTheme, CodeThemePreview> = {
   nord: { bg: "#2e3440", fg: "#d8dee9", accent: "#88c0d0" },
 };
 
-const cardClass =
-  "h-14 flex-col gap-1 rounded-md border bg-card text-card-foreground transition-colors " +
-  "hover:bg-accent " +
-  "data-[state=on]:bg-primary/10 data-[state=on]:text-primary data-[state=on]:border-primary/40 " +
-  "data-[state=on]:hover:bg-primary/15";
-
 export function AppearanceSection({ settings, onChange }: Props) {
   return (
     <div className="flex flex-col gap-5">
       <Field label="Color scheme" hint="Match your system or pick a fixed mode.">
-        <ToggleGroup
-          type="single"
+        <SchemePicker
           value={settings.colorScheme}
-          onValueChange={(v) => v && onChange({ ...settings, colorScheme: v as ColorScheme })}
-          variant="outline"
-          spacing={8}
-          className="grid w-full grid-cols-3"
-        >
-          {SCHEMES.map(({ value, label, icon: Icon }) => (
-            <ToggleGroupItem key={value} value={value} className={cardClass}>
-              <Icon className="size-4" />
-              <span className="text-xs font-normal">{label}</span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+          onChange={(colorScheme) => onChange({ ...settings, colorScheme })}
+        />
       </Field>
 
       <Field label="Accent color" hint="Used for buttons, links, and highlights.">
-        <ToggleGroup
-          type="single"
+        <AccentPicker
           value={settings.accentColor}
-          onValueChange={(v) => v && onChange({ ...settings, accentColor: v as AccentColor })}
-          variant="outline"
-          spacing={8}
-          className="grid w-full grid-cols-3"
-        >
-          {ACCENTS.map(({ value, label }) => (
-            <ToggleGroupItem key={value} value={value} className={cardClass}>
-              <span
-                aria-hidden
-                className="size-5 rounded-full border"
-                style={{ background: `oklch(0.6 0.2 ${ACCENT_HUE[value]})` }}
-              />
-              <span className="text-xs font-normal">{label}</span>
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
+          onChange={(accentColor) => onChange({ ...settings, accentColor })}
+        />
       </Field>
 
       <Field label="Code block theme" hint="Syntax-highlighting theme used for fenced code.">

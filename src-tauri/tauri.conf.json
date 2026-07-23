@@ -13,11 +13,16 @@
     "windows": [
       {
         "title": "",
+        "dragDropEnabled": false,
         "width": 1280,
         "height": 820,
         "minWidth": 800,
         "minHeight": 500,
-        "titleBarStyle": "Overlay"
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": {
+          "x": 11,
+          "y": 20
+        }
       }
     ],
     "security": {
@@ -74,7 +79,7 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "10.15",
+      "minimumSystemVersion": "11.0",
       "entitlements": null,
       "exceptionDomain": null,
       "frameworks": []

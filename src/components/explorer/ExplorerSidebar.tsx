@@ -1,45 +1,54 @@
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty";
 import {
   Sidebar,
   SidebarContent,
   SidebarFooter,
-  SidebarHeader,
-  SidebarRail,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import type { MarkdownFile } from "@/lib/scan";
 import type { TreeNode } from "@/lib/tree";
 import type { SidebarLens } from "@/lib/storage";
 import type { RootScan } from "@/hooks/useLibrary";
 import type { GitFileStatusKind } from "@/lib/git";
+import { ExplorerHeader } from "./ExplorerHeader";
 import { FileTree } from "./FileTree";
-import { LensTabs } from "./LensTabs";
+import { LensRail } from "./LensRail";
 import { PinnedList } from "./PinnedList";
 import { RecentList } from "./RecentList";
 import { ScanProgressView } from "./ScanProgressView";
-import { SearchInput } from "./SearchInput";
+import { RAIL_ITEM } from "./railItem";
+import { SearchResults } from "./SearchResults";
+import { SidebarToggle } from "./SidebarToggle";
 import { TagsList } from "./TagsList";
-import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
-import { TasksBoard } from "@/components/tasks/TasksBoard";
+import { TaskFilterProvider } from "./TaskFilterContext";
+import type { SearchEntry } from "@/lib/searchEntries";
+import type { SidebarSearch } from "@/hooks/useSidebarSearch";
+import { TaskGroupList } from "@/components/tasks/TaskGroupList";
+import { TasksLens } from "@/components/tasks/TasksLens";
 
 interface Props {
   // workspaces
   roots: string[];
   activeRoot: string | undefined;
   activeScan: RootScan | undefined;
-  workspaceNamesByRoot: Record<string, string>;
-  onSelectRoot: (path: string) => void;
-  onRemoveRoot: (path: string) => void;
   onPickDirectory: () => void;
   onOpenWelcome: (() => void) | undefined;
+  onRefresh: () => void;
 
   // lens
   lens: SidebarLens;
   onLensChange: (lens: SidebarLens) => void;
+  onOpenTasksTab: () => void;
 
   // search
-  search: string;
-  onSearchChange: (value: string) => void;
+  search: SidebarSearch;
+  searchEntries: SearchEntry[];
+  searchingContents: boolean;
+  searchError: string | undefined;
+  searchTruncated: boolean;
 
   // files
   filteredFiles: MarkdownFile[];
@@ -69,19 +78,29 @@ interface Props {
   onShowGitDiff?: (path: string) => void;
 }
 
-export function ExplorerSidebar({
+export function ExplorerSidebar(props: Props) {
+  return (
+    <TaskFilterProvider>
+      <SidebarPanels {...props} />
+    </TaskFilterProvider>
+  );
+}
+
+function SidebarPanels({
   roots,
   activeRoot,
   activeScan,
-  workspaceNamesByRoot,
-  onSelectRoot,
-  onRemoveRoot,
   onPickDirectory,
   onOpenWelcome,
+  onRefresh,
   lens,
   onLensChange,
+  onOpenTasksTab,
   search,
-  onSearchChange,
+  searchEntries,
+  searchingContents,
+  searchError,
+  searchTruncated,
   filteredFiles,
   pinnedFiles,
   tree,
@@ -100,93 +119,149 @@ export function ExplorerSidebar({
   gitStatusByPath,
   onShowGitDiff,
 }: Props) {
+  const { state, setOpen } = useSidebar();
+  const collapsed = state === "collapsed";
+  const showingResults = search.query.trim() !== "" && lens !== "tasks";
+
+  // One refresh control serves the whole sidebar, but each lens draws from a
+  // different source: the file lenses from the workspace scan, the task board
+  // from its own list. The header rescans and signals the board; a lens that
+  // needs no reload simply ignores the signal.
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const refreshLens = () => {
+    onRefresh();
+    setRefreshSignal((n) => n + 1);
+  };
+
+  const selectLens = (next: SidebarLens) => {
+    onLensChange(next);
+    setOpen(true);
+  };
+
   return (
-    <Sidebar collapsible="offcanvas">
-      <SidebarHeader data-tauri-drag-region className="gap-0 p-0 pt-9">
-        {roots.length > 0 && (
-          <WorkspaceSwitcher
-            roots={roots}
-            activeRoot={activeRoot}
-            workspaceNamesByRoot={workspaceNamesByRoot}
-            onSelect={onSelectRoot}
-            onRemove={onRemoveRoot}
-            onAdd={onPickDirectory}
-          />
-        )}
-        {roots.length > 0 && (
-          <LensTabs active={lens} onChange={onLensChange} />
-        )}
-
-        {roots.length > 0 && (
-          <div className="px-2 pt-2 pb-2">
-            <SearchInput value={search} onChange={onSearchChange} />
+    <Sidebar
+      variant="inset"
+      collapsible="icon"
+      // The variant's own gap is a hardcoded `p-2`, so both the inset and the
+      // collapsed width it derives from that gap are restated off the shared
+      // token; left alone, the collapsed panel is wider than the rail it holds.
+      // No padding on the right: that edge meets the content card, not the window.
+      className="top-(--toolbar-height) h-auto overflow-hidden p-(--chrome-inset) pr-0 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+var(--chrome-inset))] *:data-[sidebar=sidebar]:flex-row"
+    >
+      {roots.length > 0 ? (
+        <LensRail active={lens} onChange={selectLens} />
+      ) : (
+        collapsed && (
+          <div className="w-(--sidebar-width-icon) p-1">
+            <SidebarToggle className={RAIL_ITEM} />
           </div>
-        )}
-      </SidebarHeader>
+        )
+      )}
 
-      <SidebarContent className="overflow-x-hidden">
-        {roots.length === 0 ? (
-          <Empty className="my-auto">
-            <EmptyHeader>
-              <EmptyTitle>No workspaces yet</EmptyTitle>
-              <EmptyDescription>
-                Add a folder of markdown to start.
-              </EmptyDescription>
-            </EmptyHeader>
-            <div className="flex flex-col items-center gap-2">
-              <Button onClick={onPickDirectory}>Add folder</Button>
-              {onOpenWelcome && (
-                <Button variant="ghost" size="sm" onClick={onOpenWelcome}>
-                  Or open the welcome workspace
-                </Button>
-              )}
-            </div>
-          </Empty>
-        ) : activeScan?.scanning && activeScan.result.files.length === 0 ? (
-          <ScanProgressView
-            progress={activeScan.progress}
-            startedAt={activeScan.startedAt}
-          />
-        ) : (
-          <LensView
-            lens={lens}
-            activeRoot={activeRoot}
-            tree={tree}
-            rootKey={rootKey}
-            filteredFiles={filteredFiles}
-            pinnedFiles={pinnedFiles}
-            selectedPath={selectedPath}
-            isExpanded={isExpanded}
-            onToggleExpanded={onToggleExpanded}
-            isPinned={isPinned}
-            onTogglePin={onTogglePin}
-            onHide={onHide}
-            onSelect={onSelectFile}
-            onOpenInNewTab={onOpenInNewTab}
-            onOpenInOtherPane={onOpenInOtherPane}
-            gitStatusByPath={gitStatusByPath}
-            onShowGitDiff={onShowGitDiff}
-          />
-        )}
-      </SidebarContent>
+      {!collapsed && (
+        <Sidebar
+          collapsible="none"
+          // Its own panel rather than an area bleeding into the window, gapped
+          // from the rail but flush with the content card: the right edge is
+          // left open so the seam between them is the card's border alone.
+          className="ml-(--chrome-inset) min-w-0 flex-1 rounded-l-md border border-r-0 border-sidebar-border"
+        >
+          {roots.length > 0 && (
+            <ExplorerHeader
+              lens={lens}
+              search={search}
+              scanning={!!activeScan?.scanning}
+              onRefresh={refreshLens}
+              onOpenTasksTab={onOpenTasksTab}
+            />
+          )}
 
-      <SidebarFooter className="gap-2 text-xs text-muted-foreground">
-        <ExplorerFooter
-          activeScan={activeScan}
-          matchCount={filteredFiles.length}
-          hiddenCount={hiddenCount}
-          onOpenSettings={onOpenSettings}
-        />
-      </SidebarFooter>
+          <SidebarContent className="overflow-x-hidden">
+            {roots.length === 0 ? (
+              <Empty className="my-auto">
+                <EmptyHeader>
+                  <EmptyTitle>No workspaces yet</EmptyTitle>
+                  <EmptyDescription>
+                    Add a folder of markdown to start.
+                  </EmptyDescription>
+                </EmptyHeader>
+                <div className="flex flex-col items-center gap-2">
+                  <Button onClick={onPickDirectory}>Add folder</Button>
+                  {onOpenWelcome && (
+                    <Button variant="ghost" size="sm" onClick={onOpenWelcome}>
+                      Or open the welcome workspace
+                    </Button>
+                  )}
+                </div>
+              </Empty>
+            ) : activeScan?.scanning && activeScan.result.files.length === 0 ? (
+              <ScanProgressView
+                progress={activeScan.progress}
+                startedAt={activeScan.startedAt}
+              />
+            ) : showingResults ? (
+              <SearchResults
+                query={search.query}
+                entries={searchEntries}
+                scope={search.scope}
+                searching={searchingContents}
+                error={searchError}
+                truncated={searchTruncated}
+                selectedPath={selectedPath}
+                onSelect={onSelectFile}
+                onOpenInNewTab={onOpenInNewTab}
+                onOpenInOtherPane={onOpenInOtherPane}
+                isPinned={isPinned}
+                onTogglePin={onTogglePin}
+              />
+            ) : (
+              <LensPanel
+                lens={lens}
+                activeRoot={activeRoot}
+                taskQuery={search.query}
+                refreshSignal={refreshSignal}
+                tree={tree}
+                rootKey={rootKey}
+                filteredFiles={filteredFiles}
+                pinnedFiles={pinnedFiles}
+                selectedPath={selectedPath}
+                isExpanded={isExpanded}
+                onToggleExpanded={onToggleExpanded}
+                isPinned={isPinned}
+                onTogglePin={onTogglePin}
+                onHide={onHide}
+                onSelect={onSelectFile}
+                onOpenInNewTab={onOpenInNewTab}
+                onOpenInOtherPane={onOpenInOtherPane}
+                gitStatusByPath={gitStatusByPath}
+                onShowGitDiff={onShowGitDiff}
+              />
+            )}
+          </SidebarContent>
 
-      <SidebarRail />
+          {hiddenCount > 0 && (
+            <SidebarFooter className="p-2 text-xs text-muted-foreground">
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className="self-start rounded-sm underline-offset-2 hover:underline focus:underline focus:outline-none"
+                title="Manage hidden files in Settings"
+              >
+                {hiddenCount} hidden
+              </button>
+            </SidebarFooter>
+          )}
+        </Sidebar>
+      )}
     </Sidebar>
   );
 }
 
-interface LensViewProps {
+interface LensPanelProps {
   lens: SidebarLens;
   activeRoot: string | undefined;
+  taskQuery: string;
+  refreshSignal: number;
   tree: TreeNode | undefined;
   rootKey: string;
   filteredFiles: MarkdownFile[];
@@ -204,9 +279,11 @@ interface LensViewProps {
   onShowGitDiff?: (path: string) => void;
 }
 
-function LensView({
+function LensPanel({
   lens,
   activeRoot,
+  taskQuery,
+  refreshSignal,
   tree,
   rootKey,
   filteredFiles,
@@ -222,7 +299,7 @@ function LensView({
   onOpenInOtherPane,
   gitStatusByPath,
   onShowGitDiff,
-}: LensViewProps) {
+}: LensPanelProps) {
   if (lens === "tree") {
     if (!tree || filteredFiles.length === 0) {
       return (
@@ -264,8 +341,11 @@ function LensView({
   }
   if (lens === "tasks") {
     return (
-      <TasksBoard
+      <TasksLens
+        view={TaskGroupList}
         activeRoot={activeRoot}
+        query={taskQuery}
+        refreshSignal={refreshSignal}
         selectedPath={selectedPath}
         onOpen={onSelect}
         onOpenInNewTab={onOpenInNewTab}
@@ -296,54 +376,5 @@ function LensView({
       onOpenInOtherPane={onOpenInOtherPane}
       onTogglePin={onTogglePin}
     />
-  );
-}
-
-function ExplorerFooter({
-  activeScan,
-  matchCount,
-  hiddenCount,
-  onOpenSettings,
-}: {
-  activeScan: RootScan | undefined;
-  matchCount: number;
-  hiddenCount: number;
-  onOpenSettings: () => void;
-}) {
-  if (!activeScan) return null;
-  if (activeScan.scanning) {
-    return (
-      <span className="animate-pulse px-2">
-        Scanning… {activeScan.progress?.filesFound ?? 0} files,{" "}
-        {activeScan.progress?.dirsVisited ?? 0} dirs
-      </span>
-    );
-  }
-  const total = activeScan.result.files.length;
-  const visible = total - hiddenCount;
-  const skipped = activeScan.result.skipped ?? 0;
-  return (
-    <span className="flex items-center gap-2 px-2">
-      <span>
-        {visible} files
-        {activeScan.result.truncated && " (50k cap)"}
-        {matchCount !== visible && ` · ${matchCount} match`}
-      </span>
-      {skipped > 0 && (
-        <span title="Files that could not be read or were too large to include">
-          {skipped} skipped
-        </span>
-      )}
-      {hiddenCount > 0 && (
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          className="ml-auto rounded-sm underline-offset-2 hover:underline focus:underline focus:outline-none"
-          title="Manage hidden files in Settings"
-        >
-          {hiddenCount} hidden
-        </button>
-      )}
-    </span>
   );
 }

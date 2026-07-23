@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useDeferredValue, useEffect, useMemo, useR
 import { invoke } from "@tauri-apps/api/core";
 import { readTextFile } from "@tauri-apps/plugin-fs";
 import { message } from "@tauri-apps/plugin-dialog";
-import { Columns2, ListCollapse, ListTree, Moon, PanelLeft, RefreshCw, Rows2, Search, Settings as SettingsIcon, Square, Sun } from "lucide-react";
 import type { QuickOpenFile } from "@/components/quickopen/QuickOpenDialog";
 import type { SettingsSection } from "@/components/settings/SettingsDialog";
 import { BacklinksPanel } from "@/components/document/BacklinksPanel";
@@ -10,8 +9,6 @@ import { OutlinePanel } from "@/components/document/OutlinePanel";
 import { matchShortcut, parseShortcut } from "@/lib/shortcuts";
 
 const QuickOpenDialog = lazy(() => import("@/components/quickopen/QuickOpenDialog"));
-import { Button } from "@/components/ui/button";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import {
@@ -20,16 +17,18 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import { ExplorerSidebar } from "@/components/explorer/ExplorerSidebar";
+import { AppToolbar } from "@/components/layout/AppToolbar";
 import { ConvertWorkspacePrompt } from "@/components/explorer/ConvertWorkspacePrompt";
-import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
 import { PaneView } from "@/components/document/PaneView";
 import { UpdateToast } from "@/components/document/UpdateToast";
 
 const SettingsDialog = lazy(() => import("@/components/settings/SettingsDialog"));
 import { useLibrary } from "@/hooks/useLibrary";
+import { useContentSearch } from "@/hooks/useContentSearch";
+import { useSidebarSearch } from "@/hooks/useSidebarSearch";
+import { mergeSearchEntries } from "@/lib/searchEntries";
 import { useConvertPrompt } from "@/hooks/useConvertPrompt";
 import { usePanes } from "@/hooks/usePanes";
-import type { SplitMode } from "@/lib/storage";
 import { useTheme } from "@/hooks/useTheme";
 import { useViewSettings } from "@/hooks/useViewSettings";
 import { useSidebarState } from "@/hooks/useSidebarState";
@@ -44,9 +43,18 @@ import { fetchGitHead, type GitFileStatusKind } from "@/lib/git";
 import { parseFrontmatter } from "@/lib/scan";
 import { DiffViewerDialog } from "@/components/document/DiffViewerDialog";
 import type { MarkdownFile } from "@/lib/scan";
+import { CHROME_STYLE } from "@/components/layout/chrome";
+import type { SplitMode, TaskTabView } from "@/lib/storage";
+import { explorerOpen, fileTarget, TAB_KIND_SPECS, TASKS_TARGET } from "@/lib/tabKinds";
 import "@/styles/code-theme.css";
 
-const CHROME_ICON = "size-6 text-muted-foreground hover:text-foreground [&>svg]:size-4";
+// "off" never reaches the split branch, but the map stays total so a new
+// split mode has to declare its orientation instead of silently defaulting.
+const PANE_ORIENTATION: Record<SplitMode, "horizontal" | "vertical"> = {
+  off: "horizontal",
+  horizontal: "horizontal",
+  vertical: "vertical",
+};
 
 function App() {
   const library = useLibrary();
@@ -73,11 +81,27 @@ function App() {
     roots: library.roots,
     addRoot: library.addRoot,
     selectRoot: library.selectRoot,
-    openFile: panes.openInActivePane,
+    openFile: (path: string) => panes.openInActivePane(fileTarget(path)),
   });
   useTheme(viewSettings.settings.colorScheme, viewSettings.settings.accentColor);
   const deferredSettings = useDeferredValue(viewSettings.settings);
-  const [search, setSearch] = useState("");
+  const setSidebarOpen = sidebar.setOpen;
+  // A tab that is itself a view of the workspace hides the explorer without
+  // touching the remembered preference, so an ordinary document still opens
+  // the way the reader left it. Asking for the explorer while such a tab is
+  // showing is answered here instead.
+  const [explorerShownBeside, setExplorerShownBeside] = useState(false);
+  const revealSidebar = useCallback(() => {
+    setSidebarOpen(true);
+    setExplorerShownBeside(true);
+  }, [setSidebarOpen]);
+  // Mirrors the split every editor uses: Cmd+F searches the open document,
+  // Shift+Cmd+F searches the sidebar. Find-in-document owns Cmd+F in
+  // TabScrollPane, so the two never contend for the same chord.
+  const search = useSidebarSearch({
+    shortcut: viewSettings.settings.workspaceSearchShortcut,
+    onReveal: revealSidebar,
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsMounted, setSettingsMounted] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection | undefined>();
@@ -95,6 +119,23 @@ function App() {
   const handleScrollElChange1 = useCallback((el: HTMLElement | null) => {
     setScrollElByPane(([a, _]) => [a, el]);
   }, []);
+
+  const openInActive = tabs.openInActive;
+  const openInNew = tabs.openInNew;
+  const openInOtherPane = panes.openInOtherPane;
+  const openFile = useCallback(
+    (path: string) => openInActive(fileTarget(path)),
+    [openInActive]
+  );
+  const openFileInNewTab = useCallback(
+    (path: string) => openInNew(fileTarget(path)),
+    [openInNew]
+  );
+  const openFileInOtherPane = useCallback(
+    (path: string) => openInOtherPane(fileTarget(path)),
+    [openInOtherPane]
+  );
+  const openTasksTab = useCallback(() => openInActive(TASKS_TARGET), [openInActive]);
 
   const toggleOutline = useCallback(() => {
     viewSettings.update({
@@ -152,7 +193,7 @@ function App() {
     if (!file) return;
 
     const hasTabInRoot = tabsList.some(
-      (t) => t.path.startsWith(root + "/") || t.path === root
+      (t) => t.ref.startsWith(root + "/") || t.ref === root
     );
     if (hasTabInRoot) {
       autoOpenedHomepageRef.current.add(root);
@@ -160,7 +201,7 @@ function App() {
     }
 
     autoOpenedHomepageRef.current.add(root);
-    tabsOpenInNew(file.path);
+    tabsOpenInNew(fileTarget(file.path));
   }, [tabsHydrated, library.activeRoot, library.activeScan, tabsList, tabsOpenInNew]);
 
   const rawFiles = library.activeScan?.result.files ?? [];
@@ -260,7 +301,24 @@ function App() {
       if (typeof id === "number") clearTimeout(id);
     };
   }, [quickOpenMounted]);
-  const filteredFiles = useFilteredFiles(allFiles, search);
+  const filteredFiles = useFilteredFiles(allFiles, search.query);
+  const activeRoots = useMemo(
+    () => (library.activeRoot ? [library.activeRoot] : []),
+    [library.activeRoot]
+  );
+  // The tasks lens filters its own board, so it needs no content search.
+  const contentSearchEnabled =
+    search.open && viewSettings.settings.sidebarLens !== "tasks";
+  const contentSearch = useContentSearch(
+    activeRoots,
+    search.query,
+    contentSearchEnabled,
+    search.scope
+  );
+  const searchEntries = useMemo(
+    () => mergeSearchEntries(filteredFiles, contentSearch.hits, search.scope),
+    [filteredFiles, contentSearch.hits, search.scope]
+  );
   const tree = useMemo(() => {
     if (!library.activeRoot) return undefined;
     return buildTree(library.activeRoot, filteredFiles);
@@ -270,10 +328,20 @@ function App() {
     if (!tree) return;
     sidebar.collapseAll(collectDirKeys(tree, rootKey));
   }, [tree, rootKey, sidebar]);
-  const activeFile = tabs.activeTab
-    ? allFiles.find((f) => f.path === tabs.activeTab?.path)
+  // Only a tab backed by a file has a path to place in the breadcrumb, an
+  // outline to draw, or a row to highlight in the sidebar.
+  const activeTab = tabs.activeTab;
+  const hidesExplorer = activeTab ? !TAB_KIND_SPECS[activeTab.kind].wantsExplorer : false;
+  useEffect(() => {
+    if (!hidesExplorer) setExplorerShownBeside(false);
+  }, [hidesExplorer]);
+  const activeFilePath =
+    activeTab && TAB_KIND_SPECS[activeTab.kind].readsFromDisk ? activeTab.ref : undefined;
+  const activeFile = activeFilePath
+    ? allFiles.find((f) => f.path === activeFilePath)
     : undefined;
-  const headerRelPath = activeFile?.relPath ?? (tabs.activeTab && basename(tabs.activeTab.path));
+  const headerRelPath =
+    activeFile?.relPath ?? (activeFilePath ? basename(activeFilePath) : activeTab?.title);
   // Resolve the effective scheme so the toggle reflects what is actually
   // rendered, including when colorScheme is "system".
   const [systemDark, setSystemDark] = useState(
@@ -329,6 +397,13 @@ function App() {
   const handleLensChange = useCallback(
     (lens: typeof viewSettings.settings.sidebarLens) => {
       viewSettings.update({ ...viewSettings.settings, sidebarLens: lens });
+    },
+    [viewSettings]
+  );
+
+  const handleTaskViewChange = useCallback(
+    (taskTabView: TaskTabView) => {
+      viewSettings.update({ ...viewSettings.settings, taskTabView });
     },
     [viewSettings]
   );
@@ -410,155 +485,80 @@ function App() {
 
   return (
     <TooltipProvider delayDuration={200}>
-      <header
-        data-tauri-drag-region
-        className={`fixed right-0 top-0 z-30 flex h-9 items-center gap-2 border-b bg-background pr-2 ${
-          sidebar.open ? "left-[16rem] pl-2" : "left-0 pl-[100px]"
-        }`}
+      {/* The toolbar is fixed, so the wrapper's padding is what reserves its
+          row; both the inset panel and the content card then start at the
+          same y without either restating the offset. */}
+      <SidebarProvider
+        open={explorerOpen(activeTab?.kind, sidebar.open, explorerShownBeside)}
+        onOpenChange={hidesExplorer ? setExplorerShownBeside : sidebar.setOpen}
+        style={CHROME_STYLE}
+        // The variant sizes itself off the viewport with a minimum, which
+        // leaves no definite height for the panes to divide and lets a long
+        // document push the whole window taller. Anchored to the root instead.
+        className="h-full min-h-0 pt-(--toolbar-height)"
       >
-        <button
-          type="button"
-          onClick={() => sidebar.setOpen(!sidebar.open)}
-          title="Toggle sidebar"
-          aria-label="Toggle sidebar"
-          className={CHROME_ICON}
-        >
-          <PanelLeft />
-        </button>
-        {headerRelPath && (
-          <PathBreadcrumb relPath={headerRelPath} onSegmentClick={setSearch} />
-        )}
-
-        <div data-tauri-drag-region className="flex-1" />
-        <button
-          type="button"
-          onClick={() => {
-            setQuickOpenMounted(true);
-            setQuickOpen(true);
-          }}
-          className="flex h-7 w-52 items-center gap-2 rounded-md border bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover:bg-muted"
-        >
-          <Search className="size-3.5" />
-          <span>Search</span>
-          <kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-[10px] leading-4">
-            {viewSettings.settings.quickOpenShortcut}
-          </kbd>
-        </button>
-        <div data-tauri-drag-region className="flex-1" />
-
-        <div className="flex items-center gap-0.5">
-          {library.activeRoot && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className={CHROME_ICON}
-              title="Refresh workspace"
-              aria-label="Refresh workspace"
-              disabled={!!library.activeScan?.scanning}
-              onClick={() => library.activeRoot && void library.rescan(library.activeRoot)}
-            >
-              <RefreshCw className={library.activeScan?.scanning ? "animate-spin" : ""} />
-            </Button>
-          )}
-          {library.activeRoot && viewSettings.settings.sidebarLens === "tree" && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className={CHROME_ICON}
-              title="Collapse all"
-              aria-label="Collapse all"
-              onClick={handleCollapseAll}
-            >
-              <ListCollapse />
-            </Button>
-          )}
-          <ToggleGroup
-            type="single"
-            value={panes.layout.split}
-            onValueChange={(v) => v && panes.setSplit(v as SplitMode)}
-            variant="outline"
-            spacing={0}
-            aria-label="Split layout"
-            className="mx-1"
-          >
-            <ToggleGroupItem value="off" className="size-6" title="Single pane" aria-label="Single pane">
-              <Square className="size-3.5" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="horizontal" className="size-6" title="Side by side" aria-label="Side by side">
-              <Columns2 className="size-3.5" />
-            </ToggleGroupItem>
-            <ToggleGroupItem value="vertical" className="size-6" title="Stacked" aria-label="Stacked">
-              <Rows2 className="size-3.5" />
-            </ToggleGroupItem>
-          </ToggleGroup>
-          {tabs.activeTab && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className={`${CHROME_ICON} aria-pressed:bg-accent aria-pressed:text-foreground`}
-              title={viewSettings.settings.outlineOpen ? "Hide outline" : "Show outline"}
-              aria-label="Toggle outline"
-              aria-pressed={viewSettings.settings.outlineOpen}
-              onClick={toggleOutline}
-            >
-              <ListTree />
-            </Button>
-          )}
-          <Button
-            size="icon"
-            variant="ghost"
-            className={CHROME_ICON}
-            title="Toggle light / dark"
-            aria-label="Toggle theme"
-            onClick={() =>
-              viewSettings.update({
-                ...viewSettings.settings,
-                colorScheme: isDark ? "light" : "dark",
-              })
-            }
-          >
-            {isDark ? <Sun /> : <Moon />}
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            className={CHROME_ICON}
-            title="Settings"
-            aria-label="Settings"
-            onMouseEnter={() => setSettingsMounted(true)}
-            onFocus={() => setSettingsMounted(true)}
-            onClick={() => {
-              setSettingsMounted(true);
-              setSettingsSection(undefined);
-              setSettingsOpen(true);
-            }}
-          >
-            <SettingsIcon />
-          </Button>
-          {settingsMounted && (
-            <Suspense fallback={null}>
-              <SettingsDialog
-                open={settingsOpen}
-                onOpenChange={setSettingsOpen}
-                settings={viewSettings.settings}
-                onChange={viewSettings.update}
-                initialSection={settingsSection}
-                onOpenWelcome={() => void handleOpenWelcome()}
-                updater={updater}
-              />
-            </Suspense>
-          )}
-        </div>
-      </header>
-      <SidebarProvider open={sidebar.open} onOpenChange={sidebar.setOpen}>
-        <ExplorerSidebar
+        <AppToolbar
           roots={library.roots}
           activeRoot={library.activeRoot}
-          activeScan={library.activeScan}
           workspaceNamesByRoot={workspaceNamesByRoot}
           onSelectRoot={(path) => void library.selectRoot(path)}
           onRemoveRoot={(path) => void library.removeRoot(path)}
           onPickDirectory={() => void library.pickDirectory()}
+          breadcrumbPath={headerRelPath || undefined}
+          onBreadcrumbSegmentClick={search.reveal}
+          quickOpenShortcut={viewSettings.settings.quickOpenShortcut}
+          onOpenQuickOpen={() => {
+            setQuickOpenMounted(true);
+            setQuickOpen(true);
+          }}
+          canCollapseAll={
+            !!library.activeRoot && viewSettings.settings.sidebarLens === "tree"
+          }
+          onCollapseAll={handleCollapseAll}
+          split={panes.layout.split}
+          onSplitChange={panes.setSplit}
+          taskView={
+            activeTab?.kind === TASKS_TARGET.kind
+              ? viewSettings.settings.taskTabView
+              : undefined
+          }
+          onTaskViewChange={handleTaskViewChange}
+          canToggleOutline={!!activeFilePath}
+          outlineOpen={viewSettings.settings.outlineOpen}
+          onToggleOutline={toggleOutline}
+          isDark={isDark}
+          onToggleTheme={() =>
+            viewSettings.update({
+              ...viewSettings.settings,
+              colorScheme: isDark ? "light" : "dark",
+            })
+          }
+          onOpenSettings={() => {
+            setSettingsMounted(true);
+            setSettingsSection(undefined);
+            setSettingsOpen(true);
+          }}
+          onPrefetchSettings={() => setSettingsMounted(true)}
+        />
+        {settingsMounted && (
+          <Suspense fallback={null}>
+            <SettingsDialog
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+              settings={viewSettings.settings}
+              onChange={viewSettings.update}
+              initialSection={settingsSection}
+              onOpenWelcome={() => void handleOpenWelcome()}
+              updater={updater}
+            />
+          </Suspense>
+        )}
+        <ExplorerSidebar
+          roots={library.roots}
+          activeRoot={library.activeRoot}
+          activeScan={library.activeScan}
+          onPickDirectory={() => void library.pickDirectory()}
+          onRefresh={() => library.activeRoot && void library.rescan(library.activeRoot)}
           onOpenWelcome={
             viewSettings.settings.welcomeOpened
               ? undefined
@@ -571,7 +571,10 @@ function App() {
           lens={viewSettings.settings.sidebarLens}
           onLensChange={handleLensChange}
           search={search}
-          onSearchChange={setSearch}
+          searchEntries={searchEntries}
+          searchingContents={contentSearch.searching}
+          searchError={contentSearch.error}
+          searchTruncated={contentSearch.truncated}
           filteredFiles={filteredFiles}
           pinnedFiles={pinnedFiles}
           tree={tree}
@@ -589,13 +592,21 @@ function App() {
             setSettingsSection("explorer");
             setSettingsOpen(true);
           }}
-          selectedPath={tabs.activeTab?.path}
-          onSelectFile={tabs.openInActive}
-          onOpenInNewTab={tabs.openInNew}
-          onOpenInOtherPane={panes.openInOtherPane}
+          selectedPath={activeFilePath}
+          onSelectFile={openFile}
+          onOpenInNewTab={openFileInNewTab}
+          onOpenInOtherPane={openFileInOtherPane}
+          onOpenTasksTab={openTasksTab}
         />
 
-        <SidebarInset className="flex h-svh flex-col pt-9">
+        {/* The inset variant sets the card's gap with a hardcoded `m-2`, and its
+            flow position comes from a spacer the sidebar reserves at the same
+            hardcoded size; both are restated from the shared token, the second
+            as a pull-back so the card stays flush against the sidebar in either
+            state. Radius and drop shadow are restated at the same modifiers,
+            which is what lets tailwind-merge drop them rather than leaving two
+            rules to race: the seam is one hairline, not a line plus a halo. */}
+        <SidebarInset className="flex flex-col overflow-hidden md:peer-data-[variant=inset]:m-(--chrome-inset) md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-[calc(var(--chrome-inset)-var(--spacing)*4)] md:peer-data-[variant=inset]:rounded-none md:peer-data-[variant=inset]:rounded-r-md md:peer-data-[variant=inset]:border md:peer-data-[variant=inset]:shadow-none">
 
           <UpdateToast
             phase={updater.phase}
@@ -628,12 +639,13 @@ function App() {
                       autoReloadOnExternalChange: true,
                     })
                   }
+                  onOpenInOtherPane={openFileInOtherPane}
                   hasRoots={library.roots.length > 0}
                 />
               ) : (
                 <ResizablePanelGroup
                   key={panes.layout.split}
-                  orientation={panes.layout.split === "horizontal" ? "horizontal" : "vertical"}
+                  orientation={PANE_ORIENTATION[panes.layout.split]}
                   onLayoutChanged={(layout) => {
                     const v = layout["pane0"];
                     if (typeof v === "number") panes.setSplitSize(v);
@@ -658,6 +670,7 @@ function App() {
                           autoReloadOnExternalChange: true,
                         })
                       }
+                      onOpenInOtherPane={openFileInOtherPane}
                       hasRoots={library.roots.length > 0}
                     />
                   </ResizablePanel>
@@ -681,22 +694,23 @@ function App() {
                           autoReloadOnExternalChange: true,
                         })
                       }
+                      onOpenInOtherPane={openFileInOtherPane}
                       hasRoots={library.roots.length > 0}
                     />
                   </ResizablePanel>
                 </ResizablePanelGroup>
               )}
             </div>
-            {viewSettings.settings.outlineOpen && tabs.activeTab && !tabs.activeTab.loading && (
+            {viewSettings.settings.outlineOpen && activeTab && activeFilePath && !activeTab.loading && (
               <aside className="hidden w-60 shrink-0 overflow-y-auto border-l bg-background px-2 lg:block">
                 <OutlinePanel
-                  content={tabs.activeTab.content}
+                  content={activeTab.content}
                   scrollContainer={activeScrollEl}
                 />
                 <BacklinksPanel
                   files={allFiles}
-                  activePath={tabs.activeTab.path}
-                  onNavigate={tabs.openInActive}
+                  activePath={activeFilePath}
+                  onNavigate={openFile}
                 />
               </aside>
             )}
@@ -708,7 +722,8 @@ function App() {
               open={quickOpen}
               onOpenChange={setQuickOpen}
               files={quickOpenFiles}
-              onSelect={(path) => tabs.openInActive(path)}
+            roots={library.roots}
+              onSelect={openInActive}
             />
           </Suspense>
         )}

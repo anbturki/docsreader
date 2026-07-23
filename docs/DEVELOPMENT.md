@@ -15,4 +15,4 @@ cargo build --manifest-path src-tauri/Cargo.toml -p docsreader-mcp
 
 ## Releasing
 
-GitHub → Actions → **Cut Release** → enter the version. The workflow bumps `tauri.conf.json` + `Cargo.toml` + `Cargo.lock`, commits, tags, and triggers the release pipeline (signs, notarizes the macOS bundle, drafts a GitHub Release, updates the Homebrew tap).
+GitHub → Actions → **Cut Release** → enter the version. The workflow bumps `tauri.conf.json` + both `Cargo.toml`s + `Cargo.lock` + the README download URLs, commits, tags, and triggers the release pipeline (signs, notarizes the macOS bundle, drafts a GitHub Release, updates the Homebrew tap).

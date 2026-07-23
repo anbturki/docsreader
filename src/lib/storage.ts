@@ -1,5 +1,7 @@
 import { LazyStore } from "@tauri-apps/plugin-store";
 import type { ScanResult } from "./scan";
+import { fileTarget, targetKey, toTabTarget, type TabTarget } from "./tabKinds";
+import { TASK_STATUSES, type TaskStatus } from "./tasks";
 
 const store = new LazyStore("docsreader.settings.json");
 
@@ -14,6 +16,7 @@ const SIDEBAR_STATE_KEY = "sidebarState";
 const PINNED_KEY = "pinnedByRoot";
 const CONVERT_DECLINED_KEY = "convertDeclined";
 const DISMISSED_REGISTRY_KEY = "dismissedRegistry";
+const COLLAPSED_TASK_STATUSES_KEY = "collapsedTaskStatusesByRoot";
 
 export const TABS_KEY_PANE0 = TABS_STATE_KEY;
 export const TABS_KEY_PANE1 = TABS_STATE_PANE1_KEY;
@@ -21,11 +24,36 @@ export const TABS_KEY_PANE1 = TABS_STATE_PANE1_KEY;
 export type ContentWidth = "narrow" | "full";
 export type FontFamily = "sans" | "serif" | "mono";
 export type FontSize = "sm" | "md" | "lg";
-export type ColorScheme = "light" | "dark" | "system";
-export type AccentColor = "violet" | "blue" | "green" | "orange" | "rose" | "slate";
+export const RESOLVED_SCHEMES = ["light", "dark"] as const;
+export type ResolvedScheme = (typeof RESOLVED_SCHEMES)[number];
+export const COLOR_SCHEMES = [...RESOLVED_SCHEMES, "system"] as const;
+export type ColorScheme = (typeof COLOR_SCHEMES)[number];
+export const ACCENT_COLORS = [
+  "rose",
+  "orange",
+  "bronze",
+  "green",
+  "teal",
+  "blue",
+  "slate",
+  "violet",
+  "magenta",
+  "black",
+] as const;
+export type AccentColor = (typeof ACCENT_COLORS)[number];
 export type DefaultFolderState = "expanded" | "top-level" | "collapsed";
 export const SIDEBAR_LENSES = ["tree", "recent", "tags", "pinned", "tasks"] as const;
 export type SidebarLens = (typeof SIDEBAR_LENSES)[number];
+
+// A view is a property of the full-page tasks tab, which is the only surface
+// with the width to offer a choice. The sidebar draws tasks its one way.
+export const TASK_TAB_VIEWS = ["list", "board"] as const;
+export type TaskTabView = (typeof TASK_TAB_VIEWS)[number];
+
+export function isTaskTabView(value: unknown): value is TaskTabView {
+  return TASK_TAB_VIEWS.some((view) => view === value);
+}
+
 export type DiffViewMode = "unified" | "split";
 
 export const LIGHT_CODE_THEMES = [
@@ -53,13 +81,29 @@ export const FONT_SIZE_PX: Record<FontSize, number> = {
   lg: 20,
 };
 
-export const ACCENT_HUE: Record<AccentColor, number> = {
-  violet: 280,
-  blue: 240,
-  green: 145,
-  orange: 40,
-  rose: 0,
-  slate: 250,
+export interface AccentSpec {
+  lightness: number;
+  chroma: number;
+  hue: number;
+}
+
+// The only place an accent colour is written down. A hue alone cannot describe
+// an achromatic or a muted accent, so each one carries its own lightness and
+// chroma; the saturated accents keep the 0.55/0.22 pair they were drawn with,
+// because a stored selection must not change colour under anyone. Slate is the
+// one exception: at full chroma on a blue hue it rendered as a second Blue, so
+// it was rebuilt as the near-neutral its name promises.
+export const ACCENT_SPEC: Record<AccentColor, AccentSpec> = {
+  rose: { lightness: 0.55, chroma: 0.22, hue: 0 },
+  orange: { lightness: 0.55, chroma: 0.22, hue: 40 },
+  bronze: { lightness: 0.52, chroma: 0.06, hue: 70 },
+  green: { lightness: 0.55, chroma: 0.22, hue: 145 },
+  teal: { lightness: 0.51, chroma: 0.22, hue: 195 },
+  blue: { lightness: 0.55, chroma: 0.22, hue: 240 },
+  slate: { lightness: 0.52, chroma: 0.04, hue: 257 },
+  violet: { lightness: 0.55, chroma: 0.22, hue: 280 },
+  magenta: { lightness: 0.55, chroma: 0.22, hue: 330 },
+  black: { lightness: 0.28, chroma: 0, hue: 0 },
 };
 
 export interface ViewSettings {
@@ -72,9 +116,12 @@ export interface ViewSettings {
   codeThemeDark: DarkCodeTheme;
   outlineOpen: boolean;
   quickOpenShortcut: string;
+  findInDocumentShortcut: string;
+  workspaceSearchShortcut: string;
   defaultFolderState: DefaultFolderState;
   hidePatterns: string[];
   sidebarLens: SidebarLens;
+  taskTabView: TaskTabView;
   welcomeOpened: boolean;
   autoReloadOnExternalChange: boolean;
   diffViewMode: DiffViewMode;
@@ -90,9 +137,12 @@ export const defaultViewSettings: ViewSettings = {
   codeThemeDark: "github-dark",
   outlineOpen: true,
   quickOpenShortcut: "Mod+P",
+  findInDocumentShortcut: "Mod+F",
+  workspaceSearchShortcut: "Mod+Shift+F",
   defaultFolderState: "top-level",
   hidePatterns: [],
   sidebarLens: "tree",
+  taskTabView: "board",
   welcomeOpened: false,
   autoReloadOnExternalChange: false,
   diffViewMode: "unified",
@@ -224,13 +274,24 @@ export async function loadViewSettings(): Promise<ViewSettings> {
       ? (v.codeThemeDark as DarkCodeTheme)
       : defaultViewSettings.codeThemeDark,
     outlineOpen: typeof v.outlineOpen === "boolean" ? v.outlineOpen : defaultViewSettings.outlineOpen,
-    quickOpenShortcut:
-      typeof v.quickOpenShortcut === "string" && v.quickOpenShortcut.length > 0
-        ? v.quickOpenShortcut
-        : defaultViewSettings.quickOpenShortcut,
+    quickOpenShortcut: normalizeShortcut(
+      v.quickOpenShortcut,
+      defaultViewSettings.quickOpenShortcut
+    ),
+    findInDocumentShortcut: normalizeShortcut(
+      v.findInDocumentShortcut,
+      defaultViewSettings.findInDocumentShortcut
+    ),
+    workspaceSearchShortcut: normalizeShortcut(
+      v.workspaceSearchShortcut,
+      defaultViewSettings.workspaceSearchShortcut
+    ),
     defaultFolderState: normalizeDefaultFolderState(v.defaultFolderState),
     hidePatterns: normalizeHidePatterns(v.hidePatterns),
     sidebarLens: normalizeSidebarLens(v.sidebarLens),
+    taskTabView: isTaskTabView(v.taskTabView)
+      ? v.taskTabView
+      : defaultViewSettings.taskTabView,
     welcomeOpened: v.welcomeOpened === true,
     autoReloadOnExternalChange: v.autoReloadOnExternalChange === true,
     diffViewMode: v.diffViewMode === "split" ? "split" : "unified",
@@ -253,6 +314,14 @@ function normalizeHidePatterns(value: unknown): string[] {
   return out;
 }
 
+// A cleared or malformed binding falls back to the default rather than
+// leaving the action unreachable.
+function normalizeShortcut(value: unknown, fallback: string): string {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
 function normalizeSidebarLens(value: unknown): SidebarLens {
   return typeof value === "string" && (SIDEBAR_LENSES as readonly string[]).includes(value)
     ? (value as SidebarLens)
@@ -270,17 +339,15 @@ function normalizeFontSize(value: unknown): FontSize {
 }
 
 function normalizeColorScheme(value: unknown): ColorScheme {
-  return value === "light" || value === "dark" ? value : "system";
+  return (COLOR_SCHEMES as readonly unknown[]).includes(value)
+    ? (value as ColorScheme)
+    : defaultViewSettings.colorScheme;
 }
 
 function normalizeAccentColor(value: unknown): AccentColor {
-  return value === "blue" ||
-    value === "green" ||
-    value === "orange" ||
-    value === "rose" ||
-    value === "slate"
-    ? value
-    : "violet";
+  return (ACCENT_COLORS as readonly unknown[]).includes(value)
+    ? (value as AccentColor)
+    : defaultViewSettings.accentColor;
 }
 
 export async function saveViewSettings(settings: ViewSettings): Promise<void> {
@@ -289,26 +356,55 @@ export async function saveViewSettings(settings: ViewSettings): Promise<void> {
 }
 
 export interface TabsState {
-  paths: string[];
-  activePath?: string;
+  targets: TabTarget[];
+  activeKey?: string;
   scrollByPath: Record<string, number>;
 }
 
-const emptyTabsState: TabsState = { paths: [], scrollByPath: {} };
+const emptyTabsState: TabsState = { targets: [], scrollByPath: {} };
+
+// Written before tabs could be anything but a file: a list of paths, with the
+// active one named by path. Still on disk for anyone upgrading.
+interface LegacyTabsState {
+  paths?: unknown;
+  activePath?: unknown;
+}
+
+function readTargets(v: Partial<TabsState> & LegacyTabsState): TabTarget[] {
+  if (Array.isArray(v.targets)) {
+    const out: TabTarget[] = [];
+    for (const entry of v.targets) {
+      const target = toTabTarget(entry);
+      if (target) out.push(target);
+    }
+    return out;
+  }
+  if (!Array.isArray(v.paths)) return [];
+  return v.paths.filter((p): p is string => typeof p === "string").map(fileTarget);
+}
+
+function readActiveKey(
+  v: Partial<TabsState> & LegacyTabsState,
+  targets: TabTarget[]
+): string | undefined {
+  const keys = new Set(targets.map(targetKey));
+  if (typeof v.activeKey === "string" && keys.has(v.activeKey)) return v.activeKey;
+  if (typeof v.activePath !== "string") return undefined;
+  const legacyKey = targetKey(fileTarget(v.activePath));
+  return keys.has(legacyKey) ? legacyKey : undefined;
+}
 
 export async function loadTabsState(key: string = TABS_STATE_KEY): Promise<TabsState> {
-  const v = await store.get<Partial<TabsState>>(key);
+  const v = await store.get<Partial<TabsState> & LegacyTabsState>(key);
   if (!v || typeof v !== "object") return emptyTabsState;
-  const paths = Array.isArray(v.paths) ? v.paths.filter((p) => typeof p === "string") : [];
-  const activePath =
-    typeof v.activePath === "string" && paths.includes(v.activePath) ? v.activePath : undefined;
+  const targets = readTargets(v);
   const scrollByPath: Record<string, number> = {};
   if (v.scrollByPath && typeof v.scrollByPath === "object") {
     for (const [k, n] of Object.entries(v.scrollByPath)) {
       if (typeof n === "number" && Number.isFinite(n) && n >= 0) scrollByPath[k] = n;
     }
   }
-  return { paths, activePath, scrollByPath };
+  return { targets, activeKey: readActiveKey(v, targets), scrollByPath };
 }
 
 export async function saveTabsState(
@@ -319,7 +415,12 @@ export async function saveTabsState(
   await store.save();
 }
 
-export type SplitMode = "off" | "horizontal" | "vertical";
+export const SPLIT_MODES = ["off", "horizontal", "vertical"] as const;
+export type SplitMode = (typeof SPLIT_MODES)[number];
+
+export function isSplitMode(value: unknown): value is SplitMode {
+  return SPLIT_MODES.some((mode) => mode === value);
+}
 
 export interface PaneLayout {
   split: SplitMode;
@@ -336,8 +437,7 @@ export const defaultPaneLayout: PaneLayout = {
 export async function loadPaneLayout(): Promise<PaneLayout> {
   const v = await store.get<Partial<PaneLayout>>(PANE_LAYOUT_KEY);
   if (!v || typeof v !== "object") return defaultPaneLayout;
-  const split: SplitMode =
-    v.split === "horizontal" || v.split === "vertical" ? v.split : "off";
+  const split: SplitMode = isSplitMode(v.split) ? v.split : defaultPaneLayout.split;
   const rawSize = typeof v.splitSize === "number" && Number.isFinite(v.splitSize) ? v.splitSize : 50;
   const splitSize = Math.min(85, Math.max(15, rawSize));
   const activePane: 0 | 1 = v.activePane === 1 ? 1 : 0;
@@ -391,5 +491,25 @@ export async function loadPinned(): Promise<PinnedByRoot> {
 
 export async function savePinned(pinned: PinnedByRoot): Promise<void> {
   await store.set(PINNED_KEY, pinned);
+  await store.save();
+}
+
+export type CollapsedTaskStatusesByRoot = Record<string, TaskStatus[]>;
+
+export async function loadCollapsedTaskStatuses(): Promise<CollapsedTaskStatusesByRoot> {
+  const v = await store.get<Record<string, unknown>>(COLLAPSED_TASK_STATUSES_KEY);
+  if (!v || typeof v !== "object") return {};
+  const out: CollapsedTaskStatusesByRoot = {};
+  for (const [root, statuses] of Object.entries(v)) {
+    if (typeof root !== "string" || !Array.isArray(statuses)) continue;
+    out[root] = TASK_STATUSES.filter((s) => statuses.includes(s));
+  }
+  return out;
+}
+
+export async function saveCollapsedTaskStatuses(
+  collapsed: CollapsedTaskStatusesByRoot
+): Promise<void> {
+  await store.set(COLLAPSED_TASK_STATUSES_KEY, collapsed);
   await store.save();
 }

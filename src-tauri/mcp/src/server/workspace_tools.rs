@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use docsreader_core::error::{CoreError, ErrorCode};
 use docsreader_core::workspace::WorkspaceScope;
 use docsreader_core::workspace::init::{InitializedWorkspace, init_workspace_core};
-use docsreader_core::workspace::registry::{default_registry_path, load_registry};
+use docsreader_core::workspace::registry::{default_registry_path, live_workspaces, load_registry};
 use docsreader_core::workspace::resolve::DEFAULT_WORKSPACE_DIR;
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
@@ -21,9 +21,14 @@ pub struct InitWorkspaceParams {
     /// Workspace scope: "user" (~/notes) or "project" (<path>/notes).
     /// Defaults to project when path is given, user otherwise.
     pub scope: Option<String>,
-    /// Workspace slug; defaults to the project folder name, or "notes" for user scope.
+    /// Workspace slug; omit it to have one derived from the project folder
+    /// name ("notes" for user scope), suffixed if that name is taken and
+    /// reported back as "slug" - use that value on later calls. A slug
+    /// list_workspaces already shows is refused, so work cannot land in
+    /// another project's workspace.
     pub slug: Option<String>,
-    /// Human-readable display name.
+    /// Display name humans pick from in the app: the project or product this
+    /// workspace holds, e.g. "Acme Billing API" - never "Notes" or "Docs".
     pub name: Option<String>,
 }
 
@@ -38,7 +43,7 @@ impl DocsServer {
     }
 
     #[tool(
-        description = "List all known DocsReader workspaces: registered project workspaces plus the default user workspace (~/notes). Call this when a workspace slug is unknown or before choosing where to write.",
+        description = "List all known DocsReader workspaces: registered project workspaces plus the default user workspace (~/notes). Call this when a workspace slug is unknown, before choosing where to write, and before init_workspace. If none of them belongs to the project at hand, create one with init_workspace instead of writing into an unrelated workspace.",
         annotations(read_only_hint = true)
     )]
     async fn list_workspaces(&self) -> CallToolResult {
@@ -49,7 +54,7 @@ impl DocsServer {
     }
 
     #[tool(
-        description = "Create a new DocsReader workspace and register it. No args: creates the user workspace at ~/notes. With path: creates a project workspace at <path>/notes. Fails if the target already has content.",
+        description = "Create a new DocsReader workspace and register it. Call list_workspaces first and reuse the one that belongs to this project; create only when none does. No args: creates the user workspace at ~/notes. With path: creates a project workspace at <path>/notes. Give every project its own workspace rather than sharing ~/notes. Set name to the project or product the workspace holds, e.g. \"Acme Billing API\" - never \"Notes\" or \"Docs\", which tell a human nothing once a second workspace exists. A git repository is a valid location: only the notes folder is written. If <path>/notes is already a workspace, it is ready to use: pass its slug and keep writing there. Always read the returned \"slug\" and use it on later calls: an omitted slug is derived from the folder name and gets a suffix when that name is already taken. It fails when <path>/notes already holds non-workspace files - then either point path at a sibling folder such as <parent>/<project>-notes, or convert the folder in the DocsReader app - and when an explicit slug already belongs to another workspace, which would otherwise send this project's work there.",
         annotations(destructive_hint = false, idempotent_hint = true)
     )]
     async fn init_workspace(
@@ -71,7 +76,7 @@ impl DocsServer {
 
 fn list_workspaces_impl() -> Result<serde_json::Value, CoreError> {
     let home = home_dir()?;
-    let entries = load_registry(&default_registry_path(&home))?;
+    let entries = live_workspaces(load_registry(&default_registry_path(&home))?);
     let default_root = home.join(DEFAULT_WORKSPACE_DIR);
     Ok(serde_json::json!({
         "workspaces": entries,

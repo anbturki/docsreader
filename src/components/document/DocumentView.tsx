@@ -85,7 +85,7 @@ export function DocumentView({
           <DocumentHeader title={title} tags={tags} modified={modified} />
           <TaskHeader
             meta={tab.meta}
-            relPath={file?.relPath ?? tab.path}
+            relPath={file?.relPath ?? tab.ref}
             content={tab.content}
           />
         </div>
@@ -151,7 +151,7 @@ export function DocumentView({
             fontSize={viewSettings.fontSize}
             codeThemeLight={viewSettings.codeThemeLight}
             codeThemeDark={viewSettings.codeThemeDark}
-            currentFilePath={tab.path}
+            currentFilePath={tab.ref}
             rootPath={rootPath}
             onNavigate={onNavigate}
             onToggleTask={onToggleTask}

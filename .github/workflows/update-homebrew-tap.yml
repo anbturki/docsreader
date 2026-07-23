@@ -78,6 +78,8 @@ jobs:
             desc "Markdown documentation reader"
             homepage "https://github.com/anbturki/docsreader"
 
+            depends_on macos: ">= :big_sur"
+
             app "DocsReader.app"
             binary "#{appdir}/DocsReader.app/Contents/MacOS/docsreader-mcp"
 

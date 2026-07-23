@@ -24,7 +24,9 @@ function sameTasks(a: Task[], b: Task[]): boolean {
   return a.length === b.length && JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function useTasks(activeRoot: string | undefined): UseTasks {
+// `refreshSignal` lets the sidebar header's refresh reload the board, which
+// owns its own task list. Any change to it reloads; the value itself is unused.
+export function useTasks(activeRoot: string | undefined, refreshSignal = 0): UseTasks {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -66,7 +68,7 @@ export function useTasks(activeRoot: string | undefined): UseTasks {
       return;
     }
     void load(activeRoot);
-  }, [activeRoot, load]);
+  }, [activeRoot, load, refreshSignal]);
 
   // Reload when task files change on disk - e.g. an agent writes a task via MCP
   // while the board is open. Watches the whole root (the tasks/ folder may not

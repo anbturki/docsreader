@@ -108,21 +108,58 @@ pub fn save_registry(file: &Path, workspaces: &[WorkspaceEntry]) -> Result<(), C
     write_atomically(file, &raw)
 }
 
-/// Replaces any entry with the same path, so re-registering updates slug/scope.
+/// Replaces any entry naming the same folder, so re-registering updates
+/// slug/scope instead of adding a second entry for one workspace.
 pub fn upsert_workspace(file: &Path, entry: WorkspaceEntry) -> Result<(), CoreError> {
     // Held across the whole load-modify-save: concurrent sidecars would otherwise
     // each read the same registry and the last save would drop the other entries.
     let _lock = RegistryLock::acquire(file)?;
     let mut workspaces = load_registry(file)?;
-    workspaces.retain(|w| w.path != entry.path);
+    workspaces.retain(|w| !same_folder(&w.path, &entry.path));
     workspaces.push(entry);
     save_registry(file, &workspaces)
 }
 
-/// Drops entries whose directory is gone, so the GUI never surfaces a broken
-/// empty root for a workspace deleted out from under the registry.
-pub fn existing_workspaces(entries: Vec<WorkspaceEntry>) -> Vec<WorkspaceEntry> {
-    entries.into_iter().filter(|w| w.path.is_dir()).collect()
+/// The workspaces the registry can actually serve right now: entries whose
+/// folder is still there, each carrying the slug that folder answers to.
+///
+/// The stored registry is left as the user has it: reconciliation happens on
+/// the way out, never on disk.
+pub fn live_workspaces(entries: Vec<WorkspaceEntry>) -> Vec<WorkspaceEntry> {
+    let mut live: Vec<WorkspaceEntry> = Vec::new();
+    for entry in entries.into_iter().filter(|w| w.path.is_dir()) {
+        if live.iter().any(|kept| same_folder(&kept.path, &entry.path)) {
+            continue;
+        }
+        live.push(with_marker_slug(entry));
+    }
+    live
+}
+
+/// A marker that is missing or unreadable leaves the recorded slug standing:
+/// listing workspaces must not fail over one folder's damaged marker.
+fn with_marker_slug(entry: WorkspaceEntry) -> WorkspaceEntry {
+    match super::load_marker(&entry.path).ok().flatten() {
+        Some(marker) => WorkspaceEntry {
+            slug: marker.slug,
+            ..entry
+        },
+        None => entry,
+    }
+}
+
+/// Whether two paths name one folder: a symlink and its target, or a relative
+/// and an absolute spelling, are the same workspace. Resolving a path needs it
+/// to exist, so an entry whose folder is gone falls back to the literal
+/// comparison rather than becoming an error.
+pub fn same_folder(a: &Path, b: &Path) -> bool {
+    if a == b {
+        return true;
+    }
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -165,7 +202,7 @@ mod tests {
     }
 
     #[test]
-    fn existing_workspaces_drops_missing_dirs() {
+    fn live_workspaces_drops_missing_dirs() {
         let dir = test_dir("reg_existing");
         let present = dir.join("present");
         std::fs::create_dir_all(&present).unwrap();
@@ -177,9 +214,146 @@ mod tests {
             },
             entry("gone", "/no/such/workspace/dir", WorkspaceScope::Project),
         ];
-        let kept = existing_workspaces(entries);
+        let kept = live_workspaces(entries);
         assert_eq!(kept.len(), 1);
         assert_eq!(kept[0].path, present);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn live_workspaces_list_a_folder_registered_twice_once() {
+        let dir = test_dir("reg_double_listed");
+        let real = dir.join("real/notes");
+        std::fs::create_dir_all(&real).unwrap();
+        let link = dir.join("link");
+        std::os::unix::fs::symlink(dir.join("real"), &link).unwrap();
+
+        let live = live_workspaces(vec![
+            entry("acme", real.to_str().unwrap(), WorkspaceScope::Project),
+            entry(
+                "acme",
+                link.join("notes").to_str().unwrap(),
+                WorkspaceScope::Project,
+            ),
+        ]);
+        assert_eq!(live.len(), 1, "one folder, one listing: {live:?}");
+        assert_eq!(live[0].path, real);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn one_folder_spelled_two_ways_stays_one_entry() {
+        let dir = test_dir("reg_same_folder");
+        let file = dir.join(REGISTRY_FILE);
+        let real = dir.join("real/notes");
+        std::fs::create_dir_all(&real).unwrap();
+        let link = dir.join("link");
+        std::os::unix::fs::symlink(dir.join("real"), &link).unwrap();
+
+        upsert_workspace(
+            &file,
+            WorkspaceEntry {
+                slug: "first".into(),
+                path: PathBuf::from(format!("{}/", real.display())),
+                scope: WorkspaceScope::Project,
+            },
+        )
+        .unwrap();
+        upsert_workspace(
+            &file,
+            WorkspaceEntry {
+                slug: "second".into(),
+                path: real.clone(),
+                scope: WorkspaceScope::Project,
+            },
+        )
+        .unwrap();
+        upsert_workspace(
+            &file,
+            WorkspaceEntry {
+                slug: "third".into(),
+                path: link.join("notes"),
+                scope: WorkspaceScope::Project,
+            },
+        )
+        .unwrap();
+
+        let entries = load_registry(&file).unwrap();
+        assert_eq!(entries.len(), 1, "one folder, one entry: {entries:?}");
+        assert_eq!(entries[0].slug, "third");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn live_workspaces_take_their_slug_from_the_folder_marker() {
+        let dir = test_dir("reg_marker_drift");
+        let ws = dir.join("proj/notes");
+        super::super::save_marker(
+            &ws,
+            &super::super::WorkspaceMarker {
+                slug: "renamed-by-hand".into(),
+                name: None,
+                homepage: None,
+            },
+        )
+        .unwrap();
+
+        let live = live_workspaces(vec![WorkspaceEntry {
+            slug: "stale".into(),
+            path: ws.clone(),
+            scope: WorkspaceScope::Project,
+        }]);
+        assert_eq!(live.len(), 1);
+        assert_eq!(live[0].slug, "renamed-by-hand");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn live_workspaces_keep_the_registry_slug_when_the_folder_has_no_usable_marker() {
+        let dir = test_dir("reg_marker_absent");
+        let bare = dir.join("bare");
+        let broken = dir.join("broken");
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::create_dir_all(&broken).unwrap();
+        std::fs::write(
+            broken.join(super::super::MARKER_FILE),
+            "slug: \"Not A Slug\"",
+        )
+        .unwrap();
+
+        let live = live_workspaces(vec![
+            entry("bare", bare.to_str().unwrap(), WorkspaceScope::Project),
+            entry("broken", broken.to_str().unwrap(), WorkspaceScope::Project),
+        ]);
+        assert_eq!(
+            live.iter().map(|w| w.slug.as_str()).collect::<Vec<_>>(),
+            ["bare", "broken"]
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_registry_naming_a_missing_folder_still_loads() {
+        let dir = test_dir("reg_missing_folder");
+        let file = dir.join(REGISTRY_FILE);
+        let present = dir.join("present");
+        std::fs::create_dir_all(&present).unwrap();
+        save_registry(
+            &file,
+            &[
+                entry("gone", "/no/such/workspace/dir", WorkspaceScope::Project),
+                entry("here", present.to_str().unwrap(), WorkspaceScope::User),
+            ],
+        )
+        .unwrap();
+
+        let loaded = load_registry(&file).unwrap();
+        assert_eq!(loaded.len(), 2, "the stored registry is left intact");
+        let live = live_workspaces(loaded);
+        assert_eq!(live.len(), 1);
+        assert_eq!(live[0].slug, "here");
         let _ = std::fs::remove_dir_all(&dir);
     }
 

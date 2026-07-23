@@ -19,6 +19,18 @@ info "detecting platform: ${OS}/${ARCH}"
 
 case "$OS" in
   Darwin)
+    MACOS_VERSION="$(sw_vers -productVersion)"
+    MACOS_MAJOR="${MACOS_VERSION%%.*}"
+    MACOS_MINOR="$(printf "%s" "$MACOS_VERSION" | cut -d. -f2)"
+    MACOS_MINOR="${MACOS_MINOR:-0}"
+    # 10.15 Catalina was the last shipped 10.x, so 10.16 can only be Big Sur
+    # reporting itself under the old numbering and must not be turned away.
+    if [ "$MACOS_MAJOR" = "10" ] && [ "$MACOS_MINOR" -lt 16 ]; then
+      err "DocsReader needs macOS 11 Big Sur or later, and this Mac is running macOS ${MACOS_VERSION}. Update macOS from System Preferences > Software Update, then run this installer again."
+    fi
+    if [ "$MACOS_MAJOR" -lt 13 ] || { [ "$MACOS_MAJOR" = "13" ] && [ "$MACOS_MINOR" -lt 3 ]; }; then
+      info "macOS ${MACOS_VERSION} does not include Safari 16.4, which DocsReader needs to draw its interface. Install the latest Safari from Software Update before launching the app."
+    fi
     case "$ARCH" in
       arm64|aarch64) PATTERN="aarch64.*\.dmg$" ;;
       x86_64) PATTERN="x64.*\.dmg$" ;;
@@ -32,7 +44,7 @@ case "$OS" in
     esac
     ;;
   *)
-    err "unsupported OS: $OS — try the GitHub Releases page directly"
+    err "unsupported OS: $OS - try the GitHub Releases page directly"
     ;;
 esac
 
@@ -78,4 +90,4 @@ case "$ASSET" in
     ;;
 esac
 
-info "done — open '${APP_NAME}' to launch"
+info "done - open '${APP_NAME}' to launch"

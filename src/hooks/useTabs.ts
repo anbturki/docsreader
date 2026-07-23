@@ -3,8 +3,8 @@ import { readTextFile, watch, writeTextFile, type UnwatchFn } from "@tauri-apps/
 import { parseFrontmatter, splitFrontmatter } from "@/lib/scan";
 import { toggleTaskCheckbox } from "@/lib/checklist";
 import { describeEventKind } from "@/lib/events";
-import { basename } from "@/lib/path";
 import { loadTabsState, saveTabsState, TABS_KEY_PANE0 } from "@/lib/storage";
+import { TAB_KIND_SPECS, targetKey, type TabTarget } from "@/lib/tabKinds";
 
 // A read that blocks at the OS level (cloud placeholder still downloading,
 // dead network mount, FIFO) never settles, which would pin the tab on
@@ -13,9 +13,8 @@ const LOAD_TIMEOUT_MS = 15000;
 const LOAD_TIMEOUT_ERROR =
   "This file is taking too long to read. It may still be downloading from cloud storage or live on an unreachable disk. Click the file again to retry.";
 
-export interface Tab {
+export interface Tab extends TabTarget {
   id: string;
-  path: string;
   title: string;
   content: string;
   meta: Record<string, unknown>;
@@ -45,8 +44,8 @@ export interface Tabs {
   activeTab: Tab | undefined;
   activeId: string | undefined;
   hydrated: boolean;
-  openInActive: (path: string) => void;
-  openInNew: (path: string) => void;
+  openInActive: (target: TabTarget) => void;
+  openInNew: (target: TabTarget) => void;
   activate: (id: string) => void;
   close: (id: string) => void;
   acceptPending: (id: string) => void;
@@ -55,8 +54,8 @@ export interface Tabs {
   cancelEdit: (id: string) => void;
   saveEdit: (id: string, body: string) => Promise<void>;
   toggleTaskItem: (id: string, index: number) => Promise<void>;
-  getScrollTop: (path: string) => number;
-  setScrollTop: (path: string, value: number) => void;
+  getScrollTop: (ref: string) => number;
+  setScrollTop: (ref: string, value: number) => void;
 }
 
 interface WatcherSlot {
@@ -64,18 +63,35 @@ interface WatcherSlot {
   unwatch: UnwatchFn;
 }
 
+function readsFromDisk(tab: Tab): boolean {
+  return TAB_KIND_SPECS[tab.kind].readsFromDisk;
+}
+
 let tabIdSeq = 0;
 const nextId = () => `t${++tabIdSeq}_${Date.now()}`;
 
-function emptyTab(path: string): Tab {
+const MISSING_FILE_ERROR =
+  "This file is no longer on disk. It may have been moved, renamed, or deleted. Refresh the workspace to update the file list.";
+
+// The reader is shown whatever this returns, so a filesystem message like
+// "failed to open file at path ... (os error 2)" would reach them verbatim.
+export function describeReadFailure(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const missing = /os error 2\b|ENOENT|No such file or directory/i.test(message);
+  return missing ? MISSING_FILE_ERROR : message;
+}
+
+function emptyTab(target: TabTarget): Tab {
+  const spec = TAB_KIND_SPECS[target.kind];
   return {
     id: nextId(),
-    path,
-    title: basename(path),
+    kind: target.kind,
+    ref: target.ref,
+    title: spec.title(target.ref),
     content: "",
     meta: {},
     error: undefined,
-    loading: true,
+    loading: spec.readsFromDisk,
   };
 }
 
@@ -117,6 +133,20 @@ export function useTabs(options: UseTabsOptions): Tabs {
     setTabs((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }, []);
 
+  // A load starts in the same tick as the setState that creates or repoints
+  // the tab, so a read that settles before React commits would find a stale
+  // tabsRef and drop its own result, pinning the tab on "Loading" with its
+  // timeout already cleared. Matching inside the updater always sees the
+  // committed row.
+  const patchLoadedTab = useCallback(
+    (id: string, path: string, patch: Partial<Tab>) => {
+      setTabs((prev) =>
+        prev.map((t) => (t.id === id && t.ref === path ? { ...t, ...patch } : t))
+      );
+    },
+    []
+  );
+
   const loadTab = useCallback(
     async (id: string, path: string) => {
       const seq = (loadSeqRef.current.get(id) ?? 0) + 1;
@@ -126,76 +156,77 @@ export function useTabs(options: UseTabsOptions): Tabs {
       // lands and replaces the timeout error.
       const timer = setTimeout(() => {
         if (loadSeqRef.current.get(id) !== seq) return;
-        const current = tabsRef.current.find((t) => t.id === id);
-        if (!current || current.path !== path) return;
-        updateTab(id, { error: LOAD_TIMEOUT_ERROR, content: "", meta: {}, loading: false });
+        patchLoadedTab(id, path, {
+          error: LOAD_TIMEOUT_ERROR,
+          content: "",
+          meta: {},
+          loading: false,
+        });
       }, LOAD_TIMEOUT_MS);
       try {
         const raw = await readTextFile(path);
         clearTimeout(timer);
         if (loadSeqRef.current.get(id) !== seq) return;
         const { data, content } = parseFrontmatter(raw);
-        const current = tabsRef.current.find((t) => t.id === id);
-        if (!current || current.path !== path) return;
-        updateTab(id, { meta: data, content, error: undefined, loading: false });
+        patchLoadedTab(id, path, { meta: data, content, error: undefined, loading: false });
       } catch (err) {
         clearTimeout(timer);
         if (loadSeqRef.current.get(id) !== seq) return;
-        const current = tabsRef.current.find((t) => t.id === id);
-        if (!current || current.path !== path) return;
-        updateTab(id, {
-          error: err instanceof Error ? err.message : String(err),
+        patchLoadedTab(id, path, {
+          error: describeReadFailure(err),
           content: "",
           meta: {},
           loading: false,
         });
       }
     },
-    [updateTab]
+    [patchLoadedTab]
   );
 
   const openInNew = useCallback(
-    (path: string) => {
-      const tab = emptyTab(path);
+    (target: TabTarget) => {
+      const tab = emptyTab(target);
       setTabs((prev) => [...prev, tab]);
       setActiveId(tab.id);
-      void loadTab(tab.id, path);
+      if (readsFromDisk(tab)) void loadTab(tab.id, tab.ref);
     },
     [loadTab]
   );
 
   const openInActive = useCallback(
-    (path: string) => {
-      const existing = tabsRef.current.find((t) => t.path === path);
+    (target: TabTarget) => {
+      const key = targetKey(target);
+      const existing = tabsRef.current.find((t) => targetKey(t) === key);
       if (existing) {
         setActiveId(existing.id);
         // An errored tab (including one that hit the load timeout) gets a
         // fresh load attempt; healthy tabs are only re-activated.
         if (existing.error !== undefined) {
           updateTab(existing.id, { error: undefined, loading: true });
-          void loadTab(existing.id, existing.path);
+          void loadTab(existing.id, existing.ref);
         }
         return;
       }
-      const active = tabsRef.current.find((t) => t.id === activeId);
+      const active = tabsRef.current.find((t) => t.id === activeIdRef.current);
       if (!active) {
-        openInNew(path);
+        openInNew(target);
         return;
       }
-      const newTitle = basename(path);
+      const spec = TAB_KIND_SPECS[target.kind];
       updateTab(active.id, {
-        path,
-        title: newTitle,
+        kind: target.kind,
+        ref: target.ref,
+        title: spec.title(target.ref),
         content: "",
         meta: {},
         error: undefined,
-        loading: true,
+        loading: spec.readsFromDisk,
         draft: undefined,
         draftError: undefined,
       });
-      void loadTab(active.id, path);
+      if (spec.readsFromDisk) void loadTab(active.id, target.ref);
     },
-    [activeId, openInNew, updateTab, loadTab]
+    [openInNew, updateTab, loadTab]
   );
 
   const activate = useCallback((id: string) => setActiveId(id), []);
@@ -261,8 +292,9 @@ export function useTabs(options: UseTabsOptions): Tabs {
     async (id: string) => {
       const current = tabsRef.current.find((t) => t.id === id);
       if (!current || current.loading || current.draft !== undefined) return;
+      if (!readsFromDisk(current)) return;
       try {
-        const raw = await readTextFile(current.path);
+        const raw = await readTextFile(current.ref);
         updateTab(id, { draft: raw, draftError: undefined });
       } catch (err) {
         updateTab(id, {
@@ -293,7 +325,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
         // Refuse to clobber a concurrent write (an agent via MCP, or an
         // external editor) that landed after editing began. The draft is
         // kept so nothing is lost; the user reconciles manually.
-        const diskNow = await readTextFile(current.path);
+        const diskNow = await readTextFile(current.ref);
         if (diskNow !== current.draft) {
           updateTab(id, {
             draftError:
@@ -306,7 +338,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
           updateTab(id, { draft: undefined, draftError: undefined });
           return;
         }
-        await writeTextFile(current.path, raw);
+        await writeTextFile(current.ref, raw);
         const { data, content } = parseFrontmatter(raw);
         updateTab(id, {
           meta: data,
@@ -335,11 +367,12 @@ export function useTabs(options: UseTabsOptions): Tabs {
     async (id: string, index: number) => {
       const current = tabsRef.current.find((t) => t.id === id);
       if (!current || current.loading || current.draft !== undefined) return;
+      if (!readsFromDisk(current)) return;
       try {
-        const raw = await readTextFile(current.path);
+        const raw = await readTextFile(current.ref);
         const next = toggleTaskCheckbox(raw, index);
         if (next === null) return;
-        await writeTextFile(current.path, next);
+        await writeTextFile(current.ref, next);
         const { data, content } = parseFrontmatter(next);
         updateTab(id, {
           meta: data,
@@ -372,7 +405,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
         if (modifySeqRef.current.get(id) !== seq) return;
 
         const current = tabsRef.current.find((t) => t.id === id);
-        if (!current || current.path !== path) return;
+        if (!current || current.ref !== path) return;
 
         const reparsed = parseFrontmatter(raw);
 
@@ -454,7 +487,7 @@ export function useTabs(options: UseTabsOptions): Tabs {
 
     for (const [id, entry] of watchers) {
       const tab = tabs.find((t) => t.id === id);
-      if (!tab || tab.path !== entry.path) {
+      if (!tab || tab.ref !== entry.path) {
         void entry.unwatch();
         watchers.delete(id);
       }
@@ -462,24 +495,25 @@ export function useTabs(options: UseTabsOptions): Tabs {
 
     for (const tab of tabs) {
       if (watchers.has(tab.id)) continue;
-      const slot: WatcherSlot = { path: tab.path, unwatch: () => {} };
+      if (!readsFromDisk(tab)) continue;
+      const slot: WatcherSlot = { path: tab.ref, unwatch: () => {} };
       watchers.set(tab.id, slot);
       void (async () => {
         try {
           const unwatch = await watch(
-            tab.path,
+            tab.ref,
             (event) => {
               const kind = describeEventKind(event.type);
               if (kind === "remove" || kind === "access") return;
               const current = tabsRef.current.find((t) => t.id === tab.id);
-              if (!current || current.path !== tab.path) return;
+              if (!current || current.ref !== tab.ref) return;
               // Modify: surface as a pending external change so the
               // user gets to consent before the rendered content shifts.
               // Create/rename: file was replaced - full reload.
               if (kind === "modify") {
-                void handleExternalModify(tab.id, tab.path);
+                void handleExternalModify(tab.id, tab.ref);
               } else {
-                void loadTab(tab.id, tab.path);
+                void loadTab(tab.id, tab.ref);
               }
             },
             { recursive: false, delayMs: 400 }
@@ -511,6 +545,9 @@ export function useTabs(options: UseTabsOptions): Tabs {
 
   const hydratedRef = useRef(false);
   hydratedRef.current = hydrated;
+  // Read through the ref, not the value: a callback depending on the active tab
+  // changes identity on every switch, and the markdown body memoises on that
+  // identity, so every open document would re-parse each time.
   const activeIdRef = useRef<string | undefined>(undefined);
   activeIdRef.current = activeId;
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -521,16 +558,16 @@ export function useTabs(options: UseTabsOptions): Tabs {
     persistTimerRef.current = setTimeout(() => {
       const currentTabs = tabsRef.current;
       const active = currentTabs.find((t) => t.id === activeIdRef.current);
-      const openPaths = new Set(currentTabs.map((t) => t.path));
+      const openRefs = new Set(currentTabs.map((t) => t.ref));
       const trimmedScroll: Record<string, number> = {};
-      for (const [path, value] of Object.entries(scrollByPathRef.current)) {
-        if (openPaths.has(path)) trimmedScroll[path] = value;
+      for (const [ref, value] of Object.entries(scrollByPathRef.current)) {
+        if (openRefs.has(ref)) trimmedScroll[ref] = value;
       }
       scrollByPathRef.current = trimmedScroll;
       void saveTabsState(
         {
-          paths: currentTabs.map((t) => t.path),
-          activePath: active?.path,
+          targets: currentTabs.map(({ kind, ref }) => ({ kind, ref })),
+          activeKey: active && targetKey(active),
           scrollByPath: trimmedScroll,
         },
         storageKey
@@ -543,13 +580,17 @@ export function useTabs(options: UseTabsOptions): Tabs {
     void loadTabsState(storageKey).then((state) => {
       if (cancelled) return;
       scrollByPathRef.current = { ...state.scrollByPath };
-      if (state.paths.length > 0) {
-        const restored = state.paths.map(emptyTab);
+      if (state.targets.length > 0) {
+        const restored = state.targets.map(emptyTab);
         setTabs(restored);
-        const activeIdx = state.activePath ? state.paths.indexOf(state.activePath) : 0;
+        const activeIdx = state.activeKey
+          ? restored.findIndex((tab) => targetKey(tab) === state.activeKey)
+          : 0;
         const safeIdx = activeIdx >= 0 ? activeIdx : 0;
         setActiveId(restored[safeIdx]?.id);
-        restored.forEach((tab, i) => void loadTab(tab.id, state.paths[i]));
+        for (const tab of restored) {
+          if (readsFromDisk(tab)) void loadTab(tab.id, tab.ref);
+        }
       }
       setHydrated(true);
     });
@@ -569,11 +610,11 @@ export function useTabs(options: UseTabsOptions): Tabs {
     };
   }, []);
 
-  const getScrollTop = useCallback((path: string) => scrollByPathRef.current[path] ?? 0, []);
+  const getScrollTop = useCallback((ref: string) => scrollByPathRef.current[ref] ?? 0, []);
 
   const setScrollTop = useCallback(
-    (path: string, value: number) => {
-      scrollByPathRef.current[path] = value;
+    (ref: string, value: number) => {
+      scrollByPathRef.current[ref] = value;
       schedulePersist(500);
     },
     [schedulePersist]

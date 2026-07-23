@@ -9,6 +9,10 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+    /* One step below text-xs, so chrome that has to fit a fixed width has a
+       scale step to reach for instead of a one-off pixel size. */
+    --text-2xs: 0.625rem;
+    --text-2xs--line-height: 0.875rem;
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
     --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -35,6 +39,14 @@
     --color-muted: var(--muted);
     --color-secondary-foreground: var(--secondary-foreground);
     --color-secondary: var(--secondary);
+    --color-scheme-light-screen: var(--scheme-light-screen);
+    --color-scheme-light-panel: var(--scheme-light-panel);
+    --color-scheme-light-line: var(--scheme-light-line);
+    --color-scheme-dark-screen: var(--scheme-dark-screen);
+    --color-scheme-dark-panel: var(--scheme-dark-panel);
+    --color-scheme-dark-line: var(--scheme-dark-line);
+    --color-primary-fixed-foreground: var(--primary-fixed-foreground);
+    --color-primary-fixed: var(--primary-fixed);
     --color-primary-foreground: var(--primary-foreground);
     --color-primary: var(--primary);
     --color-popover-foreground: var(--popover-foreground);
@@ -59,7 +71,18 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.55 0.22 280);
+    /* The one accent definition; useTheme rewrites these three numbers. The
+       parts stay addressable because a swatch previewing another accent has to
+       recompose them against its own values: --primary-fixed is substituted
+       here, so a child overriding a part cannot re-resolve it. Deliberately
+       absent from .dark: holding one value across both schemes is what "fixed"
+       means. */
+    --primary-fixed-l: 0.55;
+    --primary-fixed-c: 0.22;
+    --primary-fixed-hue: 280;
+    --primary-fixed: oklch(var(--primary-fixed-l) var(--primary-fixed-c) var(--primary-fixed-hue));
+    --primary-fixed-foreground: oklch(0.985 0 0);
+    --primary: var(--primary-fixed);
     --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
@@ -70,7 +93,7 @@
     --destructive: oklch(0.577 0.245 27.325);
     --border: oklch(0.922 0 0);
     --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
+    --ring: var(--primary);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -85,6 +108,16 @@
     --sidebar-accent-foreground: oklch(0.205 0 0);
     --sidebar-border: oklch(0.922 0 0);
     --sidebar-ring: oklch(0.708 0 0);
+    /* The miniature light and dark screens in the appearance picker. Absent
+       from .dark on purpose: each one has to keep showing its own scheme while
+       the app around it shows the other. */
+    --scheme-light-screen: oklch(1 0 0);
+    --scheme-light-panel: oklch(0.93 0 0);
+    --scheme-light-line: oklch(0.87 0 0);
+    --scheme-dark-screen: oklch(0.18 0 0);
+    --scheme-dark-panel: oklch(0.3 0 0);
+    --scheme-dark-line: oklch(0.38 0 0);
+    --overlay: oklch(0 0 0 / 25%);
 }
 
 .dark {
@@ -94,7 +127,11 @@
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.7 0.18 280);
+    /* The accent lightened for dark surfaces; the only value allowed to differ
+       from the fixed accent, and still built from it. The chroma is scaled
+       rather than fixed so a muted or achromatic accent stays muted here;
+       9/11 is exactly the 0.22 -> 0.18 the saturated accents already shipped. */
+    --primary: oklch(0.7 calc(var(--primary-fixed-c) * 9 / 11) var(--primary-fixed-hue));
     --primary-foreground: oklch(0.145 0 0);
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
@@ -105,7 +142,7 @@
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
+    --ring: var(--primary);
     --chart-1: oklch(0.87 0 0);
     --chart-2: oklch(0.556 0 0);
     --chart-3: oklch(0.439 0 0);
@@ -119,6 +156,7 @@
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.556 0 0);
+    --overlay: oklch(0 0 0 / 55%);
 }
 
 /* Strata status palette, layered on the theme; the aliases re-resolve
@@ -157,6 +195,16 @@
   html {
     @apply font-sans;
     }
+  /* The window is the whole of the app, so the height comes from here and
+     every panel below fills its parent. Without this anchor the layout has no
+     definite height to divide up, only a minimum, and a long document grows
+     the page instead of scrolling inside its pane. */
+  html,
+  body,
+  #root {
+    height: 100%;
+    overflow: hidden;
+    }
 
   /*
     Tailwind v4 sets `cursor: default` on buttons to match browser defaults.
@@ -179,6 +227,21 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+
+  /* The accent preview in settings; each swatch supplies its own hue. Composed
+     here so what it shows is the accent definition above, not a second formula. */
+  .accent-swatch {
+    background: oklch(var(--primary-fixed-l) var(--primary-fixed-c) var(--primary-fixed-hue));
+  }
+}
+
+/* The radix-nova style paints both overlays bg-black/10, which leaves the page
+   behind a dialog fully legible in dark. Retinted here rather than in the
+   primitives because components/ui/ stays CLI-owned; unlayered, so it outranks
+   Tailwind's utility layer without !important. */
+[data-slot="dialog-overlay"],
+[data-slot="sheet-overlay"] {
+    background-color: var(--overlay);
 }
 
 /* Reader task lists render checkbox-only (no redundant bullet) with an
@@ -198,4 +261,35 @@
 }
 .prose li::marker {
   color: var(--muted-foreground);
+}
+/* Find-in-document. Two painters render the same matches: the CSS Custom
+   Highlight API where the webview supports it, and positioned rects on older
+   macOS webviews. Keep the two visually identical. */
+::highlight(docsreader-find-all) {
+    background-color: color-mix(in oklch, var(--primary) 28%, transparent);
+    color: var(--foreground);
+}
+
+::highlight(docsreader-find-current) {
+    background-color: color-mix(in oklch, var(--primary) 60%, transparent);
+    color: var(--foreground);
+}
+
+.find-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.find-overlay-mark {
+    position: absolute;
+    border-radius: var(--radius-sm);
+    background-color: color-mix(in oklch, var(--primary) 28%, transparent);
+}
+
+.find-overlay-mark.is-current {
+    background-color: color-mix(in oklch, var(--primary) 60%, transparent);
+    outline: 1px solid var(--primary);
 }

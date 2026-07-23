@@ -10,6 +10,12 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import type { MarkdownFile } from "@/lib/scan";
+import { useContentSearch } from "@/hooks/useContentSearch";
+import { SearchSnippet } from "@/components/explorer/SearchSnippet";
+import { SearchScopeChips } from "@/components/explorer/SearchScopeChips";
+import type { SearchScope } from "@/lib/contentSearch";
+import { fileTarget, TAB_KINDS, type TabTarget } from "@/lib/tabKinds";
+import { TAB_KIND_VIEWS } from "@/components/document/tabKinds";
 
 export interface QuickOpenFile extends MarkdownFile {
   rootPath: string;
@@ -19,21 +25,47 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   files: QuickOpenFile[];
-  onSelect: (path: string, openInNew: boolean) => void;
+  roots: string[];
+  onSelect: (target: TabTarget) => void;
 }
 
-export default function QuickOpenDialog({ open, onOpenChange, files, onSelect }: Props) {
+export default function QuickOpenDialog({
+  open,
+  onOpenChange,
+  files,
+  roots,
+  onSelect,
+}: Props) {
   const [query, setQuery] = useState("");
+  const [scope, setScope] = useState<SearchScope>("all");
   const deferredQuery = useDeferredValue(query);
 
   useEffect(() => {
-    if (!open) setQuery("");
+    if (open) return;
+    setQuery("");
+    setScope("all");
   }, [open]);
 
+  const showFiles = scope === "all" || scope === "names";
   const ranked = useMemo(
-    () => rankFiles(files, deferredQuery),
-    [files, deferredQuery]
+    () => (showFiles ? rankFiles(files, deferredQuery) : []),
+    [showFiles, files, deferredQuery]
   );
+
+  // Name ranking above stays synchronous so the list never lags a keystroke;
+  // matches from inside documents land a moment later in their own group.
+  const contentSearch = useContentSearch(roots, query, open, scope);
+  const documentHits = useMemo(() => {
+    if (scope === "names") return [];
+    // Only a tag search legitimately has no matched line; elsewhere a hit
+    // without one matched by name, and listing it under a heading that claims
+    // otherwise would be a lie.
+    const needsLine = scope !== "tags";
+    const alreadyListed = new Set(ranked.map((file) => file.path));
+    return contentSearch.hits.filter(
+      (hit) => !alreadyListed.has(hit.path) && (!needsLine || hit.lines.length > 0)
+    );
+  }, [scope, contentSearch.hits, ranked]);
 
   return (
     <CommandDialog
@@ -44,19 +76,30 @@ export default function QuickOpenDialog({ open, onOpenChange, files, onSelect }:
     >
       <Command shouldFilter={false}>
         <CommandInput
-          placeholder="Search files by name or path..."
+          placeholder="Search files and contents..."
           value={query}
           onValueChange={setQuery}
         />
+        <div className="px-2 pb-2">
+          <SearchScopeChips active={scope} onChange={setScope} />
+        </div>
         <CommandList>
-          <CommandEmpty>No matching files.</CommandEmpty>
-          <CommandGroup>
+          <CommandEmpty>No matches.</CommandEmpty>
+          <StandaloneTabs
+            query={deferredQuery}
+            onSelect={(target) => {
+              onSelect(target);
+              onOpenChange(false);
+            }}
+          />
+          {ranked.length > 0 && (
+          <CommandGroup heading="Files">
             {ranked.map((file) => (
               <CommandItem
                 key={file.path}
                 value={file.path}
                 onSelect={() => {
-                  onSelect(file.path, false);
+                  onSelect(fileTarget(file.path));
                   onOpenChange(false);
                 }}
               >
@@ -68,6 +111,27 @@ export default function QuickOpenDialog({ open, onOpenChange, files, onSelect }:
               </CommandItem>
             ))}
           </CommandGroup>
+          )}
+          {documentHits.length > 0 && (
+            <CommandGroup heading={scope === "tags" ? "Tagged" : "In documents"}>
+              {documentHits.map((hit) => (
+                <CommandItem
+                  key={hit.path}
+                  value={`content:${hit.path}`}
+                  onSelect={() => {
+                    onSelect(fileTarget(hit.path));
+                    onOpenChange(false);
+                  }}
+                >
+                  <FileText className="text-muted-foreground" />
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm">{hit.relPath}</span>
+                    {hit.lines[0] && <SearchSnippet match={hit.lines[0]} />}
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
         </CommandList>
       </Command>
     </CommandDialog>
@@ -103,4 +167,41 @@ function scoreFile(file: QuickOpenFile, tokens: string[]): number {
     total += best;
   }
   return total;
+}
+
+// Views a tab can open without pointing at anything, so a reader who never
+// opens the sidebar can still reach them.
+function StandaloneTabs({
+  query,
+  onSelect,
+}: {
+  query: string;
+  onSelect: (target: TabTarget) => void;
+}) {
+  const q = query.trim().toLowerCase();
+  const entries = TAB_KINDS.flatMap((kind) => {
+    const standalone = TAB_KIND_VIEWS[kind].standalone;
+    if (!standalone) return [];
+    if (q && !standalone.label.toLowerCase().includes(q)) return [];
+    return [{ kind, ...standalone }];
+  });
+  if (entries.length === 0) return null;
+
+  return (
+    <CommandGroup heading="Views">
+      {entries.map(({ kind, label, hint, icon: Icon }) => (
+        <CommandItem
+          key={kind}
+          value={`view:${kind}`}
+          onSelect={() => onSelect({ kind, ref: "" })}
+        >
+          <Icon className="text-muted-foreground" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm">{label}</span>
+            <span className="truncate text-xs text-muted-foreground">{hint}</span>
+          </div>
+        </CommandItem>
+      ))}
+    </CommandGroup>
+  );
 }

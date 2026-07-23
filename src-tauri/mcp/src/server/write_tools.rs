@@ -18,8 +18,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    DocsServer, client_name, doc_resource_link, doc_uri, ensure_workspace_exists, error_result,
-    resolve_or_pick,
+    DocsServer, client_name, doc_resource_link, doc_uri, error_result, require_workspace_dir,
+    resolve_for_write,
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -30,8 +30,9 @@ pub struct WriteDocParams {
     pub body: String,
     /// Lifecycle status: one of "research", "in-progress", "done", "archived".
     pub status: String,
-    /// Workspace slug (see list_workspaces). Omit to use the resolved default
-    /// workspace (project ./notes if present, else user ~/notes).
+    /// Workspace slug (see list_workspaces). Omit to use the workspace
+    /// resolved from the current project; when none resolves, the write is
+    /// refused instead of landing in the shared user workspace.
     pub workspace: Option<String>,
     /// Phase subfolder within the status folder, e.g. "discovery" or "v2-launch".
     pub phase: Option<String>,
@@ -139,15 +140,15 @@ async fn located(
     peer: &Peer<RoleServer>,
     workspace: Option<&str>,
 ) -> Result<ResolvedWorkspace, CoreError> {
-    let ws = resolve_or_pick(peer, workspace).await?;
-    ensure_workspace_exists(&ws)?;
+    let ws = resolve_for_write(peer, workspace).await?;
+    require_workspace_dir(&ws)?;
     Ok(ws)
 }
 
 #[tool_router(router = write_tool_router, vis = "pub(crate)")]
 impl DocsServer {
     #[tool(
-        description = "Create a markdown doc in a DocsReader workspace. The doc lands in the folder matching its status (research | in-progress | done | archived), optionally inside a phase subfolder, with generated frontmatter. Prefer this over writing files directly: it handles slugs, collisions, metadata, and git staging.",
+        description = "Create a markdown doc in a DocsReader workspace. The doc lands in the folder matching its status (research | in-progress | done | archived), optionally inside a phase subfolder, with generated frontmatter. Prefer this over writing files directly: it handles slugs, collisions, metadata, and git staging (the written file is added when the workspace is inside a repository, never committed).",
         annotations(destructive_hint = false)
     )]
     async fn write_doc(

@@ -1,15 +1,21 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::agents::{self, AgentClient, ClientId};
 use docsreader_core::git::{git_show_head_core, git_status_core, GitStatus};
 use docsreader_core::scan::{run_scan, ScanProgress, ScanProgressSink, ScanResult};
+use docsreader_core::search::{
+    search_roots, ContentQuery, ContentSearchResult, SearchAbort, SearchScope,
+};
 use docsreader_core::tasks::{list_tasks_core, set_task_status_core, TaskSummary};
 use docsreader_core::workspace::init::{convert_workspace_core, InitializedWorkspace};
 use docsreader_core::workspace::registry::{
-    default_registry_path, existing_workspaces, load_registry, WorkspaceEntry,
+    default_registry_path, live_workspaces, load_registry, WorkspaceEntry,
 };
 
 const PROGRESS_EVENT: &str = "scan-progress";
@@ -31,6 +37,57 @@ pub async fn scan_markdown(app: AppHandle, path: String) -> Result<ScanResult, S
     tauri::async_runtime::spawn_blocking(move || run_scan(&sink, path_for_task))
         .await
         .map_err(|e| format!("scan task panicked: {}", e))?
+}
+
+/// One counter per calling surface, bumped by every search request. A command
+/// cannot be cancelled once it is running, so a superseded query notices the
+/// newer generation and stops reading files instead of competing with it for
+/// the disk. The counters are kept apart because several search boxes can be
+/// open at once, and one typing must not abandon another's results.
+#[derive(Default)]
+pub struct SearchGeneration(Mutex<HashMap<String, Arc<AtomicU64>>>);
+
+impl SearchGeneration {
+    fn claim(&self, surface: &str) -> NewerQueryWins {
+        let latest = {
+            let mut counters = self.0.lock().unwrap_or_else(PoisonError::into_inner);
+            counters.entry(surface.to_string()).or_default().clone()
+        };
+        let generation = latest.fetch_add(1, Ordering::SeqCst) + 1;
+        NewerQueryWins { generation, latest }
+    }
+}
+
+struct NewerQueryWins {
+    generation: u64,
+    latest: Arc<AtomicU64>,
+}
+
+impl SearchAbort for NewerQueryWins {
+    fn is_aborted(&self) -> bool {
+        self.latest.load(Ordering::Relaxed) != self.generation
+    }
+}
+
+#[tauri::command]
+pub async fn search_content(
+    state: State<'_, SearchGeneration>,
+    paths: Vec<String>,
+    query: String,
+    scope: Option<SearchScope>,
+    surface: Option<String>,
+) -> Result<ContentSearchResult, String> {
+    let abort = state.claim(&surface.unwrap_or_default());
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(parsed) = ContentQuery::parse(&query, false, scope.unwrap_or_default()) else {
+            return Ok(ContentSearchResult::empty());
+        };
+        let roots: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+        Ok(search_roots(&roots, &parsed, &abort))
+    })
+    .await
+    .map_err(|e| format!("search task panicked: {e}"))?
 }
 
 #[tauri::command]
@@ -65,7 +122,7 @@ pub fn connect_agent_client(app: AppHandle, id: ClientId) -> Result<AgentClient,
 pub fn list_registry_workspaces(app: AppHandle) -> Result<Vec<WorkspaceEntry>, String> {
     let home = home_dir(&app)?;
     let entries = load_registry(&default_registry_path(&home)).map_err(|e| e.message)?;
-    Ok(existing_workspaces(entries))
+    Ok(live_workspaces(entries))
 }
 
 #[tauri::command]

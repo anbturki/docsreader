@@ -2,19 +2,60 @@
 
 DocsReader is a local markdown store you write to over MCP while humans read the
 same files in the DocsReader app. Prefer these tools over raw file writes: they
-handle slugs, frontmatter, collisions, lifecycle moves, and git staging.
+handle slugs, frontmatter, collisions, lifecycle moves, and git staging. Staging
+runs only when the workspace folder sits inside a git repository, and it only
+adds the file just written: never a commit, never anything outside the
+workspace folder.
 
 ## Model
 
 - A workspace is a folder of markdown docs. Default user workspace: `~/notes`
-  (created on first write). A project can opt in with its own `<project>/notes`
-  via `init_workspace`; when one exists it takes precedence.
+  (created by `init_workspace`, never by a write). A project workspace is
+  `<project>/notes`; when one exists it takes precedence. See "Choosing a
+  workspace".
 - Docs live in the folder matching their lifecycle status:
   `research/`, `in-progress/`, `done/`, `archived/`. The folder IS the status.
 - Optional phase subfolders group work inside a status, e.g.
   `research/v2-launch/plan.md`. The folder IS the phase.
 - Filenames are slugs generated from titles. Frontmatter carries title, tags,
   owner, created_at, created_by - never status or phase.
+
+## Choosing a workspace
+
+Each project gets its own workspace. Labels and tags group work inside one
+workspace; they do not separate projects, and `list_tasks` in a shared
+workspace returns other projects' tasks too.
+
+List first, reuse second, create last: `list_workspaces` before writing, and
+if one already belongs to this project, use it. `init_workspace` answering
+"already a DocsReader workspace" means the same thing - that workspace is
+ready, keep writing there rather than looking for somewhere else.
+
+When asked to track work for a project that has no workspace yet, take the
+first option that fits and proceed without asking:
+
+1. `init_workspace {path: "<project root>", name: "<the project or product>"}`,
+   creating `<project>/notes`. The project root being a git repository is not
+   a blocker: only the `notes` folder is written, and files there are staged
+   but never committed.
+2. If the project's own tree must stay untouched, use a sibling folder:
+   `init_workspace {path: "<parent>/<project>-notes"}`. Pass that workspace's
+   slug on every later call, since it is outside the project tree and will not
+   be picked up automatically.
+3. `~/notes` only for work that belongs to no project. Do not park a new
+   project's docs or tasks there.
+
+A write with no `workspace` argument is refused when nothing at the agent's
+location resolves to a workspace, rather than falling back to `~/notes`. An
+already set up `~/notes` does not change that: it takes un-slugged writes only
+from an agent working inside it, since from anywhere else it names no project.
+The refusal lists the workspaces that do exist, and `workspace` is always
+honoured, `notes` included. Reads still fall back, so they never need setup.
+
+The `name` is what humans pick from in the app, so it must identify the
+project or product: `"Acme Billing API"`, never `"Notes"` or `"Docs"`. Leave
+`slug` to its default (the project folder name) unless `list_workspaces`
+already shows that slug in use.
 
 ## Workflow
 

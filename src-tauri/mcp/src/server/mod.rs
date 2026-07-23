@@ -10,8 +10,6 @@ mod write_tools;
 use std::path::PathBuf;
 
 use docsreader_core::error::{CoreError, ErrorCode};
-use docsreader_core::workspace::WorkspaceScope;
-use docsreader_core::workspace::init::init_workspace_core;
 use docsreader_core::workspace::registry::{default_registry_path, load_registry};
 use docsreader_core::workspace::resolve::{ResolvedWorkspace, available_slugs, resolve_workspace};
 use docsreader_core::write::DocStatus;
@@ -23,7 +21,7 @@ use rmcp::model::{
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, Peer, RoleServer, ServerHandler, prompt_handler, tool_handler};
 
-pub(crate) use elicit::resolve_or_pick;
+pub(crate) use elicit::{resolve_for_write, resolve_or_pick};
 
 pub struct DocsServer;
 
@@ -125,30 +123,19 @@ pub(crate) fn known_slugs() -> Result<Vec<String>, CoreError> {
     Ok(available_slugs(&registry, ambient.as_ref()))
 }
 
-/// The default user workspace is create-on-first-use: writing to it before
-/// init_workspace must succeed, so agents never hit a setup wall.
-pub(crate) fn ensure_workspace_exists(ws: &ResolvedWorkspace) -> Result<(), CoreError> {
+/// Only init_workspace creates a workspace, so a write never conjures the
+/// folder it lands in; this is the last guard before touching disk.
+pub(crate) fn require_workspace_dir(ws: &ResolvedWorkspace) -> Result<(), CoreError> {
     if ws.root.is_dir() {
         return Ok(());
     }
-    if ws.scope != WorkspaceScope::User {
-        return Err(CoreError::new(
-            ErrorCode::WorkspaceNotFound,
-            format!("workspace directory {} is missing", ws.root.display()),
-        )
-        .with_recovery(
-            "call list_workspaces to see valid slugs, or init_workspace to create one",
-        ));
-    }
-    let home = home_dir()?;
-    init_workspace_core(
-        &ws.root,
-        Some(&ws.slug),
-        None,
-        WorkspaceScope::User,
-        &default_registry_path(&home),
-    )?;
-    Ok(())
+    Err(CoreError::new(
+        ErrorCode::WorkspaceNotFound,
+        format!("workspace directory {} is missing", ws.root.display()),
+    )
+    .with_recovery(
+        "call list_workspaces to see which workspaces exist, or init_workspace to create one",
+    ))
 }
 
 pub(crate) fn doc_uri(ws_slug: &str, rel_path: &str) -> String {

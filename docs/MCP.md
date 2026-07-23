@@ -26,21 +26,27 @@ Homebrew users from before v0.6.0: run `brew upgrade --cask docsreader` once so 
 
 ## Tools
 
-Every tool takes an optional `workspace` slug - omit it to use the resolved default (a project `./notes` if present, else `~/notes`). Tool errors carry recovery hints, so agents self-correct instead of stalling.
+Every tool takes an optional `workspace` slug. Omit it and the server resolves one from where the agent is working: a project `./notes` if there is one above it, else your `~/notes`. Reads resolve that way always, so a session that has no workspace of its own can still look around.
+
+Writes do not fall back. A write with no `workspace` argument is refused unless a workspace actually covers where the agent is working: a project `./notes` above it, or `~/notes` when that is where the agent is standing. Working from an unrelated folder is refused even when `~/notes` exists, because filing project work in the shared folder is the mistake this prevents. Clients that can put a question to you are offered a pick from the workspaces that exist; when the client cannot be asked, the refusal lists them and points at `init_workspace`. Only `init_workspace` creates a workspace. An explicit `workspace` slug is always honoured, including `notes`: naming it is a choice, and only an unnamed write can drift.
+
+Tool errors carry recovery hints, so agents self-correct instead of stalling.
+
+Give each project its own workspace: labels group work inside a workspace, they do not separate projects. List first, reuse second, create last - `list_workspaces` before writing, and an "already a DocsReader workspace" answer from `init_workspace` means that workspace is ready, not that you should write elsewhere. In order of preference, an agent starting on a project with no workspace should `init_workspace {path: "<project root>", name: "<the project or product>"}` (a git repository is fine - only the `notes` folder is written, and files there are staged, never committed); failing that, use a sibling folder such as `<parent>/<project>-notes` and pass its slug explicitly; `~/notes` is for work that belongs to no project. The `name` is what the app's switcher lists, so it must identify the project or product (`"Acme Billing API"`, not `"Notes"`).
 
 ### Workspaces
 
 | Tool | What it does |
 | --- | --- |
 | `list_workspaces` | List all known workspaces: registered projects plus the default `~/notes`. Call before choosing where to write. |
-| `init_workspace` | Create and register a workspace (`~/notes`, or `<path>/notes` for a project). Fails if the target already has content. |
+| `init_workspace` | Create and register a workspace (`~/notes`, or `<path>/notes` for a project). The only tool that creates one: no write will conjure a workspace for you. Fails if `<path>/notes` already holds files, or if an explicit `slug` already belongs to another workspace. An omitted slug is derived from the folder name, suffixed when that name is taken, and returned as `slug`. |
 | `ping` | Health check; returns `pong`. |
 
 ### Docs
 
 | Tool | What it does |
 | --- | --- |
-| `write_doc` | Create a doc in the folder matching its status (`research` / `in-progress` / `done` / `archived`), with generated frontmatter. Handles slugs, collisions, and git staging. |
+| `write_doc` | Create a doc in the folder matching its status (`research` / `in-progress` / `done` / `archived`), with generated frontmatter. Handles slugs, collisions, and git staging (adds the file, never commits). |
 | `read_doc` | Read a doc by slug or status-relative path. Concise (frontmatter + snippet) by default, or `detailed` for the full body. |
 | `list_docs` | List docs newest first; filter by status, phase, or tag (filters AND together). |
 | `search_docs` | Rank matches across title, tags, slug, and content; returns snippets and `docsreader://` resource URIs. |
@@ -77,7 +83,7 @@ Beyond tools, the server exposes read-only MCP resources:
 ## A typical flow
 
 ```jsonc
-list_workspaces {}                         // pick where to write, or omit `workspace`
+list_workspaces {}                         // pick where to write; init_workspace if there is nowhere yet
 write_doc     { "title": "Use Postgres", "status": "done", "body": "..." }
 write_task    { "title": "Add connection pooling",
                 "description": "...",

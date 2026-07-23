@@ -78,4 +78,11 @@ describe("FileTree", () => {
     renderTree(new Map([["beta.md", "modified"]]));
     expect(screen.getByTitle("Modified since HEAD")).toHaveTextContent("M");
   });
+
+  it("colours the git badge from the theme's status tokens", () => {
+    renderTree(new Map([["beta.md", "modified"]]));
+    expect(screen.getByTitle("Modified since HEAD").className).toContain(
+      "text-[var(--status-warning-fg)]"
+    );
+  });
 });

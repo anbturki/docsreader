@@ -8,6 +8,7 @@ import {
   type PaneLayout,
   type SplitMode,
 } from "@/lib/storage";
+import type { TabTarget } from "@/lib/tabKinds";
 import { useTabs, type Tabs } from "./useTabs";
 
 export type PaneIndex = 0 | 1;
@@ -20,8 +21,8 @@ export interface Panes {
   setSplit: (mode: SplitMode) => void;
   setSplitSize: (size: number) => void;
   focusPane: (idx: PaneIndex) => void;
-  openInOtherPane: (path: string) => void;
-  openInActivePane: (path: string) => void;
+  openInOtherPane: (target: TabTarget) => void;
+  openInActivePane: (target: TabTarget) => void;
 }
 
 interface UsePanesOptions {
@@ -97,14 +98,14 @@ export function usePanes(options: UsePanesOptions): Panes {
     });
   }, []);
 
-  // Open a path in the pane that is not currently active. If split is
+  // Open a target in the pane that is not currently active. If split is
   // off, auto-enable horizontal split first so the user actually sees
   // two panes. The current pane becomes the "other" once we focus the
   // freshly-targeted one.
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
   const openInOtherPane = useCallback(
-    (path: string) => {
+    (target: TabTarget) => {
       const current = layoutRef.current;
       const targetPane: PaneIndex =
         current.split === "off" ? 1 : current.activePane === 0 ? 1 : 0;
@@ -113,17 +114,17 @@ export function usePanes(options: UsePanesOptions): Panes {
       } else if (current.activePane !== targetPane) {
         setLayout((l) => ({ ...l, activePane: targetPane }));
       }
-      if (targetPane === 0) pane0.openInActive(path);
-      else pane1.openInActive(path);
+      if (targetPane === 0) pane0.openInActive(target);
+      else pane1.openInActive(target);
     },
     [pane0, pane1]
   );
 
   const openInActivePane = useCallback(
-    (path: string) => {
+    (target: TabTarget) => {
       const current = layoutRef.current;
-      if (current.split === "off" || current.activePane === 0) pane0.openInActive(path);
-      else pane1.openInActive(path);
+      if (current.split === "off" || current.activePane === 0) pane0.openInActive(target);
+      else pane1.openInActive(target);
     },
     [pane0, pane1]
   );

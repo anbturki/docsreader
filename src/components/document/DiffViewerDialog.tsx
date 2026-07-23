@@ -165,16 +165,14 @@ function LineRow({ line, prefixed = false }: { line: DiffLine; prefixed?: boolea
   const cls = cn(
     "px-4 py-px",
     line.kind === "add" &&
-      "bg-emerald-100/60 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200",
-    line.kind === "remove" &&
-      "bg-rose-100/60 text-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+      "bg-[var(--status-success-bg)] text-[var(--status-success-fg)]",
+    line.kind === "remove" && "bg-[var(--status-error-bg)] text-[var(--status-error-fg)]"
   );
   const segCls = (s: WordSegment): string => {
     if (!s.changed) return "";
     if (line.kind === "add")
-      return "rounded-sm bg-emerald-300/50 dark:bg-emerald-700/50";
-    if (line.kind === "remove")
-      return "rounded-sm bg-rose-300/50 dark:bg-rose-700/50";
+      return "rounded-sm bg-[var(--status-success-fg)]/30";
+    if (line.kind === "remove") return "rounded-sm bg-[var(--status-error-fg)]/30";
     return "";
   };
   return (

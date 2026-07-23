@@ -1,0 +1,216 @@
+import {
+  Columns2,
+  ListCollapse,
+  ListTree,
+  Moon,
+  Rows2,
+  Search,
+  Settings as SettingsIcon,
+  Square,
+  Sun,
+  type LucideIcon,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { PathBreadcrumb } from "@/components/document/PathBreadcrumb";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
+import { TaskViewSwitch } from "@/components/tasks/TaskViewSwitch";
+import { displayShortcut } from "@/lib/shortcuts";
+import { isMac } from "@/lib/platform";
+import {
+  isSplitMode,
+  SPLIT_MODES,
+  type SplitMode,
+  type TaskTabView,
+} from "@/lib/storage";
+
+const CHROME_ICON = "size-6 text-muted-foreground hover:text-foreground [&>svg]:size-4";
+
+// Equal flex tracks are given equal size, so the search holds one position
+// whatever flanks it. Spacers centred it on its neighbours instead, and it slid
+// whenever a breadcrumb lengthened or a control appeared beside the tab. That
+// position is the centre of the padding box, which the window-control inset puts
+// 37.5px right of the window centre; the point is that it never moves.
+export const TOOLBAR_COLUMNS = "grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]";
+
+const SPLIT_CONTROLS: Record<SplitMode, { icon: LucideIcon; label: string }> = {
+  off: { icon: Square, label: "Single pane" },
+  horizontal: { icon: Columns2, label: "Side by side" },
+  vertical: { icon: Rows2, label: "Stacked" },
+};
+
+interface Props {
+  roots: string[];
+  activeRoot: string | undefined;
+  workspaceNamesByRoot: Record<string, string>;
+  onSelectRoot: (path: string) => void;
+  onRemoveRoot: (path: string) => void;
+  onPickDirectory: () => void;
+
+  breadcrumbPath: string | undefined;
+  onBreadcrumbSegmentClick: (segment: string) => void;
+
+  quickOpenShortcut: string;
+  onOpenQuickOpen: () => void;
+
+  canCollapseAll: boolean;
+  onCollapseAll: () => void;
+
+  split: SplitMode;
+  onSplitChange: (split: SplitMode) => void;
+
+  /** Undefined while the active tab is not a tasks tab, which draws no switch. */
+  taskView: TaskTabView | undefined;
+  onTaskViewChange: (view: TaskTabView) => void;
+
+  canToggleOutline: boolean;
+  outlineOpen: boolean;
+  onToggleOutline: () => void;
+
+  isDark: boolean;
+  onToggleTheme: () => void;
+
+  onOpenSettings: () => void;
+  onPrefetchSettings: () => void;
+}
+
+export function AppToolbar({
+  roots,
+  activeRoot,
+  workspaceNamesByRoot,
+  onSelectRoot,
+  onRemoveRoot,
+  onPickDirectory,
+  breadcrumbPath,
+  onBreadcrumbSegmentClick,
+  quickOpenShortcut,
+  onOpenQuickOpen,
+  canCollapseAll,
+  onCollapseAll,
+  split,
+  onSplitChange,
+  taskView,
+  onTaskViewChange,
+  canToggleOutline,
+  outlineOpen,
+  onToggleOutline,
+  isDark,
+  onToggleTheme,
+  onOpenSettings,
+  onPrefetchSettings,
+}: Props) {
+  return (
+    <header
+      data-tauri-drag-region
+      data-slot="app-toolbar"
+      className={`fixed inset-x-0 top-0 z-30 grid h-(--toolbar-height) ${TOOLBAR_COLUMNS} items-center gap-2 border-b bg-background pr-2 ${
+        isMac ? "pl-(--window-controls-inset)" : "pl-2"
+      }`}
+    >
+      <div data-tauri-drag-region className="flex min-w-0 items-center gap-2">
+        {roots.length > 0 && (
+          <div data-slot="workspace-switcher-slot" className="max-w-48 shrink-0">
+            <WorkspaceSwitcher
+              roots={roots}
+              activeRoot={activeRoot}
+              workspaceNamesByRoot={workspaceNamesByRoot}
+              onSelect={onSelectRoot}
+              onRemove={onRemoveRoot}
+              onAdd={onPickDirectory}
+            />
+          </div>
+        )}
+        {breadcrumbPath && (
+          <PathBreadcrumb
+            relPath={breadcrumbPath}
+            onSegmentClick={onBreadcrumbSegmentClick}
+          />
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={onOpenQuickOpen}
+        className="flex h-7 w-52 items-center gap-2 rounded-md border bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover:bg-muted"
+      >
+        <Search className="size-3.5" />
+        <span>Search</span>
+        <kbd className="ml-auto rounded border bg-background px-1.5 font-mono text-2xs leading-4">
+          {displayShortcut(quickOpenShortcut)}
+        </kbd>
+      </button>
+
+      <div data-tauri-drag-region className="flex items-center justify-end gap-0.5">
+        {canCollapseAll && (
+          <Button
+            size="icon"
+            variant="ghost"
+            className={CHROME_ICON}
+            title="Collapse all"
+            aria-label="Collapse all"
+            onClick={onCollapseAll}
+          >
+            <ListCollapse />
+          </Button>
+        )}
+        {taskView && <TaskViewSwitch view={taskView} onChange={onTaskViewChange} />}
+        <ToggleGroup
+          type="single"
+          value={split}
+          onValueChange={(v) => {
+            if (isSplitMode(v)) onSplitChange(v);
+          }}
+          variant="outline"
+          spacing={0}
+          aria-label="Split layout"
+          className="mx-1"
+        >
+          {SPLIT_MODES.map((mode) => {
+            const { icon: Icon, label } = SPLIT_CONTROLS[mode];
+            return (
+              <ToggleGroupItem key={mode} value={mode} className="size-6" title={label} aria-label={label}>
+                <Icon className="size-3.5" />
+              </ToggleGroupItem>
+            );
+          })}
+        </ToggleGroup>
+        {canToggleOutline && (
+          <Button
+            size="icon"
+            variant="ghost"
+            className={`${CHROME_ICON} aria-pressed:bg-accent aria-pressed:text-foreground`}
+            title={outlineOpen ? "Hide outline" : "Show outline"}
+            aria-label="Toggle outline"
+            aria-pressed={outlineOpen}
+            onClick={onToggleOutline}
+          >
+            <ListTree />
+          </Button>
+        )}
+        <Button
+          size="icon"
+          variant="ghost"
+          className={CHROME_ICON}
+          title="Toggle light / dark"
+          aria-label="Toggle theme"
+          onClick={onToggleTheme}
+        >
+          {isDark ? <Sun /> : <Moon />}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          className={CHROME_ICON}
+          title="Settings"
+          aria-label="Settings"
+          onMouseEnter={onPrefetchSettings}
+          onFocus={onPrefetchSettings}
+          onClick={onOpenSettings}
+        >
+          <SettingsIcon />
+        </Button>
+      </div>
+    </header>
+  );
+}

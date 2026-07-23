@@ -1,10 +1,37 @@
 import { useEffect } from "react";
-import { ACCENT_HUE, type AccentColor, type ColorScheme } from "@/lib/storage";
+import type { CSSProperties } from "react";
+import {
+  ACCENT_SPEC,
+  type AccentColor,
+  type ColorScheme,
+  type ResolvedScheme,
+} from "@/lib/storage";
+import { syncNativeTheme } from "@/lib/nativeTheme";
 
-const LIGHT_PRIMARY = (hue: number) => `oklch(0.55 0.22 ${hue})`;
-const DARK_PRIMARY = (hue: number) => `oklch(0.7 0.18 ${hue})`;
+export const ACCENT_PROPERTIES = {
+  lightness: "--primary-fixed-l",
+  chroma: "--primary-fixed-c",
+  hue: "--primary-fixed-hue",
+} as const;
 
-function applyTheme(scheme: "light" | "dark", accent: AccentColor): void {
+export type AccentCustomProperties = Record<
+  (typeof ACCENT_PROPERTIES)[keyof typeof ACCENT_PROPERTIES],
+  string
+>;
+
+export function accentProperties(
+  accent: AccentColor,
+): CSSProperties & AccentCustomProperties {
+  const spec = ACCENT_SPEC[accent];
+  const properties: AccentCustomProperties = {
+    [ACCENT_PROPERTIES.lightness]: String(spec.lightness),
+    [ACCENT_PROPERTIES.chroma]: String(spec.chroma),
+    [ACCENT_PROPERTIES.hue]: String(spec.hue),
+  };
+  return properties;
+}
+
+function applyTheme(scheme: ResolvedScheme, accent: AccentColor): void {
   const root = document.documentElement;
 
   // Elements with `transition-colors` (e.g. task cards) would otherwise
@@ -18,10 +45,11 @@ function applyTheme(scheme: "light" | "dark", accent: AccentColor): void {
   if (scheme === "dark") root.classList.add("dark");
   else root.classList.remove("dark");
 
-  const hue = ACCENT_HUE[accent];
-  const primary = scheme === "dark" ? DARK_PRIMARY(hue) : LIGHT_PRIMARY(hue);
-  root.style.setProperty("--primary", primary);
-  root.style.setProperty("--ring", primary);
+  // The accent is these three numbers and nothing else; the stylesheet owns how
+  // they are drawn, in each scheme and on the fixed surfaces that ignore it.
+  for (const [property, value] of Object.entries(accentProperties(accent))) {
+    root.style.setProperty(property, value);
+  }
   root.style.colorScheme = scheme;
 
   void root.offsetHeight;
@@ -30,6 +58,10 @@ function applyTheme(scheme: "light" | "dark", accent: AccentColor): void {
 
 export function useTheme(colorScheme: ColorScheme, accentColor: AccentColor): void {
   useEffect(() => {
+    // The OS draws the window controls, so it has to be told the same thing the
+    // stylesheet was; "system" means handing that choice back to it.
+    void syncNativeTheme(colorScheme === "system" ? null : colorScheme);
+
     if (colorScheme !== "system") {
       applyTheme(colorScheme, accentColor);
       return;

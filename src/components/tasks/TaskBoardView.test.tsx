@@ -1,9 +1,9 @@
 import { render, screen, within, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi } from "vitest";
 
-import { TaskBoardView } from "./TaskBoardView";
 import type { Task, TaskStatus } from "@/lib/tasks";
 import type { AcProgress } from "@/lib/taskDoc";
+import { TaskBoardView } from "./TaskBoardView";
 
 function task(id: string, status: TaskStatus, over: Partial<Task> = {}): Task {
   return {
@@ -26,36 +26,42 @@ const noop = () => {};
 
 function column(status: TaskStatus): HTMLElement {
   const el = document.querySelector(`[data-status="${status}"]`);
-  if (!el) throw new Error(`missing column ${status}`);
-  return el as HTMLElement;
+  if (!(el instanceof HTMLElement)) throw new Error(`missing column ${status}`);
+  return el;
 }
 
-describe("Smoke C2: board groups real tasks correctly", () => {
+interface Options {
+  tasks?: Task[];
+  progress?: Map<string, AcProgress>;
+  onAdvance?: (id: string, status: TaskStatus) => void;
+  onOpen?: (path: string) => void;
+}
+
+function renderBoard({ tasks = [], progress = new Map(), onAdvance, onOpen }: Options = {}) {
+  return render(
+    <TaskBoardView
+      tasks={tasks}
+      searching={false}
+      progress={progress}
+      selectedPath={undefined}
+      onOpen={onOpen ?? noop}
+      onOpenInNewTab={noop}
+      onAdvance={onAdvance}
+    />
+  );
+}
+
+describe("TaskBoardView", () => {
   const tasks = [
-    task("task-1", "To Do", { priority: "high", assignee: ["alice"] }),
+    task("task-1", "To Do", { priority: "high" }),
     task("task-2", "In Progress"),
     task("task-3", "Done"),
     task("task-4", "To Do"),
   ];
-  const progress = new Map<string, AcProgress>([["/ws/tasks/task-2.md", { done: 1, total: 3 }]]);
 
-  function renderBoard() {
-    return render(
-      <TaskBoardView
-        tasks={tasks}
-        progress={progress}
-        loading={false}
-        error={undefined}
-        selectedPath={undefined}
-        onRefresh={noop}
-        onOpen={noop}
-        onOpenInNewTab={noop}
-      />
-    );
-  }
+  it("lays the statuses out side by side, in order", () => {
+    renderBoard({ tasks });
 
-  it("renders three columns in TASK_STATUSES order", () => {
-    renderBoard();
     const statuses = [...document.querySelectorAll("[data-status]")].map((el) =>
       el.getAttribute("data-status")
     );
@@ -63,108 +69,77 @@ describe("Smoke C2: board groups real tasks correctly", () => {
   });
 
   it("places each task in the column matching its status", () => {
-    renderBoard();
+    renderBoard({ tasks });
+
     expect(within(column("To Do")).getByText("Title task-1")).toBeTruthy();
     expect(within(column("To Do")).getByText("Title task-4")).toBeTruthy();
     expect(within(column("In Progress")).getByText("Title task-2")).toBeTruthy();
     expect(within(column("Done")).getByText("Title task-3")).toBeTruthy();
   });
 
-  it("shows card fields (priority/assignee/AC) matching the task", () => {
-    renderBoard();
-    const todo = within(column("To Do"));
-    expect(todo.getByText("high")).toBeTruthy();
-    expect(todo.getByText("alice")).toBeTruthy();
-    expect(within(column("In Progress")).getByText("1/3")).toBeTruthy();
+  it("shows an empty column rather than hiding the status", () => {
+    renderBoard({ tasks: [task("task-1", "To Do")] });
+
+    expect(within(column("Done")).queryByRole("listitem")).toBeNull();
+    expect(column("Done")).toBeTruthy();
   });
 
-  it("opens the task on card click", async () => {
-    const onOpen = vi.fn();
-    render(
-      <TaskBoardView
-        tasks={[task("task-9", "Done")]}
-        progress={new Map()}
-        loading={false}
-        error={undefined}
-        selectedPath={undefined}
-        onRefresh={noop}
-        onOpen={onOpen}
-        onOpenInNewTab={noop}
-      />
-    );
-    screen.getByText("Title task-9").click();
-    expect(onOpen).toHaveBeenCalledWith("/ws/tasks/task-9.md");
-  });
-
-  it("shows skeletons while loading with no tasks yet", () => {
-    render(
-      <TaskBoardView
-        tasks={[]}
-        progress={new Map()}
-        loading={true}
-        error={undefined}
-        selectedPath={undefined}
-        onRefresh={noop}
-        onOpen={noop}
-        onOpenInNewTab={noop}
-      />
-    );
-    expect(document.querySelectorAll('[data-slot="skeleton"]').length).toBeGreaterThan(0);
-    expect(document.querySelector("[data-status]")).toBeNull();
-  });
-
-  it("calls onAdvance with the target status when a card is dragged across columns", () => {
+  it("writes the new status when a card is dropped on another column", () => {
     const onAdvance = vi.fn();
-    render(
-      <TaskBoardView
-        tasks={[task("task-1", "To Do")]}
-        progress={new Map()}
-        loading={false}
-        error={undefined}
-        selectedPath={undefined}
-        onRefresh={noop}
-        onOpen={noop}
-        onOpenInNewTab={noop}
-        onAdvance={onAdvance}
-      />
-    );
-    const card = screen.getByText("Title task-1").closest("button");
-    if (!card) throw new Error("card not found");
-    fireEvent.dragStart(card);
-    fireEvent.drop(column("In Progress"));
-    expect(onAdvance).toHaveBeenCalledWith("task-1", "In Progress");
+    renderBoard({ tasks: [task("task-1", "To Do")], onAdvance });
+
+    fireEvent.dragStart(screen.getByText("Title task-1"));
+    fireEvent.drop(column("Done"));
+
+    expect(onAdvance).toHaveBeenCalledWith("task-1", "Done");
   });
 
-  it("narrows to matching cards as the text filter is typed, then restores on clear", () => {
-    renderBoard();
-    expect(screen.getByText("Title task-1")).toBeTruthy();
-    const input = screen.getByPlaceholderText("Filter tasks by title...");
+  it("opens the task behind a card", () => {
+    const onOpen = vi.fn();
+    renderBoard({ tasks: [task("task-7", "Done")], onOpen });
 
-    fireEvent.change(input, { target: { value: "Title task-2" } });
-    expect(screen.getByText("Title task-2")).toBeTruthy();
-    expect(screen.queryByText("Title task-1")).toBeNull();
+    screen.getByText("Title task-7").click();
 
-    fireEvent.change(input, { target: { value: "nothing matches this" } });
-    expect(screen.getByText("No matching tasks")).toBeTruthy();
-
-    fireEvent.change(input, { target: { value: "" } });
-    expect(screen.getByText("Title task-1")).toBeTruthy();
-    expect(screen.getByText("Title task-4")).toBeTruthy();
+    expect(onOpen).toHaveBeenCalledWith("/ws/tasks/task-7.md");
   });
 
-  it("shows the empty state when there are no tasks", () => {
-    render(
-      <TaskBoardView
-        tasks={[]}
-        progress={new Map()}
-        loading={false}
-        error={undefined}
-        selectedPath={undefined}
-        onRefresh={noop}
-        onOpen={noop}
-        onOpenInNewTab={noop}
-      />
-    );
-    expect(screen.getByText("No tasks")).toBeTruthy();
+  // A board wider than the window has to scroll inside its own box; letting it
+  // size the page is what makes the whole window scroll sideways.
+  it("keeps the sideways scroll inside the board", () => {
+    const { container } = renderBoard({ tasks });
+
+    const board = container.querySelector('[data-slot="tasks-board"]');
+    expect(board?.className).toContain("overflow-x-auto");
+    expect(board?.className).toContain("min-h-0");
+    expect(board?.className).toContain("flex-1");
+  });
+
+  // Three columns in a wide pane used to leave a fourth column of dead space
+  // on the right, because each one was pinned to a fixed width.
+  it("shares the width between the columns instead of pinning each one", () => {
+    renderBoard({ tasks });
+
+    for (const el of document.querySelectorAll("[data-status]")) {
+      expect(el.className).toContain("flex-1");
+      expect(el.className).toContain("min-w-72");
+      expect(el.className).not.toMatch(/(^|\s)w-\d/);
+      expect(el.className).not.toContain("shrink-0");
+    }
+  });
+
+  it("defines no height of its own, so nothing but the board scrolls", () => {
+    const { container } = renderBoard({ tasks });
+
+    const board = container.querySelector('[data-slot="tasks-board"]');
+    expect(board?.className).not.toMatch(/h-\[|vh|dvh/);
+  });
+
+  it("shows acceptance-criteria progress on the card that has it", () => {
+    renderBoard({
+      tasks,
+      progress: new Map([["/ws/tasks/task-2.md", { done: 1, total: 3 }]]),
+    });
+
+    expect(within(column("In Progress")).getByText("1/3")).toBeTruthy();
   });
 });

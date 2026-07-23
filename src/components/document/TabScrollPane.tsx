@@ -1,11 +1,16 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { MarkdownFile } from "@/lib/scan";
 import type { ViewSettings } from "@/lib/storage";
 import type { Tab } from "@/hooks/useTabs";
 import { parseFrontmatter } from "@/lib/scan";
+import { useFindInDocument } from "@/hooks/useFindInDocument";
+import { FIND_CHROME_ATTR } from "@/lib/findMatches";
+import { matchShortcut, parseShortcut } from "@/lib/shortcuts";
 import { DocumentView } from "./DocumentView";
 import { ExternalChangeBanner } from "./ExternalChangeBanner";
+import { FindBar } from "./FindBar";
+
 
 interface Props {
   tab: Tab;
@@ -14,9 +19,11 @@ interface Props {
   rootPath: string | undefined;
   viewSettings: ViewSettings;
   initialScrollTop: number;
-  onScrollChange: (path: string, value: number) => void;
+  onScrollChange: (ref: string, value: number) => void;
   onNavigate: (path: string) => void;
   onActiveRefChange?: (el: HTMLElement | null) => void;
+  /** False when a split is showing and the other pane holds focus. */
+  paneFocused: boolean;
   onAcceptPending: (id: string) => void;
   onDismissPending: (id: string) => void;
   onDiffViewModeChange: (mode: ViewSettings["diffViewMode"]) => void;
@@ -37,6 +44,7 @@ export function TabScrollPane({
   onScrollChange,
   onNavigate,
   onActiveRefChange,
+  paneFocused,
   onAcceptPending,
   onDismissPending,
   onDiffViewModeChange,
@@ -51,19 +59,48 @@ export function TabScrollPane({
     [tab.pendingContent]
   );
   const ref = useRef<HTMLDivElement>(null);
-  const restoredRef = useRef(false);
+  // Holds the document the pane has already placed. Keyed by path rather than
+  // flagged, because a flag has to be cleared by an effect, and an effect
+  // clearing it always runs after the layout effect that set it.
+  const restoredFor = useRef<string | undefined>(undefined);
+  const [scrollEl, setScrollEl] = useState<HTMLElement | null>(null);
+
+  useEffect(() => setScrollEl(ref.current), []);
+
+  // Find applies to the rendered view only; the editor brings its own.
+  const findShortcut = useMemo(
+    () => parseShortcut(viewSettings.findInDocumentShortcut),
+    [viewSettings.findInDocumentShortcut]
+  );
+  // The markdown body memoises on its component map, which is rebuilt whenever
+  // this handler changes identity. An inline arrow here re-parsed every open
+  // document on every tab switch.
+  const toggleTask = useCallback(
+    (index: number) => void onToggleTask(tab.id, index),
+    [onToggleTask, tab.id]
+  );
+  const findable = active && paneFocused && tab.draft === undefined;
+  const find = useFindInDocument(findable ? scrollEl : null, findable);
+  const showFind = find.show;
 
   useEffect(() => {
-    restoredRef.current = false;
-  }, [tab.path]);
+    if (!findable || !findShortcut) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!matchShortcut(e, findShortcut)) return;
+      e.preventDefault();
+      showFind();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [findable, findShortcut, showFind]);
 
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    if (restoredRef.current) return;
+    if (restoredFor.current === tab.ref) return;
     if (tab.loading || tab.error) return;
     if (initialScrollTop === 0) {
-      restoredRef.current = true;
+      restoredFor.current = tab.ref;
       return;
     }
 
@@ -75,32 +112,32 @@ export function TabScrollPane({
     };
 
     if (tryRestore()) {
-      restoredRef.current = true;
+      restoredFor.current = tab.ref;
       return;
     }
 
     const inner = el.firstElementChild;
     if (!inner) return;
     const observer = new ResizeObserver(() => {
-      if (restoredRef.current) {
+      if (restoredFor.current === tab.ref) {
         observer.disconnect();
         return;
       }
       if (tryRestore()) {
-        restoredRef.current = true;
+        restoredFor.current = tab.ref;
         observer.disconnect();
       }
     });
     observer.observe(inner);
     const safety = window.setTimeout(() => {
-      restoredRef.current = true;
+      restoredFor.current = tab.ref;
       observer.disconnect();
     }, 4000);
     return () => {
       observer.disconnect();
       clearTimeout(safety);
     };
-  }, [tab.loading, tab.error, tab.content, initialScrollTop]);
+  }, [tab.ref, tab.loading, tab.error, tab.content, initialScrollTop]);
 
   useEffect(() => {
     if (!onActiveRefChange) return;
@@ -116,10 +153,22 @@ export function TabScrollPane({
       className={cn("absolute inset-0 overflow-y-auto", !active && "invisible")}
       aria-hidden={!active}
       onScroll={(e) => {
-        if (!restoredRef.current) return;
-        onScrollChange(tab.path, e.currentTarget.scrollTop);
+        if (restoredFor.current !== tab.ref) return;
+        onScrollChange(tab.ref, e.currentTarget.scrollTop);
       }}
     >
+      {/* Sticky with no height so the bar stays pinned while the document
+          scrolls beneath it without displacing the content. */}
+      {find.open && (
+        <div
+          {...{ [FIND_CHROME_ATTR]: "" }}
+          className="pointer-events-none sticky top-0 z-10 h-0"
+        >
+          <div className="pointer-events-auto flex justify-end p-3">
+            <FindBar find={find} />
+          </div>
+        </div>
+      )}
       {tab.pendingContent && pendingBody !== undefined && (
         <ExternalChangeBanner
           before={tab.content}
@@ -140,7 +189,7 @@ export function TabScrollPane({
         onBeginEdit={() => void onBeginEdit(tab.id)}
         onCancelEdit={() => onCancelEdit(tab.id)}
         onSaveEdit={(markdown) => onSaveEdit(tab.id, markdown)}
-        onToggleTask={(index) => void onToggleTask(tab.id, index)}
+        onToggleTask={toggleTask}
       />
     </div>
   );

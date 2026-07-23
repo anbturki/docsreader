@@ -1,12 +1,53 @@
 /* Aligns Crepe's frame theme with the DocsReader reader: swap in the
-   app's Geist fonts, and drive dark mode from the app's own `.dark`
-   toggle rather than the theme's separate dark stylesheet. The dark
-   palette below is frame-dark's own, applied only under `.dark`. */
+   app's Geist fonts and re-point Crepe's palette at the app's theme
+   tokens, which already flip under the app's own `.dark` toggle, so the
+   editor follows the scheme and the accent instead of the two fixed
+   palettes the frame theme ships. */
 
 .milkdown {
   --crepe-font-default: var(--font-sans, "Geist Variable", sans-serif);
   --crepe-font-title: var(--font-sans, "Geist Variable", sans-serif);
   --crepe-font-code: var(--font-mono, "Geist Mono Variable", ui-monospace, monospace);
+
+  --crepe-color-background: var(--background);
+  --crepe-color-on-background: var(--foreground);
+  --crepe-color-surface: var(--popover);
+  --crepe-color-surface-low: var(--muted);
+  --crepe-color-on-surface: var(--popover-foreground);
+  --crepe-color-on-surface-variant: var(--muted-foreground);
+  /* Crepe uses "outline" for icon fills and placeholder text, not only for
+     borders, so it maps to the muted foreground rather than to --border.
+     Every caret is pulled off it below: muted is right for a placeholder and
+     wrong for the insertion point, which has to out-read the text around it. */
+  --crepe-color-outline: var(--muted-foreground);
+  --crepe-color-caret: var(--foreground);
+  --crepe-color-primary: var(--primary);
+  --crepe-color-secondary: var(--secondary);
+  --crepe-color-on-secondary: var(--secondary-foreground);
+  --crepe-color-inverse: var(--foreground);
+  --crepe-color-on-inverse: var(--background);
+  /* The reader draws inline code as a neutral chip (bg-muted / text-foreground);
+     Crepe's palette makes it crimson. Same document, so same chip. */
+  --crepe-color-inline-code: var(--foreground);
+  --crepe-color-error: var(--destructive);
+  --crepe-color-hover: var(--accent);
+  --crepe-color-selected: color-mix(in oklch, var(--primary) 25%, transparent);
+  --crepe-color-inline-area: var(--muted);
+}
+
+/* The prose caret is drawn by prosemirror-virtual-cursor, not by caret-color:
+   Crepe's cursor.css points --prosemirror-virtual-cursor-color at
+   --crepe-color-outline, and the auxiliary inputs (code-block search panel,
+   image caption) set caret-color from the same variable. Those four rules are
+   every caret in the editor; each is re-pointed at --crepe-color-caret. */
+.crepe-host .milkdown .ProseMirror-focused {
+  --prosemirror-virtual-cursor-color: var(--crepe-color-caret);
+}
+.crepe-host .milkdown .milkdown-code-block .cm-panel input,
+.crepe-host .milkdown .milkdown-code-block .tools input,
+.crepe-host .milkdown .milkdown-image-inline input,
+.crepe-host .milkdown .milkdown-image-block input {
+  caret-color: var(--crepe-color-caret);
 }
 
 /* Read like the document, not a boxed input. Crepe's frame theme paints
@@ -64,6 +105,8 @@
 }
 .crepe-host .milkdown .ProseMirror :not(pre) > code {
   font-size: 0.875em;
+  /* Crepe fades the chip to 60%; the reader's bg-muted is solid. */
+  background: var(--muted);
 }
 
 /* Crepe renders bullets, numbers, and checkboxes all inside .label-wrapper.
@@ -88,24 +131,4 @@
    getMarkdown() still serialises it and the delimiters survive the save. */
 .crepe-host .milkdown [data-type="html"][data-value^="<!--"] {
   display: none;
-}
-
-.dark .milkdown {
-  --crepe-color-background: #1a1a1a;
-  --crepe-color-on-background: #e6e6e6;
-  --crepe-color-surface: #121212;
-  --crepe-color-surface-low: #1c1c1c;
-  --crepe-color-on-surface: #d1d1d1;
-  --crepe-color-on-surface-variant: #a9a9a9;
-  --crepe-color-outline: #757575;
-  --crepe-color-primary: #b5b5b5;
-  --crepe-color-secondary: #4d4d4d;
-  --crepe-color-on-secondary: #d6d6d6;
-  --crepe-color-inverse: #e5e5e5;
-  --crepe-color-on-inverse: #2a2a2a;
-  --crepe-color-inline-code: #ff6666;
-  --crepe-color-error: #ff6666;
-  --crepe-color-hover: #232323;
-  --crepe-color-selected: #2f2f2f;
-  --crepe-color-inline-area: #2b2b2b;
 }

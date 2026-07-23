@@ -10,8 +10,8 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::{
-    DocsServer, TRUNCATION_GUIDANCE, client_name, doc_uri, ensure_workspace_exists, error_result,
-    resolve_or_pick, take_within_budget,
+    DocsServer, TRUNCATION_GUIDANCE, client_name, doc_uri, error_result, require_workspace_dir,
+    resolve_for_write, resolve_or_pick, take_within_budget,
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -32,7 +32,9 @@ pub struct WriteTaskParams {
     pub labels: Option<Vec<String>>,
     /// Ids of tasks this one depends on, e.g. ["task-2"].
     pub dependencies: Option<Vec<String>>,
-    /// Workspace slug (see list_workspaces). Omit to use the resolved default.
+    /// Workspace slug (see list_workspaces). Omit to use the workspace
+    /// resolved from the current project; when none resolves, the write is
+    /// refused instead of landing in the shared user workspace.
     pub workspace: Option<String>,
 }
 
@@ -112,7 +114,7 @@ fn task_change(ws: ResolvedWorkspace, task: TaskSummary) -> Json<TaskChangeResul
 #[tool_router(router = task_tool_router, vis = "pub(crate)")]
 impl DocsServer {
     #[tool(
-        description = "Create a task in the workspace's tasks/ folder using the Backlog.md file shape (task-N id, frontmatter status, Description + Acceptance Criteria checklist). Unlike docs, task status lives in frontmatter, not folders.",
+        description = "Create a task in the workspace's tasks/ folder using the Backlog.md file shape (task-N id, frontmatter status, Description + Acceptance Criteria checklist). Unlike docs, task status lives in frontmatter, not folders. Write a project's tasks to that project's own workspace; a label is not a substitute for one.",
         annotations(destructive_hint = false)
     )]
     async fn write_task(
@@ -122,8 +124,8 @@ impl DocsServer {
     ) -> Result<Json<TaskChangeResult>, CallToolResult> {
         let reporter = client_name(&peer);
         let result = async {
-            let ws = resolve_or_pick(&peer, p.workspace.as_deref()).await?;
-            ensure_workspace_exists(&ws)?;
+            let ws = resolve_for_write(&peer, p.workspace.as_deref()).await?;
+            require_workspace_dir(&ws)?;
             let task = NewTask {
                 title: &p.title,
                 description: &p.description,
@@ -145,7 +147,7 @@ impl DocsServer {
     }
 
     #[tool(
-        description = "List tasks in the workspace, ordered by id. Filter by status (\"To Do\" | \"In Progress\" | \"Done\") or label.",
+        description = "List tasks in the workspace, ordered by id. Filter by status (\"To Do\" | \"In Progress\" | \"Done\") or label. Labels group work inside one workspace; unfiltered results include every project sharing it.",
         annotations(read_only_hint = true)
     )]
     async fn list_tasks(
@@ -189,7 +191,7 @@ impl DocsServer {
         Parameters(p): Parameters<SetTaskStatusParams>,
     ) -> Result<Json<TaskChangeResult>, CallToolResult> {
         let result = async {
-            let ws = resolve_or_pick(&peer, p.workspace.as_deref()).await?;
+            let ws = resolve_for_write(&peer, p.workspace.as_deref()).await?;
             let task = set_task_status_core(&ws.root, &p.id, &p.status).await?;
             Ok::<_, CoreError>((ws, task))
         }
@@ -208,7 +210,7 @@ impl DocsServer {
         Parameters(p): Parameters<UpdateTaskParams>,
     ) -> Result<Json<TaskChangeResult>, CallToolResult> {
         let result = async {
-            let ws = resolve_or_pick(&peer, p.workspace.as_deref()).await?;
+            let ws = resolve_for_write(&peer, p.workspace.as_deref()).await?;
             let task = update_task_core(
                 &ws.root,
                 &p.id,

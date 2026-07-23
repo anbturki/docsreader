@@ -56,10 +56,11 @@ Needs `docsreader-mcp` on your PATH and `jq`. Full setup in the [plugin README](
 | --- | --- |
 | **Rich rendering** | GitHub-flavored Markdown, KaTeX math, Mermaid diagrams, Shiki highlighting across twelve themes |
 | **Interactive checklists** | Toggle any checkbox from the rendered view; the change writes back to the file |
-| **Five lenses** | Tree, Recent, Tags, Pinned, and a Tasks kanban board over one library |
+| **Five lenses** | Tree, Recent, Tags, Pinned, and Tasks over one library, on a rail the sidebar collapses to |
 | **Split view** | Two docs side-by-side or stacked, each with its own tabs and scroll |
+| **Full-text search** | Search names, tags, and the text inside documents, from the toolbar's search or the magnifier in the sidebar header; narrow to files, contents, or tags |
 | **Open with** | Double-click a `.md` in Finder or "Open With DocsReader" to jump straight to a file or folder |
-| **Task board** | To Do / In Progress / Done with drag-to-advance and acceptance-criteria progress, consistent with the MCP |
+| **Tasks board or list** | Tasks open full-window as a board of To Do / In Progress / Done columns, or as grouped rows; switch from the toolbar, drag a card to change its status, and see acceptance-criteria progress, all consistent with the MCP |
 | **Agent-aware** | Open docs reload live as agents write; on-disk changes surface a diff; git status shows in the tree |
 | **Quiet and local** | Minimal chrome, no telemetry, signed updates, notarized on macOS |
 
@@ -84,9 +85,12 @@ More views in [docs/FEATURES.md](docs/FEATURES.md).
 
 Manual downloads: `DocsReader_*_universal.dmg` (macOS Intel + Apple Silicon), `DocsReader_*_amd64.AppImage` or `.deb` (Linux), `DocsReader_*_x64-setup.exe` (Windows).
 
+**macOS requirement:** macOS 11 Big Sur or later, with Safari 16.4 or later installed. The app renders in the system WebView, so the installed Safari version decides which CSS features are available. macOS 13.3 Ventura and later ship Safari 16.4 or newer; on Big Sur and Monterey, install the latest Safari from Software Update first.
+
 ## More
 
-- **[What's new](https://github.com/anbturki/docsreader/releases)** - release history and notes
+- **[CHANGELOG.md](CHANGELOG.md)** - what changed in each version
+- **[What's new](https://github.com/anbturki/docsreader/releases)** - downloads for every release
 - **[docs/MCP.md](docs/MCP.md)** - connect agents, every tool, the `docsreader://` resources
 - **[docs/FEATURES.md](docs/FEATURES.md)** - the full feature list
 - **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - build from source, release process
