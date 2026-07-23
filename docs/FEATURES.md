@@ -60,6 +60,8 @@ The full feature list for DocsReader. The [README](../README.md#features) shows 
 
 ![The Tasks board beside a task doc with its status pill and acceptance-criteria progress](screenshots/tasks-header.png)
 
+![The same tasks as a full-window list, grouped by status with labels, assignee, priority, and progress columns](screenshots/tasks-list.png)
+
 ## Quiet by default
 
 - **Minimal chrome:** flat active states, no badges, only user-initiated motion (ADHD-friendly, low visual load)
