@@ -27,9 +27,11 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/plugin-fs", () => ({
   watch: vi.fn(async () => () => {}),
   readTextFile: vi.fn(async () => ""),
+  writeTextFile: vi.fn(async () => {}),
 }));
 
 import { invoke } from "@tauri-apps/api/core";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 const ROOT = "/ws";
 
@@ -116,6 +118,8 @@ beforeEach(() => {
   storeSet.mockReset();
   storeSave.mockReset();
   storeGet.mockResolvedValue(undefined);
+  vi.mocked(readTextFile).mockReset();
+  vi.mocked(readTextFile).mockResolvedValue("");
 });
 
 function listOnly(tasks: Task[]) {
@@ -206,10 +210,87 @@ describe("the tasks tab", () => {
     expect(lens()?.className).toContain("min-h-0");
     unmount();
 
+    // Before a task is picked the list fills the area on its own; no detail pane.
     render(<TasksTabContent {...props("list")} />);
     await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
     expect(lens()?.className).toContain("flex-1");
     expect(lens()?.className).toContain("min-h-0");
+    expect(document.querySelector('[data-slot="task-detail"]')).toBeNull();
+  });
+
+  it("opens a clicked list task in the detail pane, not a new page", async () => {
+    vi.mocked(readTextFile).mockResolvedValue(
+      "---\nid: task-1\nstatus: To Do\ntitle: Rotate keys\n---\n\nThe body."
+    );
+    listOnly([task("task-1", "To Do")]);
+
+    render(<TasksTabContent {...props("list")} />);
+    await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
+    expect(document.querySelector('[data-slot="task-detail"]')).toBeNull();
+
+    fireEvent.click(screen.getByText("Title task-1"));
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="task-detail"]')).toBeTruthy()
+    );
+    expect(openInActive).not.toHaveBeenCalled();
+  });
+
+  it("closes the detail pane and hands the width back to the list", async () => {
+    vi.mocked(readTextFile).mockResolvedValue("---\nid: task-1\nstatus: To Do\n---\n");
+    listOnly([task("task-1", "To Do")]);
+
+    render(<TasksTabContent {...props("list")} />);
+    await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
+    fireEvent.click(screen.getByText("Title task-1"));
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="task-detail"]')).toBeTruthy()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Hide details" }));
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="task-detail"]')).toBeNull()
+    );
+    expect(lens()?.className).toContain("flex-1");
+  });
+
+  it("opens the task full-window from the detail's Open control", async () => {
+    vi.mocked(readTextFile).mockResolvedValue("---\nid: task-1\nstatus: To Do\n---\n");
+    listOnly([task("task-1", "To Do")]);
+
+    render(<TasksTabContent {...props("list")} />);
+    await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
+    fireEvent.click(screen.getByText("Title task-1"));
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="task-detail"]')).toBeTruthy()
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Open full" }));
+    expect(openInActive).toHaveBeenCalledWith(fileTarget("/ws/tasks/task-1.md"));
+  });
+
+  it("writes back when a criteria checkbox is toggled in the detail", async () => {
+    vi.mocked(writeTextFile).mockClear();
+    vi.mocked(readTextFile).mockResolvedValue(
+      "---\nid: task-1\nstatus: To Do\n---\n\n## Acceptance Criteria\n\n- [ ] First\n- [x] Second\n"
+    );
+    listOnly([task("task-1", "To Do")]);
+
+    render(<TasksTabContent {...props("list")} />);
+    await waitFor(() => expect(screen.getByText("Title task-1")).toBeTruthy());
+    fireEvent.click(screen.getByText("Title task-1"));
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="task-detail"]')).toBeTruthy()
+    );
+
+    const boxes = document.querySelectorAll<HTMLInputElement>(
+      '[data-slot="task-detail"] input[type="checkbox"]'
+    );
+    expect(boxes.length).toBe(2);
+    fireEvent.click(boxes[0]);
+
+    await waitFor(() => expect(writeTextFile).toHaveBeenCalled());
   });
 
   it("carries no view switch of its own: the toolbar owns that", async () => {

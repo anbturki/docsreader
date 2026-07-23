@@ -42,7 +42,7 @@ export function TaskListRow({
         data-slot="task-row"
         className={cn(
           TASK_LIST_COLUMNS,
-          "w-full py-1.5 text-left text-[13px] transition-colors",
+          "w-full py-1 text-left text-xs transition-colors",
           sidebarRowState(selected),
           advancing && "pointer-events-none opacity-50"
         )}

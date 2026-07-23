@@ -43,7 +43,7 @@ export function TaskListGroup({
         aria-expanded={!collapsed}
         aria-controls={listId}
         aria-label={groupLabel(status, tasks.length)}
-        className="flex items-center gap-2 px-3 py-1.5 text-left hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="flex items-center gap-2 px-3 py-1 text-left hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
       >
         <ChevronRight
           aria-hidden
@@ -58,7 +58,7 @@ export function TaskListGroup({
       {!collapsed && (
         <div id={listId}>
           <TaskListColumnHeader />
-          <ul className="flex flex-col">
+          <ul className="flex flex-col divide-y divide-border/70">
             {tasks.map((task) => (
               <li key={task.path}>
                 <TaskListRow

@@ -10,9 +10,12 @@ export interface TaskViewDef {
   label: string;
   icon: LucideIcon;
   component: ComponentType<TaskViewProps>;
+  // A row selects into a detail pane beside the list rather than navigating
+  // away to open the task. The board already fills the width, so it opens.
+  detail: boolean;
 }
 
 export const TASK_VIEWS: Record<TaskTabView, TaskViewDef> = {
-  list: { label: "List", icon: List, component: TaskListView },
-  board: { label: "Board", icon: Columns3, component: TaskBoardView },
+  list: { label: "List", icon: List, component: TaskListView, detail: true },
+  board: { label: "Board", icon: Columns3, component: TaskBoardView, detail: false },
 };
