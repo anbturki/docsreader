@@ -9,6 +9,26 @@ and DocsReader adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 Nothing yet.
 
+## [0.11.0] - 2026-07-23
+
+### Added
+
+- **A detail pane for the full-window task list.** Clicking a task in the list
+  now opens its details in a resizable pane beside it instead of navigating
+  away: the status, priority, assignee and progress, the description, and the
+  acceptance-criteria checklist. Ticking a criterion writes back to the file,
+  and an Open control takes the task full-window. A close control hands the
+  width back to the list. The board view is unchanged, since it already fills
+  the width.
+
+### Changed
+
+- **A denser, quieter task list.** A hairline separates the rows, row and group
+  padding is tighter, and the row text is a step smaller. The full-window tasks
+  header is compact to match, built on a shared control height and a reusable
+  search field so a dense header and its input stay the same size and can be
+  restyled in one place.
+
 ## [0.10.0] - 2026-07-23
 
 > [!IMPORTANT]
@@ -173,5 +193,6 @@ Nothing yet.
   workspaces all live in a folder of that name. They are now labelled by the
   project that contains them.
 
-[Unreleased]: https://github.com/anbturki/docsreader/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/anbturki/docsreader/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/anbturki/docsreader/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/anbturki/docsreader/compare/v0.9.2...v0.10.0
