@@ -9,7 +9,7 @@ and DocsReader adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 Nothing yet.
 
-## [0.10.0] - 2026-07-22
+## [0.10.0] - 2026-07-23
 
 > [!IMPORTANT]
 > **Agents: a write with no workspace is now refused instead of falling back to the shared personal workspace.**
